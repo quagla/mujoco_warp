@@ -23,6 +23,7 @@ MJ_MAXVAL = mujoco.mjMAXVAL
 MJ_MINIMP = mujoco.mjMINIMP  # minimum constraint impedance
 MJ_MAXIMP = mujoco.mjMAXIMP  # maximum constraint impedance
 MJ_MAXCONPAIR = mujoco.mjMAXCONPAIR
+MJ_MINMU = mujoco.mjMINMU  # minimum friction
 
 
 # TODO(team): add check that all wp.launch_tiled 'block_dim' settings are configurable
