@@ -908,8 +908,13 @@ class Model:
     actuator_cranklength: crank length for slider-crank      (nu,)
     actuator_acc0: acceleration from unit force in qpos0     (nu,)
     actuator_lengthrange: feasible actuator length range     (nu, 2)
-    nxn_geom_pair: valid collision pair geom ids             (<= ngeom * (ngeom - 1) // 2,)
-    nxn_pairid: predefined pair id, -1 if not predefined     (<= ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair: collision pair geom ids: [-2, ngeom-1]    (<= ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair_filtered: valid collision pair geom ids:   (<=, ngeom * (ngeom - 1) // 2,)
+                            [-1, ngeom - 1]
+    nxn_pairid: predefined pair id, -1 if not predefined,    (<= ngeom * (ngeom - 1) // 2,)
+                -2 if skipped
+    nxn_pairid_filtered: predefined pair id, -1 if not       (<= ngeom * (ngeom - 1) // 2,)
+                         predefined
     pair_dim: contact dimensionality                         (npair,)
     pair_geom1: id of geom1                                  (npair,)
     pair_geom2: id of geom2                                  (npair,)
@@ -1201,7 +1206,9 @@ class Model:
   actuator_acc0: wp.array(dtype=float)
   actuator_lengthrange: wp.array(dtype=wp.vec2)
   nxn_geom_pair: wp.array(dtype=wp.vec2i)  # warp only
+  nxn_geom_pair_filtered: wp.array(dtype=wp.vec2i)  # warp only
   nxn_pairid: wp.array(dtype=int)  # warp only
+  nxn_pairid_filtered: wp.array(dtype=int)  # warp only
   pair_dim: wp.array(dtype=int)
   pair_geom1: wp.array(dtype=int)
   pair_geom2: wp.array(dtype=int)

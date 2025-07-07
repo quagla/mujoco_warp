@@ -331,7 +331,8 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   exclude = np.isin((bodyid1 << 16) + bodyid2, mjm.exclude_signature)
 
   nxn_pairid = -1 * np.ones(len(geom1), dtype=int)
-  nxn_pairid[~(mask & ~self_collision & ~parent_child_collision & ~exclude)] = -2
+  nxn_include = mask & ~self_collision & ~parent_child_collision & ~exclude
+  nxn_pairid[~nxn_include] = -2
 
   # contact pairs
   for i in range(mjm.npair):
@@ -344,6 +345,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       pairid = np.int32(math.upper_tri_index(mjm.ngeom, int(pair_geom1), int(pair_geom2)))
 
     nxn_pairid[pairid] = i
+
+  nxn_pairid_filtered = nxn_pairid[nxn_include]
+  nxn_geom_pair_filtered = nxn_geom_pair[nxn_include]
 
   # count contact pair types
   geom_type_pair_count = np.bincount(
@@ -641,7 +645,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       or np.any(mjm.actuator_gaintype == types.GainType.AFFINE.value)
     ),
     nxn_geom_pair=wp.array(nxn_geom_pair, dtype=wp.vec2i),
+    nxn_geom_pair_filtered=wp.array(nxn_geom_pair_filtered, dtype=wp.vec2i),
     nxn_pairid=wp.array(nxn_pairid, dtype=int),
+    nxn_pairid_filtered=wp.array(nxn_pairid_filtered, dtype=int),
     pair_dim=wp.array(mjm.pair_dim, dtype=int),
     pair_geom1=wp.array(mjm.pair_geom1, dtype=int),
     pair_geom2=wp.array(mjm.pair_geom2, dtype=int),
