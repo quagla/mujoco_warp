@@ -908,8 +908,8 @@ class Model:
     actuator_cranklength: crank length for slider-crank      (nu,)
     actuator_acc0: acceleration from unit force in qpos0     (nu,)
     actuator_lengthrange: feasible actuator length range     (nu, 2)
-    nxn_geom_pair: collision pair geom ids: [-2, ngeom-1]    (<= ngeom * (ngeom - 1) // 2,)
-    nxn_geom_pair_filtered: valid collision pair geom ids:   (<=, ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair: collision pair geom ids [-2, ngeom-1]     (<= ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair_filtered: valid collision pair geom ids    (<= ngeom * (ngeom - 1) // 2,)
                             [-1, ngeom - 1]
     nxn_pairid: predefined pair id, -1 if not predefined,    (<= ngeom * (ngeom - 1) // 2,)
                 -2 if skipped
