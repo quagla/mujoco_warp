@@ -20,6 +20,7 @@ from .math import closest_segment_point
 from .math import closest_segment_to_segment_points
 from .math import make_frame
 from .math import normalize_with_norm
+from .math import upper_trid_index
 from .types import MJ_MINMU
 from .types import MJ_MINVAL
 from .types import Data
@@ -2403,462 +2404,213 @@ def box_box(
     contact_solimp_out[cid] = solimp
 
 
-@wp.kernel
-def _primitive_narrowphase(
-  # Model:
-  geom_type: wp.array(dtype=int),
-  geom_condim: wp.array(dtype=int),
-  geom_dataid: wp.array(dtype=int),
-  geom_priority: wp.array(dtype=int),
-  geom_solmix: wp.array2d(dtype=float),
-  geom_solref: wp.array2d(dtype=wp.vec2),
-  geom_solimp: wp.array2d(dtype=vec5),
-  geom_size: wp.array2d(dtype=wp.vec3),
-  geom_friction: wp.array2d(dtype=wp.vec3),
-  geom_margin: wp.array2d(dtype=float),
-  geom_gap: wp.array2d(dtype=float),
-  hfield_adr: wp.array(dtype=int),
-  hfield_nrow: wp.array(dtype=int),
-  hfield_ncol: wp.array(dtype=int),
-  hfield_size: wp.array(dtype=wp.vec4),
-  hfield_data: wp.array(dtype=float),
-  mesh_vertadr: wp.array(dtype=int),
-  mesh_vertnum: wp.array(dtype=int),
-  mesh_vert: wp.array(dtype=wp.vec3),
-  mesh_graphadr: wp.array(dtype=int),
-  mesh_graph: wp.array(dtype=int),
-  pair_dim: wp.array(dtype=int),
-  pair_solref: wp.array2d(dtype=wp.vec2),
-  pair_solreffriction: wp.array2d(dtype=wp.vec2),
-  pair_solimp: wp.array2d(dtype=vec5),
-  pair_margin: wp.array2d(dtype=float),
-  pair_gap: wp.array2d(dtype=float),
-  pair_friction: wp.array2d(dtype=vec5),
-  # Data in:
-  nconmax_in: int,
-  geom_xpos_in: wp.array2d(dtype=wp.vec3),
-  geom_xmat_in: wp.array2d(dtype=wp.mat33),
-  collision_pair_in: wp.array(dtype=wp.vec2i),
-  collision_hftri_index_in: wp.array(dtype=int),
-  collision_pairid_in: wp.array(dtype=int),
-  collision_worldid_in: wp.array(dtype=int),
-  ncollision_in: wp.array(dtype=int),
-  # Data out:
-  ncon_out: wp.array(dtype=int),
-  contact_dist_out: wp.array(dtype=float),
-  contact_pos_out: wp.array(dtype=wp.vec3),
-  contact_frame_out: wp.array(dtype=wp.mat33),
-  contact_includemargin_out: wp.array(dtype=float),
-  contact_friction_out: wp.array(dtype=vec5),
-  contact_solref_out: wp.array(dtype=wp.vec2),
-  contact_solreffriction_out: wp.array(dtype=wp.vec2),
-  contact_solimp_out: wp.array(dtype=vec5),
-  contact_dim_out: wp.array(dtype=int),
-  contact_geom_out: wp.array(dtype=wp.vec2i),
-  contact_worldid_out: wp.array(dtype=int),
-):
-  tid = wp.tid()
+_PRIMITIVE_COLLISIONS = {
+  (GeomType.PLANE.value, GeomType.SPHERE.value): plane_sphere,
+  (GeomType.PLANE.value, GeomType.CAPSULE.value): plane_capsule,
+  (GeomType.PLANE.value, GeomType.CYLINDER.value): plane_cylinder,
+  (GeomType.PLANE.value, GeomType.BOX.value): plane_box,
+  (GeomType.PLANE.value, GeomType.MESH.value): plane_convex,
+  (GeomType.SPHERE.value, GeomType.SPHERE.value): sphere_sphere,
+  (GeomType.SPHERE.value, GeomType.CAPSULE.value): sphere_capsule,
+  (GeomType.SPHERE.value, GeomType.CYLINDER.value): sphere_cylinder,
+  (GeomType.SPHERE.value, GeomType.BOX.value): sphere_box,
+  (GeomType.CAPSULE.value, GeomType.CAPSULE.value): capsule_capsule,
+  (GeomType.CAPSULE.value, GeomType.BOX.value): capsule_box,
+  (GeomType.BOX.value, GeomType.BOX.value): box_box,
+}
 
-  if tid >= ncollision_in[0]:
-    return
 
-  worldid = collision_worldid_in[tid]
+# TODO(team): _check_collisions shared utility
+def _check_primitive_collisions():
+  prev_idx = -1
+  for types in _PRIMITIVE_COLLISIONS.keys():
+    idx = upper_trid_index(len(GeomType), types[0], types[1])
+    if types[1] < types[0] or idx <= prev_idx:
+      return False
+    prev_idx = idx
+  return True
 
-  geoms, margin, gap, condim, friction, solref, solreffriction, solimp = contact_params(
-    geom_condim,
-    geom_priority,
-    geom_solmix,
-    geom_solref,
-    geom_solimp,
-    geom_friction,
-    geom_margin,
-    geom_gap,
-    pair_dim,
-    pair_solref,
-    pair_solreffriction,
-    pair_solimp,
-    pair_margin,
-    pair_gap,
-    pair_friction,
-    collision_pair_in,
-    collision_pairid_in,
-    tid,
-    worldid,
-  )
-  g1 = geoms[0]
-  g2 = geoms[1]
 
-  hftri_index = collision_hftri_index_in[tid]
+assert _check_primitive_collisions(), "_PRIMITIVE_COLLISIONS is in invalid order"
 
-  geom1 = _geom(
-    geom_type,
-    geom_dataid,
-    geom_size,
-    hfield_adr,
-    hfield_nrow,
-    hfield_ncol,
-    hfield_size,
-    hfield_data,
-    mesh_vertadr,
-    mesh_vertnum,
-    mesh_vert,
-    mesh_graphadr,
-    mesh_graph,
-    geom_xpos_in,
-    geom_xmat_in,
-    worldid,
-    g1,
-    hftri_index,
-  )
-  geom2 = _geom(
-    geom_type,
-    geom_dataid,
-    geom_size,
-    hfield_adr,
-    hfield_nrow,
-    hfield_ncol,
-    hfield_size,
-    hfield_data,
-    mesh_vertadr,
-    mesh_vertnum,
-    mesh_vert,
-    mesh_graphadr,
-    mesh_graph,
-    geom_xpos_in,
-    geom_xmat_in,
-    worldid,
-    g2,
-    hftri_index,
-  )
+_primitive_collisions_types = []
+_primitive_collisions_func = []
 
-  type1 = geom_type[g1]
-  type2 = geom_type[g2]
 
-  # TODO(team): static loop unrolling to remove unnecessary branching
-  if type1 == int(GeomType.PLANE.value) and type2 == int(GeomType.SPHERE.value):
-    plane_sphere(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.SPHERE.value) and type2 == int(GeomType.SPHERE.value):
-    sphere_sphere(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.PLANE.value) and type2 == int(GeomType.CAPSULE.value):
-    plane_capsule(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.PLANE.value) and type2 == int(GeomType.BOX.value):
-    plane_box(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.CAPSULE.value) and type2 == int(GeomType.CAPSULE.value):
-    capsule_capsule(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.PLANE.value) and type2 == int(GeomType.MESH.value):
-    plane_convex(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.SPHERE.value) and type2 == int(GeomType.CAPSULE.value):
-    sphere_capsule(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.SPHERE.value) and type2 == int(GeomType.CYLINDER.value):
-    sphere_cylinder(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.SPHERE.value) and type2 == int(GeomType.BOX.value):
-    sphere_box(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.PLANE.value) and type2 == int(GeomType.CYLINDER.value):
-    plane_cylinder(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.BOX.value) and type2 == int(GeomType.BOX.value):
-    box_box(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  elif type1 == int(GeomType.CAPSULE.value) and type2 == int(GeomType.BOX.value):
-    capsule_box(
-      nconmax_in,
-      geom1,
-      geom2,
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
+def primitive_narrowphase_builder(m: Model):
+  for types, func in _PRIMITIVE_COLLISIONS.items():
+    idx = upper_trid_index(len(GeomType), types[0], types[1])
+    if m.geom_pair_type_count[idx] and types not in _primitive_collisions_types:
+      _primitive_collisions_types.append(types)
+      _primitive_collisions_func.append(func)
+
+  @wp.kernel
+  def _primitive_narrowphase(
+    # Model:
+    geom_type: wp.array(dtype=int),
+    geom_condim: wp.array(dtype=int),
+    geom_dataid: wp.array(dtype=int),
+    geom_priority: wp.array(dtype=int),
+    geom_solmix: wp.array2d(dtype=float),
+    geom_solref: wp.array2d(dtype=wp.vec2),
+    geom_solimp: wp.array2d(dtype=vec5),
+    geom_size: wp.array2d(dtype=wp.vec3),
+    geom_friction: wp.array2d(dtype=wp.vec3),
+    geom_margin: wp.array2d(dtype=float),
+    geom_gap: wp.array2d(dtype=float),
+    hfield_adr: wp.array(dtype=int),
+    hfield_nrow: wp.array(dtype=int),
+    hfield_ncol: wp.array(dtype=int),
+    hfield_size: wp.array(dtype=wp.vec4),
+    hfield_data: wp.array(dtype=float),
+    mesh_vertadr: wp.array(dtype=int),
+    mesh_vertnum: wp.array(dtype=int),
+    mesh_vert: wp.array(dtype=wp.vec3),
+    mesh_graphadr: wp.array(dtype=int),
+    mesh_graph: wp.array(dtype=int),
+    pair_dim: wp.array(dtype=int),
+    pair_solref: wp.array2d(dtype=wp.vec2),
+    pair_solreffriction: wp.array2d(dtype=wp.vec2),
+    pair_solimp: wp.array2d(dtype=vec5),
+    pair_margin: wp.array2d(dtype=float),
+    pair_gap: wp.array2d(dtype=float),
+    pair_friction: wp.array2d(dtype=vec5),
+    # Data in:
+    nconmax_in: int,
+    geom_xpos_in: wp.array2d(dtype=wp.vec3),
+    geom_xmat_in: wp.array2d(dtype=wp.mat33),
+    collision_pair_in: wp.array(dtype=wp.vec2i),
+    collision_hftri_index_in: wp.array(dtype=int),
+    collision_pairid_in: wp.array(dtype=int),
+    collision_worldid_in: wp.array(dtype=int),
+    ncollision_in: wp.array(dtype=int),
+    # Data out:
+    ncon_out: wp.array(dtype=int),
+    contact_dist_out: wp.array(dtype=float),
+    contact_pos_out: wp.array(dtype=wp.vec3),
+    contact_frame_out: wp.array(dtype=wp.mat33),
+    contact_includemargin_out: wp.array(dtype=float),
+    contact_friction_out: wp.array(dtype=vec5),
+    contact_solref_out: wp.array(dtype=wp.vec2),
+    contact_solreffriction_out: wp.array(dtype=wp.vec2),
+    contact_solimp_out: wp.array(dtype=vec5),
+    contact_dim_out: wp.array(dtype=int),
+    contact_geom_out: wp.array(dtype=wp.vec2i),
+    contact_worldid_out: wp.array(dtype=int),
+  ):
+    tid = wp.tid()
+
+    if tid >= ncollision_in[0]:
+      return
+
+    geoms = collision_pair_in[tid]
+    g1 = geoms[0]
+    g2 = geoms[1]
+
+    type1 = geom_type[g1]
+    type2 = geom_type[g2]
+
+    for i in range(wp.static(len(_primitive_collisions_func))):
+      collision_type1 = wp.static(_primitive_collisions_types[i][0])
+      collision_type2 = wp.static(_primitive_collisions_types[i][1])
+
+      if collision_type1 == type1 and collision_type2 == type2:
+        worldid = collision_worldid_in[tid]
+
+        _, margin, gap, condim, friction, solref, solreffriction, solimp = contact_params(
+          geom_condim,
+          geom_priority,
+          geom_solmix,
+          geom_solref,
+          geom_solimp,
+          geom_friction,
+          geom_margin,
+          geom_gap,
+          pair_dim,
+          pair_solref,
+          pair_solreffriction,
+          pair_solimp,
+          pair_margin,
+          pair_gap,
+          pair_friction,
+          collision_pair_in,
+          collision_pairid_in,
+          tid,
+          worldid,
+        )
+
+        hftri_index = collision_hftri_index_in[tid]
+
+        geom1 = _geom(
+          geom_type,
+          geom_dataid,
+          geom_size,
+          hfield_adr,
+          hfield_nrow,
+          hfield_ncol,
+          hfield_size,
+          hfield_data,
+          mesh_vertadr,
+          mesh_vertnum,
+          mesh_vert,
+          mesh_graphadr,
+          mesh_graph,
+          geom_xpos_in,
+          geom_xmat_in,
+          worldid,
+          g1,
+          hftri_index,
+        )
+
+        geom2 = _geom(
+          geom_type,
+          geom_dataid,
+          geom_size,
+          hfield_adr,
+          hfield_nrow,
+          hfield_ncol,
+          hfield_size,
+          hfield_data,
+          mesh_vertadr,
+          mesh_vertnum,
+          mesh_vert,
+          mesh_graphadr,
+          mesh_graph,
+          geom_xpos_in,
+          geom_xmat_in,
+          worldid,
+          g2,
+          hftri_index,
+        )
+
+        wp.static(_primitive_collisions_func[i])(
+          nconmax_in,
+          geom1,
+          geom2,
+          worldid,
+          margin,
+          gap,
+          condim,
+          friction,
+          solref,
+          solreffriction,
+          solimp,
+          geoms,
+          ncon_out,
+          contact_dist_out,
+          contact_pos_out,
+          contact_frame_out,
+          contact_includemargin_out,
+          contact_friction_out,
+          contact_solref_out,
+          contact_solreffriction_out,
+          contact_solimp_out,
+          contact_dim_out,
+          contact_geom_out,
+          contact_worldid_out,
+        )
+
+  return _primitive_narrowphase
 
 
 @event_scope
@@ -2866,7 +2618,7 @@ def primitive_narrowphase(m: Model, d: Data):
   # we need to figure out how to keep the overhead of this small - not launching anything
   # for pair types without collisions, as well as updating the launch dimensions.
   wp.launch(
-    _primitive_narrowphase,
+    primitive_narrowphase_builder(m),
     dim=d.nconmax,
     inputs=[
       m.geom_type,
