@@ -27,6 +27,7 @@ from .types import GeomType
 from .types import Model
 from .types import vec5
 from .warp_util import event_scope
+from .warp_util import kernel as nested_kernel
 
 wp.set_module_options({"enable_backward": False})
 
@@ -2432,15 +2433,16 @@ def _check_primitive_collisions():
 
 assert _check_primitive_collisions(), "_PRIMITIVE_COLLISIONS is in invalid order"
 
+_primitive_collisions_types = []
+_primitive_collisions_func = []
 
-def primitive_narrowphase_builder():
-  _primitive_collision_type1 = []
-  _primitive_collision_type2 = []
 
-  for types in _PRIMITIVE_COLLISIONS.keys():
-    # TODO(team): check geom type pairs
-    _primitive_collision_type1.append(types[0])
-    _primitive_collision_type2.append(types[1])
+def primitive_narrowphase_builder(m: Model):
+  for types, func in _PRIMITIVE_COLLISIONS.items():
+    idx = upper_trid_index(len(GeomType), types[0], types[1])
+    if m.geom_pair_type_count[idx] and types not in _primitive_collisions_types:
+      _primitive_collisions_types.append(types)
+      _primitive_collisions_func.append(func)
 
   @wp.kernel
   def _primitive_narrowphase(
@@ -2573,12 +2575,12 @@ def primitive_narrowphase_builder():
     type1 = geom_type[g1]
     type2 = geom_type[g2]
 
-    for i in range(wp.static(len(_primitive_collision_type1))):
-      collision_type1 = wp.static(_primitive_collision_type1[i])
-      collision_type2 = wp.static(_primitive_collision_type2[i])
+    for i in range(wp.static(len(_primitive_collisions_func))):
+      collision_type1 = wp.static(_primitive_collisions_types[i][0])
+      collision_type2 = wp.static(_primitive_collisions_types[i][1])
 
       if collision_type1 == type1 and collision_type2 == type2:
-        wp.static(_PRIMITIVE_COLLISIONS[(collision_type1, collision_type2)])(
+        wp.static(_primitive_collisions_func[i])(
           nconmax_in,
           geom1,
           geom2,
@@ -2613,7 +2615,7 @@ def primitive_narrowphase(m: Model, d: Data):
   # we need to figure out how to keep the overhead of this small - not launching anything
   # for pair types without collisions, as well as updating the launch dimensions.
   wp.launch(
-    primitive_narrowphase_builder(),
+    primitive_narrowphase_builder(m),
     dim=d.nconmax,
     inputs=[
       m.geom_type,
