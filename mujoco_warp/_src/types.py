@@ -744,6 +744,9 @@ class Model:
     nmeshvert: number of vertices for all meshes             ()
     nmeshface: number of faces for all meshes                ()
     nmeshgraph: number of ints in mesh auxiliary data        ()
+    nmeshpoly: number of polygons in all meshes              ()
+    nmeshpolyvert: number of vertices in all polygons        ()
+    nmeshpolymap: number of polygons in vertex map           ()
     nlsp: number of step sizes for parallel linsearch        ()
     npair: number of predefined geom pairs                   ()
     nhfield: number of heightfields                          ()
@@ -871,8 +874,17 @@ class Model:
     mesh_vert: vertex positions for all meshes               (nmeshvert, 3)
     mesh_faceadr: first face address                         (nmesh,)
     mesh_face: face indices for all meshes                   (nface, 3)
-    mesh_graphadr: graph data address; -1: no graph          (nmesh, 1)
-    mesh_graph: convex graph data                            (nmeshgraph, 1)
+    mesh_graphadr: graph data address; -1: no graph          (nmesh,)
+    mesh_graph: convex graph data                            (nmeshgraph,)
+    mesh_polynum: number of polygons per mesh                (nmesh,)
+    mesh_polyadr: first polygon address per mesh             (nmesh,)
+    mesh_polynormal: all polygon normals                     (nmeshpoly, 3)
+    mesh_polyvertadr: polygon vertex start address           (nmeshpoly,)
+    mesh_polyvertnum: number of vertices per polygon         (nmeshpoly,)
+    mesh_polyvert: all polygon vertices                      (nmeshpolyvert,)
+    mesh_polymapadr: first polygon address per vertex        (nmeshvert,)
+    mesh_polymapnum: number of polygons per vertex           (nmeshvert,)
+    mesh_polymap: vertex to polygon map                      (nmeshpolymap,)
     eq_type: constraint type (mjtEq)                         (neq,)
     eq_obj1id: id of object 1                                (neq,)
     eq_obj2id: id of object 2                                (neq,)
@@ -1022,6 +1034,9 @@ class Model:
   nmeshvert: int
   nmeshface: int
   nmeshgraph: int
+  nmeshpoly: int
+  nmeshpolyvert: int
+  nmeshpolymap: int
   nlsp: int  # warp only
   npair: int
   nhfield: int
@@ -1165,6 +1180,15 @@ class Model:
   mesh_face: wp.array(dtype=wp.vec3i)
   mesh_graphadr: wp.array(dtype=int)
   mesh_graph: wp.array(dtype=int)
+  mesh_polynum: wp.array(dtype=int)
+  mesh_polyadr: wp.array(dtype=int)
+  mesh_polynormal: wp.array(dtype=wp.vec3)
+  mesh_polyvertadr: wp.array(dtype=int)
+  mesh_polyvertnum: wp.array(dtype=int)
+  mesh_polyvert: wp.array(dtype=int)
+  mesh_polymapadr: wp.array(dtype=int)
+  mesh_polymapnum: wp.array(dtype=int)
+  mesh_polymap: wp.array(dtype=int)
   eq_type: wp.array(dtype=int)
   eq_obj1id: wp.array(dtype=int)
   eq_obj2id: wp.array(dtype=int)
