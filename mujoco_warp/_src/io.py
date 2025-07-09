@@ -331,8 +331,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   exclude = np.isin((bodyid1 << 16) + bodyid2, mjm.exclude_signature)
 
   nxn_pairid = -1 * np.ones(len(geom1), dtype=int)
-  nxn_include = mask & ~self_collision & ~parent_child_collision & ~exclude
-  nxn_pairid[~nxn_include] = -2
+  nxn_pairid[~(mask & ~self_collision & ~parent_child_collision & ~exclude)] = -2
 
   # contact pairs
   for i in range(mjm.npair):
@@ -346,8 +345,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
     nxn_pairid[pairid] = i
 
-  nxn_pairid_filtered = nxn_pairid[nxn_include]
-  nxn_geom_pair_filtered = nxn_geom_pair[nxn_include]
+  include = nxn_pairid > -2
+  nxn_pairid_filtered = nxn_pairid[include]
+  nxn_geom_pair_filtered = nxn_geom_pair[include]
 
   # count contact pair types
   geom_type_pair_count = np.bincount(
