@@ -41,8 +41,9 @@ def _assert_eq(a, b, name):
 
 
 class ForwardTest(parameterized.TestCase):
-  def test_fwd_velocity(self):
-    _, mjd, m, d = test_util.fixture("pendula.xml", kick=True)
+  @parameterized.product(xml=["humanoid/humanoid.xml", "pendula.xml"], sparse=[True, False])
+  def test_fwd_velocity(self, xml, sparse):
+    _, mjd, m, d = test_util.fixture(xml, kick=True, sparse=sparse)
 
     for arr in (d.actuator_velocity, d.qfrc_bias):
       arr.zero_()
