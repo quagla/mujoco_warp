@@ -557,7 +557,7 @@ def _actuator_velocity_sparse(m: Model, d: Data):
     qvel_tile = wp.tile_load(qvel_in[worldid], shape=NV)
     moment_qvel_tile = wp.tile_map(wp.mul, moment_tile, qvel_tile)
     actuator_velocity_tile = wp.tile_reduce(wp.add, moment_qvel_tile)
-    wp.tile_store(actuator_velocity_out[worldid], actuator_velocity_tile)
+    actuator_velocity_out[worldid, actid] = actuator_velocity_tile[0]
 
   wp.launch_tiled(
     actuator_velocity_sparse,
@@ -626,7 +626,7 @@ def _tendon_velocity(m: Model, d: Data):
     qvel_tile = wp.tile_load(qvel_in[worldid], shape=NV)
     ten_J_qvel_tile = wp.tile_map(wp.mul, ten_J_tile, qvel_tile)
     ten_velocity_tile = wp.tile_reduce(wp.add, ten_J_qvel_tile)
-    wp.tile_store(ten_velocity_out[worldid], ten_velocity_tile)
+    ten_velocity_out[worldid, tenid] = ten_velocity_tile[0]
 
   wp.launch_tiled(
     tendon_velocity,
