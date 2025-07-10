@@ -23,6 +23,7 @@ MJ_MAXVAL = mujoco.mjMAXVAL
 MJ_MINIMP = mujoco.mjMINIMP  # minimum constraint impedance
 MJ_MAXIMP = mujoco.mjMAXIMP  # maximum constraint impedance
 MJ_MAXCONPAIR = mujoco.mjMAXCONPAIR
+MJ_MINMU = mujoco.mjMINMU  # minimum friction
 
 
 # TODO(team): add check that all wp.launch_tiled 'block_dim' settings are configurable
@@ -270,6 +271,7 @@ class GeomType(enum.IntEnum):
     CYLINDER: cylinder
     BOX: box
     MESH: mesh
+    SDF: sdf
   """
 
   PLANE = mujoco.mjtGeom.mjGEOM_PLANE
@@ -742,6 +744,9 @@ class Model:
     nmeshvert: number of vertices for all meshes
     nmeshface: number of faces for all meshes
     nmeshgraph: number of ints in mesh auxiliary data
+    nmeshpoly: number of polygons in all meshes
+    nmeshpolyvert: number of vertices in all polygons
+    nmeshpolymap: number of polygons in vertex map
     nlsp: number of step sizes for parallel linsearch
     npair: number of predefined geom pairs
     nhfield: number of heightfields
@@ -869,8 +874,17 @@ class Model:
     mesh_vert: vertex positions for all meshes               (nmeshvert, 3)
     mesh_faceadr: first face address                         (nmesh,)
     mesh_face: face indices for all meshes                   (nface, 3)
-    mesh_graphadr: graph data address; -1: no graph          (nmesh, 1)
-    mesh_graph: convex graph data                            (nmeshgraph, 1)
+    mesh_graphadr: graph data address; -1: no graph          (nmesh,)
+    mesh_graph: convex graph data                            (nmeshgraph,)
+    mesh_polynum: number of polygons per mesh                (nmesh,)
+    mesh_polyadr: first polygon address per mesh             (nmesh,)
+    mesh_polynormal: all polygon normals                     (nmeshpoly, 3)
+    mesh_polyvertadr: polygon vertex start address           (nmeshpoly,)
+    mesh_polyvertnum: number of vertices per polygon         (nmeshpoly,)
+    mesh_polyvert: all polygon vertices                      (nmeshpolyvert,)
+    mesh_polymapadr: first polygon address per vertex        (nmeshvert,)
+    mesh_polymapnum: number of polygons per vertex           (nmeshvert,)
+    mesh_polymap: vertex to polygon map                      (nmeshpolymap,)
     eq_type: constraint type (mjtEq)                         (neq,)
     eq_obj1id: id of object 1                                (neq,)
     eq_obj2id: id of object 2                                (neq,)
@@ -899,6 +913,7 @@ class Model:
     actuator_dynprm: dynamics parameters                     (nworld, nu, mjNDYN)
     actuator_gainprm: gain parameters                        (nworld, nu, mjNGAIN)
     actuator_biasprm: bias parameters                        (nworld, nu, mjNBIAS)
+    actuator_actearly: step activation before force          (nu,)
     actuator_ctrlrange: range of controls                    (nworld, nu, 2)
     actuator_forcerange: range of forces                     (nworld, nu, 2)
     actuator_actrange: range of activations                  (nworld, nu, 2)
@@ -988,7 +1003,7 @@ class Model:
     geompair2hfgeompair: geom pair to geom pair with         (ngeom * (ngeom - 1) // 2,)
                          height field mapping
     block_dim: BlockDim
-    geom_type_pair: geom type id pairs for collisions
+    geom_pair_type_count: count of max number of each potential collision
     has_sdf_geom: whether the model contains SDF geoms
   """
 
@@ -1020,6 +1035,9 @@ class Model:
   nmeshvert: int
   nmeshface: int
   nmeshgraph: int
+  nmeshpoly: int
+  nmeshpolyvert: int
+  nmeshpolymap: int
   nlsp: int  # warp only
   npair: int
   nhfield: int
@@ -1163,6 +1181,15 @@ class Model:
   mesh_face: wp.array(dtype=wp.vec3i)
   mesh_graphadr: wp.array(dtype=int)
   mesh_graph: wp.array(dtype=int)
+  mesh_polynum: wp.array(dtype=int)
+  mesh_polyadr: wp.array(dtype=int)
+  mesh_polynormal: wp.array(dtype=wp.vec3)
+  mesh_polyvertadr: wp.array(dtype=int)
+  mesh_polyvertnum: wp.array(dtype=int)
+  mesh_polyvert: wp.array(dtype=int)
+  mesh_polymapadr: wp.array(dtype=int)
+  mesh_polymapnum: wp.array(dtype=int)
+  mesh_polymap: wp.array(dtype=int)
   eq_type: wp.array(dtype=int)
   eq_obj1id: wp.array(dtype=int)
   eq_obj2id: wp.array(dtype=int)
@@ -1191,6 +1218,7 @@ class Model:
   actuator_dynprm: wp.array2d(dtype=vec10f)
   actuator_gainprm: wp.array2d(dtype=vec10f)
   actuator_biasprm: wp.array2d(dtype=vec10f)
+  actuator_actearly: wp.array(dtype=bool)
   actuator_ctrlrange: wp.array2d(dtype=wp.vec2)
   actuator_forcerange: wp.array2d(dtype=wp.vec2)
   actuator_actrange: wp.array2d(dtype=wp.vec2)
@@ -1275,7 +1303,7 @@ class Model:
   actuator_trntype_body_adr: wp.array(dtype=int)  # warp only
   geompair2hfgeompair: wp.array(dtype=int)  # warp only
   block_dim: BlockDim  # warp only
-  geom_type_pair: tuple[int, ...]  # warp only
+  geom_pair_type_count: tuple[int, ...]  # warp only
   has_sdf_geom: bool  # warp only
 
 
@@ -1425,6 +1453,8 @@ class Data:
     epa_vert: vertices in EPA polytope in Minkowski space       (nconmax, 5 + CCDiter)
     epa_vert1: vertices in EPA polytope in geom 1 space         (nconmax, 5 + CCDiter)
     epa_vert2: vertices in EPA polytope in geom 2 space         (nconmax, 5 + CCDiter)
+    epa_vert_index1: vertex indices in EPA polytope for geom 1  (nconmax, 5 + CCDiter)
+    epa_vert_index2: vertex indices in EPA polytope for geom 2  (nconmax, 5 + CCDiter)
     epa_face: faces of polytope represented by three indices    (nconmax, 6 + 3 * CCDiter)
     epa_pr: projection of origin on polytope faces              (nconmax, 6 + 3 * CCDiter)
     epa_norm2: epa_pr * epa_pr                                  (nconmax, 6 + 3 * CCDiter)
@@ -1573,6 +1603,8 @@ class Data:
   epa_vert: wp.array2d(dtype=wp.vec3)
   epa_vert1: wp.array2d(dtype=wp.vec3)
   epa_vert2: wp.array2d(dtype=wp.vec3)
+  epa_vert_index1: wp.array2d(dtype=int)
+  epa_vert_index2: wp.array2d(dtype=int)
   epa_face: wp.array2d(dtype=wp.vec3i)
   epa_pr: wp.array2d(dtype=wp.vec3)
   epa_norm2: wp.array2d(dtype=float)

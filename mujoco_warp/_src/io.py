@@ -345,17 +345,28 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
     nxn_pairid[pairid] = i
 
-  # contact pair types
-  type_pairs = np.stack([mjm.geom_type[geom1], mjm.geom_type[geom2]], axis=1)
-  type_pairs.sort()
-  geom_type_pair = set(tuple(tp) for tp in type_pairs)
-  geom_type_pair = tuple(int(t) for tp in geom_type_pair for t in tp)
+  # count contact pair types
+  geom_type_pair_count = np.bincount(
+    [
+      math.upper_trid_index(len(types.GeomType), int(mjm.geom_type[geom1[i]]), int(mjm.geom_type[geom2[i]]))
+      for i in np.arange(len(geom1))
+      if nxn_pairid[i] > -2
+    ],
+    minlength=len(types.GeomType) * (len(types.GeomType) + 1) // 2,
+  )
+
+  # Disable collisions if there are no potentially colliding pairs
+  if np.sum(geom_type_pair_count) == 0:
+    mjm.opt.disableflags |= types.DisableBit.CONTACT.value
 
   def create_nmodel_batched_array(mjm_array, dtype, expand_dim=True):
     array = wp.array(mjm_array, dtype=dtype)
-    array.strides = (0,) + array.strides
+    # add private attribute for JAX to determine which fields are batched
+    array._is_batched = True
     if not expand_dim:
+      array.strides = (0,) + array.strides[1:]
       return array
+    array.strides = (0,) + array.strides
     array.ndim += 1
     array.shape = (1,) + array.shape
     return array
@@ -372,6 +383,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     broadphase = types.BroadphaseType.SAP_TILE
   else:
     broadphase = types.BroadphaseType.NXN
+
+  condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
+  condim_max = np.max(condim) if len(condim) > 0 else 0
 
   m = types.Model(
     nq=mjm.nq,
@@ -402,6 +416,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     nmeshvert=mjm.nmeshvert,
     nmeshface=mjm.nmeshface,
     nmeshgraph=mjm.nmeshgraph,
+    nmeshpoly=mjm.nmeshpoly,
+    nmeshpolyvert=mjm.nmeshpolyvert,
+    nmeshpolymap=mjm.nmeshpolymap,
     nlsp=nlsp,
     npair=mjm.npair,
     opt=types.Option(
@@ -578,6 +595,15 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_face=wp.array(mjm.mesh_face, dtype=wp.vec3i),
     mesh_graphadr=wp.array(mjm.mesh_graphadr, dtype=int),
     mesh_graph=wp.array(mjm.mesh_graph, dtype=int),
+    mesh_polynum=wp.array(mjm.mesh_polynum, dtype=int),
+    mesh_polyadr=wp.array(mjm.mesh_polyadr, dtype=int),
+    mesh_polynormal=wp.array(mjm.mesh_polynormal, dtype=wp.vec3),
+    mesh_polyvertadr=wp.array(mjm.mesh_polyvertadr, dtype=int),
+    mesh_polyvertnum=wp.array(mjm.mesh_polyvertnum, dtype=int),
+    mesh_polyvert=wp.array(mjm.mesh_polyvert, dtype=int),
+    mesh_polymapadr=wp.array(mjm.mesh_polymapadr, dtype=int),
+    mesh_polymapnum=wp.array(mjm.mesh_polymapnum, dtype=int),
+    mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -613,6 +639,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     actuator_dynprm=create_nmodel_batched_array(mjm.actuator_dynprm, dtype=types.vec10f),
     actuator_gainprm=create_nmodel_batched_array(mjm.actuator_gainprm, dtype=types.vec10f),
     actuator_biasprm=create_nmodel_batched_array(mjm.actuator_biasprm, dtype=types.vec10f),
+    actuator_actearly=wp.array(mjm.actuator_actearly, dtype=bool),
     actuator_ctrlrange=create_nmodel_batched_array(mjm.actuator_ctrlrange, dtype=wp.vec2),
     actuator_forcerange=create_nmodel_batched_array(mjm.actuator_forcerange, dtype=wp.vec2),
     actuator_actrange=create_nmodel_batched_array(mjm.actuator_actrange, dtype=wp.vec2),
@@ -637,7 +664,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     pair_margin=create_nmodel_batched_array(mjm.pair_margin, dtype=float),
     pair_gap=create_nmodel_batched_array(mjm.pair_gap, dtype=float),
     pair_friction=create_nmodel_batched_array(mjm.pair_friction, dtype=types.vec5),
-    condim_max=np.max(np.concatenate((mjm.geom_condim, mjm.pair_dim))),  # TODO(team): get max after filtering,
+    condim_max=condim_max,  # TODO(team): get max after filtering,
     tendon_adr=wp.array(mjm.tendon_adr, dtype=int),
     tendon_num=wp.array(mjm.tendon_num, dtype=int),
     tendon_limited=wp.array(mjm.tendon_limited, dtype=int),
@@ -763,7 +790,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     actuator_trntype_body_adr=wp.array(np.nonzero(mjm.actuator_trntype == mujoco.mjtTrn.mjTRN_BODY)[0], dtype=int),
     geompair2hfgeompair=wp.array(_hfield_geom_pair(mjm)[1], dtype=int),
     block_dim=types.BlockDim(),
-    geom_type_pair=geom_type_pair,
+    geom_pair_type_count=tuple(geom_type_pair_count),
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
   )
 
@@ -790,6 +817,8 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
   if njmax == -1:
     # TODO(team): heuristic for njmax
     njmax = nworld * 20 * 6
+  condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
+  condim_max = np.max(condim) if len(condim) > 0 else 0
 
   if mujoco.mj_isSparse(mjm):
     qM = wp.zeros((nworld, 1, mjm.nM), dtype=float)
@@ -891,7 +920,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       dim=wp.zeros((nconmax,), dtype=int),
       geom=wp.zeros((nconmax,), dtype=wp.vec2i),
       efc_address=wp.zeros(
-        (nconmax, np.maximum(1, 2 * (np.max(np.concatenate([mjm.geom_condim, mjm.pair_dim])) - 1))),
+        (nconmax, np.maximum(1, 2 * (condim_max - 1))),
         dtype=int,
       ),
       worldid=wp.zeros((nconmax,), dtype=int),
@@ -987,6 +1016,8 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     epa_vert=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_vert1=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_vert2=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
+    epa_vert_index1=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=int),
+    epa_vert_index2=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=int),
     epa_face=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=wp.vec3i),
     epa_pr=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_norm2=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=float),
@@ -1109,9 +1140,9 @@ def put_data(
     mjd.moment_colind,
   )
 
-  contact_efc_address = np.zeros(
-    (nconmax, np.maximum(1, 2 * (np.max(np.concatenate([mjm.geom_condim, mjm.pair_dim])) - 1))), dtype=int
-  )
+  condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
+  condim_max = np.max(condim) if len(condim) > 0 else 0
+  contact_efc_address = np.zeros((nconmax, np.maximum(1, 2 * (condim_max - 1))), dtype=int)
   for i in range(nworld):
     for j in range(mjd.ncon):
       condim = mjd.contact.dim[j]
@@ -1338,6 +1369,8 @@ def put_data(
     epa_vert=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_vert1=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_vert2=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=wp.vec3),
+    epa_vert_index1=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=int),
+    epa_vert_index2=wp.zeros(shape=(nconmax, 5 + MJ_CCD_ITERATIONS), dtype=int),
     epa_face=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=wp.vec3i),
     epa_pr=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=wp.vec3),
     epa_norm2=wp.zeros(shape=(nconmax, 6 + 3 * MJ_CCD_ITERATIONS), dtype=float),
