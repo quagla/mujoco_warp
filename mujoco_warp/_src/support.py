@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Optional, Tuple
+from typing import Tuple
 
 import warp as wp
 
@@ -119,7 +119,7 @@ def mul_m(
   res: wp.array2d(dtype=float),
   vec: wp.array2d(dtype=float),
   skip: wp.array(dtype=bool),
-  M: Optional[wp.array3d(dtype=float)] = None,
+  M: wp.array3d(dtype=float) = None,
 ):
   """Multiply vectors by inertia matrix.
 
