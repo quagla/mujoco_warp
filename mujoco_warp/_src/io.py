@@ -381,6 +381,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   rangefinder_sensor_adr = np.full(mjm.nsensor, -1)
   rangefinder_sensor_adr[sensor_rangefinder_adr] = np.arange(len(sensor_rangefinder_adr))
 
+  # TODO(team): improve heuristic for selecting broadphase routine
   if mjm.ngeom > 1000:
     broadphase = types.BroadphaseType.SAP_SEGMENTED
   elif mjm.ngeom > 100:
