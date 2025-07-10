@@ -540,7 +540,7 @@ def fwd_position(m: Model, d: Data):
   smooth.transmission(m, d)
 
 
-# TODO(team): sparse version
+# TODO(team): sparse actuator_moment version
 def _actuator_velocity(m: Model, d: Data):
   NV = m.nv
 
