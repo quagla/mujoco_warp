@@ -142,6 +142,7 @@ def _next_velocity(
   qvel_out[worldid, dofid] = qvel_in[worldid, dofid] + qacc_scale_in * qacc_in[worldid, dofid] * timestep
 
 
+# TODO(team): kernel analyzer array slice?
 @wp.func
 def _next_act(
   # Model:
