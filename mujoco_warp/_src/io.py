@@ -237,9 +237,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
     actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
 
-  qfrc_actuator_tiles_nu = tuple((types.TileSet(adr=wp.zeros(mjm.nv, dtype=int), size=mjm.nu),))
-  qfrc_actuator_tiles_nv = tuple((types.TileSet(adr=wp.array(np.array(np.arange(mjm.nv)), dtype=int), size=1),))
-
   # fixed tendon
   tendon_jnt_adr = []
   wrap_jnt_adr = []
@@ -589,8 +586,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     eq_ten_adr=wp.array(np.nonzero(mjm.eq_type == types.EqType.TENDON.value)[0], dtype=int),
     actuator_moment_tiles_nv=actuator_moment_tiles_nv,
     actuator_moment_tiles_nu=actuator_moment_tiles_nu,
-    qfrc_actuator_tiles_nu=qfrc_actuator_tiles_nu,
-    qfrc_actuator_tiles_nv=qfrc_actuator_tiles_nv,
     actuator_trntype=wp.array(mjm.actuator_trntype, dtype=int),
     actuator_dyntype=wp.array(mjm.actuator_dyntype, dtype=int),
     actuator_gaintype=wp.array(mjm.actuator_gaintype, dtype=int),

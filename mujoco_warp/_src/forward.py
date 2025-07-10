@@ -769,7 +769,7 @@ def _tendon_actuator_force_clamp(
 
 
 @wp.kernel
-def _qfrc_actuator_sparse(
+def _qfrc_actuator(
   # Model:
   nu: int,
   ngravcomp: int,
@@ -802,68 +802,6 @@ def _qfrc_actuator_sparse(
     qfrc = wp.clamp(qfrc, frcrange[0], frcrange[1])
 
   qfrc_actuator_out[worldid, dofid] = qfrc
-
-
-@wp.kernel
-def _qfrc_actuator_limited(
-  # Model:
-  ngravcomp: int,
-  jnt_actfrclimited: wp.array(dtype=bool),
-  jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
-  jnt_actgravcomp: wp.array(dtype=int),
-  dof_jntid: wp.array(dtype=int),
-  # Data in:
-  qfrc_gravcomp_in: wp.array2d(dtype=float),
-  qfrc_actuator_in: wp.array2d(dtype=float),
-  # Data out:
-  qfrc_actuator_out: wp.array2d(dtype=float),
-):
-  worldid, dofid = wp.tid()
-  jntid = dof_jntid[dofid]
-  qfrc_dof = qfrc_actuator_in[worldid, dofid]
-
-  # actuator-level gravity compensation, skip if added as a passive force
-  if ngravcomp and jnt_actgravcomp[jntid]:
-    qfrc_dof += qfrc_gravcomp_in[worldid, dofid]
-
-  if jnt_actfrclimited[jntid]:
-    frcrange = jnt_actfrcrange[worldid, jntid]
-    qfrc_dof = wp.clamp(qfrc_dof, frcrange[0], frcrange[1])
-
-  qfrc_actuator_out[worldid, dofid] = qfrc_dof
-
-
-@cache_kernel
-def _tile_qfrc_actuator(tile_nu: TileSet, tile_nv: TileSet):
-  @nested_kernel
-  def qfrc_actuator(
-    # Data in:
-    actuator_force_in: wp.array3d(dtype=float),
-    actuator_moment_in: wp.array3d(dtype=float),
-    # In:
-    tile_nu_adr: wp.array(dtype=int),
-    tile_nv_adr: wp.array(dtype=int),
-    # Data out:
-    qfrc_actuator_out: wp.array3d(dtype=float),
-  ):
-    worldid, nodeid = wp.tid()
-
-    TILE_NU_SIZE = wp.static(int(tile_nu.size))
-    TILE_NV_SIZE = wp.static(int(tile_nv.size))
-
-    offset_nu = tile_nu_adr[nodeid]
-    offset_nv = tile_nv_adr[nodeid]
-
-    actuator_moment_tile = wp.tile_load(
-      actuator_moment_in[worldid], shape=(TILE_NU_SIZE, TILE_NV_SIZE), offset=(offset_nu, offset_nv)
-    )
-    actuator_moment_T_tile = wp.tile_transpose(actuator_moment_tile)
-
-    force_tile = wp.tile_load(actuator_force_in[worldid], shape=(TILE_NU_SIZE, 1), offset=(offset_nu, 0))
-    qfrc_tile = wp.tile_matmul(actuator_moment_T_tile, force_tile)
-    wp.tile_store(qfrc_actuator_out[worldid], qfrc_tile, offset=(offset_nv, 0))
-
-  return qfrc_actuator
 
 
 @event_scope
@@ -929,55 +867,22 @@ def fwd_actuation(m: Model, d: Data):
       outputs=[d.actuator_force],
     )
 
-  if m.opt.is_sparse:
-    wp.launch(
-      _qfrc_actuator_sparse,
-      dim=(d.nworld, m.nv),
-      inputs=[
-        m.nu,
-        m.ngravcomp,
-        m.jnt_actfrclimited,
-        m.jnt_actfrcrange,
-        m.jnt_actgravcomp,
-        m.dof_jntid,
-        d.actuator_moment,
-        d.qfrc_gravcomp,
-        d.actuator_force,
-      ],
-      outputs=[d.qfrc_actuator],
-    )
-
-  else:
-    for tile_nu, tile_nv in zip(m.qfrc_actuator_tiles_nu, m.qfrc_actuator_tiles_nv):
-      wp.launch_tiled(
-        _tile_qfrc_actuator(tile_nu, tile_nv),
-        dim=(d.nworld, tile_nu.adr.size, tile_nv.adr.size),
-        inputs=[
-          d.actuator_force.reshape(d.actuator_force.shape + (1,)),
-          d.actuator_moment,
-          tile_nu.adr,
-          tile_nv.adr,
-        ],
-        outputs=[
-          d.qfrc_actuator.reshape(d.qfrc_actuator.shape + (1,)),
-        ],
-        block_dim=m.block_dim.qfrc_actuator,
-      )
-
-    wp.launch(
-      _qfrc_actuator_limited,
-      dim=(d.nworld, m.nv),
-      inputs=[
-        m.ngravcomp,
-        m.jnt_actfrclimited,
-        m.jnt_actfrcrange,
-        m.jnt_actgravcomp,
-        m.dof_jntid,
-        d.qfrc_gravcomp,
-        d.qfrc_actuator,
-      ],
-      outputs=[d.qfrc_actuator],
-    )
+  wp.launch(
+    _qfrc_actuator,
+    dim=(d.nworld, m.nv),
+    inputs=[
+      m.nu,
+      m.ngravcomp,
+      m.jnt_actfrclimited,
+      m.jnt_actfrcrange,
+      m.jnt_actgravcomp,
+      m.dof_jntid,
+      d.actuator_moment,
+      d.qfrc_gravcomp,
+      d.actuator_force,
+    ],
+    outputs=[d.qfrc_actuator],
+  )
 
   # TODO actuator-level gravity compensation, skip if added as passive force
 
