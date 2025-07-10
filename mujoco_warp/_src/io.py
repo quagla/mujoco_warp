@@ -345,6 +345,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
     nxn_pairid[pairid] = i
 
+  include = nxn_pairid > -2
+  nxn_pairid_filtered = nxn_pairid[include]
+  nxn_geom_pair_filtered = nxn_geom_pair[include]
+
   # count contact pair types
   geom_type_pair_count = np.bincount(
     [
@@ -377,6 +381,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   rangefinder_sensor_adr = np.full(mjm.nsensor, -1)
   rangefinder_sensor_adr[sensor_rangefinder_adr] = np.arange(len(sensor_rangefinder_adr))
 
+  # TODO(team): improve heuristic for selecting broadphase routine
   if mjm.ngeom > 1000:
     broadphase = types.BroadphaseType.SAP_SEGMENTED
   elif mjm.ngeom > 100:
@@ -654,7 +659,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       or np.any(mjm.actuator_gaintype == types.GainType.AFFINE.value)
     ),
     nxn_geom_pair=wp.array(nxn_geom_pair, dtype=wp.vec2i),
+    nxn_geom_pair_filtered=wp.array(nxn_geom_pair_filtered, dtype=wp.vec2i),
     nxn_pairid=wp.array(nxn_pairid, dtype=int),
+    nxn_pairid_filtered=wp.array(nxn_pairid_filtered, dtype=int),
     pair_dim=wp.array(mjm.pair_dim, dtype=int),
     pair_geom1=wp.array(mjm.pair_geom1, dtype=int),
     pair_geom2=wp.array(mjm.pair_geom2, dtype=int),
