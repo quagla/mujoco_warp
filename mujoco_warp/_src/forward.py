@@ -768,40 +768,61 @@ def _tendon_actuator_force_clamp(
         actuator_force_out[worldid, actid] *= actfrcrange[1] / ten_actfrc
 
 
-@wp.kernel
-def _qfrc_actuator(
-  # Model:
-  nu: int,
-  ngravcomp: int,
-  jnt_actfrclimited: wp.array(dtype=bool),
-  jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
-  jnt_actgravcomp: wp.array(dtype=int),
-  dof_jntid: wp.array(dtype=int),
-  # Data in:
-  actuator_moment_in: wp.array3d(dtype=float),
-  qfrc_gravcomp_in: wp.array2d(dtype=float),
-  actuator_force_in: wp.array2d(dtype=float),
-  # Data out:
-  qfrc_actuator_out: wp.array2d(dtype=float),
-):
-  worldid, dofid = wp.tid()
+def _qfrc_actuator(m: Model, d: Data):
+  NU = m.nu
 
-  qfrc = float(0.0)
-  for uid in range(nu):
-    # TODO consider using Tile API or transpose moment for better access pattern
-    qfrc += actuator_moment_in[worldid, uid, dofid] * actuator_force_in[worldid, uid]
+  @wp.kernel
+  def qfrc_actuator(
+    # Model:
+    ngravcomp: int,
+    jnt_actfrclimited: wp.array(dtype=bool),
+    jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
+    jnt_actgravcomp: wp.array(dtype=int),
+    dof_jntid: wp.array(dtype=int),
+    # Data in:
+    actuator_moment_in: wp.array3d(dtype=float),
+    qfrc_gravcomp_in: wp.array2d(dtype=float),
+    actuator_force_in: wp.array2d(dtype=float),
+    # Data out:
+    qfrc_actuator_out: wp.array2d(dtype=float),
+  ):
+    worldid, dofid = wp.tid()
 
-  jntid = dof_jntid[dofid]
+    actuator_moment_tile = wp.tile_load(actuator_moment_in[worldid], shape=(NU, 1), offset=(0, dofid))
+    actuator_moment_tile = wp.tile_squeeze(actuator_moment_tile, axis=(1,))
+    actuator_force_tile = wp.tile_load(actuator_force_in[worldid], shape=NU)
+    actuator_moment_force_tile = wp.tile_map(wp.mul, actuator_moment_tile, actuator_force_tile)
+    qfrc_tile = wp.tile_reduce(wp.add, actuator_moment_force_tile)
+    qfrc = qfrc_tile[0]
 
-  # actuator-level gravity compensation, skip if added as passive force
-  if ngravcomp and jnt_actgravcomp[jntid]:
-    qfrc += qfrc_gravcomp_in[worldid, dofid]
+    jntid = dof_jntid[dofid]
 
-  if jnt_actfrclimited[jntid]:
-    frcrange = jnt_actfrcrange[worldid, jntid]
-    qfrc = wp.clamp(qfrc, frcrange[0], frcrange[1])
+    # actuator-level gravity compensation, skip if added as passive force
+    if ngravcomp and jnt_actgravcomp[jntid]:
+      qfrc += qfrc_gravcomp_in[worldid, dofid]
 
-  qfrc_actuator_out[worldid, dofid] = qfrc
+    if jnt_actfrclimited[jntid]:
+      frcrange = jnt_actfrcrange[worldid, jntid]
+      qfrc = wp.clamp(qfrc, frcrange[0], frcrange[1])
+
+    qfrc_actuator_out[worldid, dofid] = qfrc
+
+  wp.launch_tiled(
+    qfrc_actuator,
+    dim=(d.nworld, m.nv),
+    inputs=[
+      m.ngravcomp,
+      m.jnt_actfrclimited,
+      m.jnt_actfrcrange,
+      m.jnt_actgravcomp,
+      m.dof_jntid,
+      d.actuator_moment,
+      d.qfrc_gravcomp,
+      d.actuator_force,
+    ],
+    outputs=[d.qfrc_actuator],
+    block_dim=m.block_dim.qfrc_actuator,
+  )
 
 
 @event_scope
@@ -867,23 +888,7 @@ def fwd_actuation(m: Model, d: Data):
       outputs=[d.actuator_force],
     )
 
-  wp.launch(
-    _qfrc_actuator,
-    dim=(d.nworld, m.nv),
-    inputs=[
-      m.nu,
-      m.ngravcomp,
-      m.jnt_actfrclimited,
-      m.jnt_actfrcrange,
-      m.jnt_actgravcomp,
-      m.dof_jntid,
-      d.actuator_moment,
-      d.qfrc_gravcomp,
-      d.actuator_force,
-    ],
-    outputs=[d.qfrc_actuator],
-  )
-
+  _qfrc_actuator(m, d)
   # TODO actuator-level gravity compensation, skip if added as passive force
 
 
