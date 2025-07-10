@@ -524,6 +524,7 @@ def _S1D(s1: wp.vec3, s2: wp.vec3):
 
 @wp.func
 def _gjk(
+  # In:
   tolerance: float,
   gjk_iterations: int,
   geom1: Geom,
@@ -535,7 +536,6 @@ def _gjk(
   cutoff: float,
 ):
   """Find distance within a tolerance between two geoms."""
-  need_dist = cutoff > 0.0
   cutoff2 = cutoff * cutoff
   simplex = mat43()
   simplex1 = mat43()
@@ -567,7 +567,7 @@ def _gjk(
     simplex_index2[n] = vertex_index2
     simplex[n] = s1_k - s2_k
 
-    if not need_dist:
+    if cutoff == 0.0:
       if wp.dot(x_k, simplex[n]) > 0:
         result = GJKResult()
         result.dim = 0
