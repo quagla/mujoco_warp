@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import warp as wp
 
@@ -82,37 +82,6 @@ def mul_m_sparse_ij(
   wp.atomic_add(res[worldid], j, qM_ij * vec[worldid, i])
 
 
-def _mul_m_sparse(
-  # Model:
-  nv: int,
-  qM_mulm_i: wp.array(dtype=int),
-  qM_mulm_j: wp.array(dtype=int),
-  qM_madr_ij: wp.array(dtype=int),
-  dof_Madr: wp.array(dtype=int),
-  # Data in:
-  nworld_in: int,
-  qM_in: wp.array3d(dtype=float),
-  # In:
-  vec: wp.array2d(dtype=float),
-  skip: wp.array(dtype=int),
-  # Out:
-  res: wp.array2d(dtype=float),
-):
-  wp.launch(
-    mul_m_sparse_diag,
-    dim=(nworld_in, nv),
-    inputs=[dof_Madr, qM_in, vec, skip],
-    outputs=[res],
-  )
-
-  wp.launch(
-    mul_m_sparse_ij,
-    dim=(nworld_in, qM_madr_ij.size),
-    inputs=[qM_mulm_i, qM_mulm_j, qM_madr_ij, qM_in, vec, skip],
-    outputs=[res],
-  )
-
-
 @cache_kernel
 def mul_m_dense(tile: TileSet):
   """Returns a matmul kernel for some tile size"""
@@ -143,42 +112,14 @@ def mul_m_dense(tile: TileSet):
   return kernel
 
 
-def _mul_m_dense(
-  # Model:
-  qM_tiles: tuple[TileSet, ...],
-  block_dim_mul_m_dense: int,
-  # Data in:
-  nworld_in: int,
-  qM_in: wp.array3d(dtype=float),
-  # In:
-  vec: wp.array2d(dtype=float),
-  skip: wp.array2d(dtype=bool),
-  # Out:
-  res: wp.array2d(dtype=float),
-):
-  for tile in qM_tiles:
-    wp.launch_tiled(
-      mul_m_dense(tile),
-      dim=(nworld_in, tile.adr.size),
-      inputs=[
-        qM_in,
-        tile.adr,
-        # note reshape: tile_matmul expects 2d input
-        vec.reshape(vec.shape + (1,)),
-        skip,
-      ],
-      outputs=[res.reshape(res.shape + (1,))],
-      block_dim=block_dim_mul_m_dense,
-    )
-
-
 @event_scope
 def mul_m(
   m: Model,
   d: Data,
-  res: wp.array(ndim=2, dtype=wp.float32),
-  vec: wp.array(ndim=2, dtype=wp.float32),
-  skip: wp.array(ndim=1, dtype=bool),
+  res: wp.array2d(dtype=float),
+  vec: wp.array2d(dtype=float),
+  skip: wp.array(dtype=bool),
+  M: Optional[wp.array3d(dtype=float)] = None,
 ):
   """Multiply vectors by inertia matrix.
 
@@ -188,31 +129,42 @@ def mul_m(
     res (wp.array2d(dtype=float)): Result: qM @ vec.
     vec (wp.array2d(dtype=float)): Input vector to multiply by qM.
     skip (wp.array(dtype=flooat)): Skip output.
+    M (wp.array3d(dtype=float), optional): Input matrix: M @ vec.
   """
 
+  if M is None:
+    M = d.qM
+
   if m.opt.is_sparse:
-    _mul_m_sparse(
-      m.nv,
-      m.qM_mulm_i,
-      m.qM_mulm_j,
-      m.qM_madr_ij,
-      m.dof_Madr,
-      d.nworld,
-      d.qM,
-      vec,
-      skip,
-      res,
+    wp.launch(
+      mul_m_sparse_diag,
+      dim=(d.nworld, m.nv),
+      inputs=[m.dof_Madr, M, vec, skip],
+      outputs=[res],
     )
+
+    wp.launch(
+      mul_m_sparse_ij,
+      dim=(d.nworld, m.qM_madr_ij.size),
+      inputs=[m.qM_mulm_i, m.qM_mulm_j, m.qM_madr_ij, M, vec, skip],
+      outputs=[res],
+    )
+
   else:
-    _mul_m_dense(
-      m.qM_tiles,
-      m.block_dim.mul_m_dense,
-      d.nworld,
-      d.qM,
-      vec,
-      skip,
-      res,
-    )
+    for tile in m.qM_tiles:
+      wp.launch_tiled(
+        mul_m_dense(tile),
+        dim=(d.nworld, tile.adr.size),
+        inputs=[
+          M,
+          tile.adr,
+          # note reshape: tile_matmul expects 2d input
+          vec.reshape(vec.shape + (1,)),
+          skip,
+        ],
+        outputs=[res.reshape(res.shape + (1,))],
+        block_dim=m.block_dim.mul_m_dense,
+      )
 
 
 @wp.kernel

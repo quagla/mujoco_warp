@@ -15,8 +15,7 @@
 
 import warp as wp
 
-from .support import _mul_m_dense
-from .support import _mul_m_sparse
+from .support import mul_m
 from .types import BiasType
 from .types import Data
 from .types import DisableBit
@@ -200,28 +199,6 @@ def deriv_smooth_vel(m: Model, d: Data, flg_forward: bool = True):
     )
   else:
     # qfrc = qM @ qacc
-    if m.opt.is_sparse:
-      _mul_m_sparse(
-        m.nv,
-        m.qM_mulm_i,
-        m.qM_mulm_j,
-        m.qM_madr_ij,
-        m.dof_Madr,
-        d.nworld,
-        d.qM_integration,
-        d.qacc,
-        d.inverse_mul_m_skip,
-        d.qfrc_integration,
-      )
-    else:
-      _mul_m_dense(
-        m.qM_tiles,
-        m.block_dim.mul_m_dense,
-        d.nworld,
-        d.qM_integration,
-        d.qacc,
-        d.inverse_mul_m_skip,
-        d.qfrc_integration,
-      )
+    mul_m(m, d, d.qfrc_integration, d.qacc, d.inverse_mul_m_skip, d.qM_integration)
 
   # TODO(team): rne derivative
