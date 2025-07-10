@@ -237,8 +237,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
     actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
 
-  actuator_velocity_tiles_nu = tuple((types.TileSet(adr=wp.array(np.array(np.arange(mjm.nu)), dtype=int), size=1),))
-  actuator_velocity_tiles_nv = tuple((types.TileSet(adr=wp.zeros(mjm.nu, dtype=int), size=mjm.nv),))
   qfrc_actuator_tiles_nu = tuple((types.TileSet(adr=wp.zeros(mjm.nv, dtype=int), size=mjm.nu),))
   qfrc_actuator_tiles_nv = tuple((types.TileSet(adr=wp.array(np.array(np.arange(mjm.nv)), dtype=int), size=1),))
 
@@ -591,8 +589,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     eq_ten_adr=wp.array(np.nonzero(mjm.eq_type == types.EqType.TENDON.value)[0], dtype=int),
     actuator_moment_tiles_nv=actuator_moment_tiles_nv,
     actuator_moment_tiles_nu=actuator_moment_tiles_nu,
-    actuator_velocity_tiles_nu=actuator_velocity_tiles_nu,
-    actuator_velocity_tiles_nv=actuator_velocity_tiles_nv,
     qfrc_actuator_tiles_nu=qfrc_actuator_tiles_nu,
     qfrc_actuator_tiles_nv=qfrc_actuator_tiles_nv,
     actuator_trntype=wp.array(mjm.actuator_trntype, dtype=int),
