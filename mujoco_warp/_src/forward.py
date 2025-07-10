@@ -889,7 +889,6 @@ def fwd_actuation(m: Model, d: Data):
     )
 
   _qfrc_actuator(m, d)
-  # TODO actuator-level gravity compensation, skip if added as passive force
 
 
 @wp.kernel
