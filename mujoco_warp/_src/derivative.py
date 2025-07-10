@@ -28,6 +28,7 @@ from .warp_util import event_scope
 wp.set_module_options({"enable_backward": False})
 
 
+# TODO(team): improve performance with tile operations?
 @wp.kernel
 def _qderiv_actuator_passive(
   # Model:
@@ -95,6 +96,7 @@ def _qderiv_actuator_passive(
       qM_integration_out[worldid, dofjid, dofiid] = qM
 
 
+# TODO(team): improve performance with tile operations?
 @wp.kernel
 def _qderiv_tendon_damping(
   # Model:
