@@ -44,7 +44,6 @@ class BlockDim:
   # forward
   euler_dense: int = 32
   actuator_velocity: int = 32
-  actuator_velocity_dense: int = 32
   tendon_velocity: int = 32
   qfrc_actuator: int = 32
   # ray
