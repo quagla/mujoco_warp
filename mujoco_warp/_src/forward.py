@@ -142,6 +142,35 @@ def _next_velocity(
   qvel_out[worldid, dofid] = qvel_in[worldid, dofid] + qacc_scale_in * qacc_in[worldid, dofid] * timestep
 
 
+# TODO(team): kernel analyzer array slice?
+@wp.func
+def _next_act(
+  # Model:
+  opt_timestep: float,  # kernel_analyzer: ignore
+  actuator_dyntype: int,  # kernel_analyzer: ignore
+  actuator_dynprm: vec10f,  # kernel_analyzer: ignore
+  actuator_actrange: wp.vec2,  # kernel_analyzer: ignore
+  # Data In:
+  act_in: float,  # kernel_analyzer: ignore
+  act_dot_in: float,  # kernel_analyzer: ignore
+  # In:
+  act_dot_scale: float,
+  clamp: bool,
+) -> float:
+  # advance actuation
+  if actuator_dyntype == wp.static(DynType.FILTEREXACT.value):
+    tau = wp.max(MJ_MINVAL, actuator_dynprm[0])
+    act = act_in + act_dot_scale * act_dot_in * tau * (1.0 - wp.exp(-opt_timestep / tau))
+  else:
+    act = act_in + act_dot_scale * act_dot_in * opt_timestep
+
+  # clamp to actrange
+  if clamp:
+    act = wp.clamp(act, actuator_actrange[0], actuator_actrange[1])
+
+  return act
+
+
 @wp.kernel
 def _next_activation(
   # Model:
@@ -154,30 +183,22 @@ def _next_activation(
   act_in: wp.array2d(dtype=float),
   act_dot_in: wp.array2d(dtype=float),
   # In:
-  act_dot_scale_in: float,
+  act_dot_scale: float,
   limit: bool,
   # Data out:
   act_out: wp.array2d(dtype=float),
 ):
   worldid, actid = wp.tid()
-  timestep = opt_timestep[worldid]
-
-  act = act_in[worldid, actid]
-  act_dot = act_dot_in[worldid, actid]
-
-  # advance the actuation
-  if actuator_dyntype[actid] == wp.static(DynType.FILTEREXACT.value):
-    dyn_prm = actuator_dynprm[worldid, actid]
-    tau = wp.max(MJ_MINVAL, dyn_prm[0])
-    act += act_dot_scale_in * act_dot * tau * (1.0 - wp.exp(-timestep / tau))
-  else:
-    act += act_dot_scale_in * act_dot * timestep
-
-  # clamp to actrange
-  if limit and actuator_actlimited[actid]:
-    actrange = actuator_actrange[worldid, actid]
-    act = wp.clamp(act, actrange[0], actrange[1])
-
+  act = _next_act(
+    opt_timestep[worldid],
+    actuator_dyntype[actid],
+    actuator_dynprm[worldid, actid],
+    actuator_actrange[worldid, actid],
+    act_in[worldid, actid],
+    act_dot_in[worldid, actid],
+    act_dot_scale,
+    limit and actuator_actlimited[actid],
+  )
   act_out[worldid, actid] = act
 
 
@@ -525,7 +546,7 @@ def implicit(m: Model, d: Data):
 
 
 @event_scope
-def fwd_position(m: Model, d: Data):
+def fwd_position(m: Model, d: Data, factorize: bool = True):
   """Position-dependent computations."""
 
   smooth.kinematics(m, d)
@@ -534,8 +555,10 @@ def fwd_position(m: Model, d: Data):
   smooth.tendon(m, d)
   smooth.crb(m, d)
   smooth.tendon_armature(m, d)
-  smooth.factor_m(m, d)
-  collision_driver.collision(m, d)
+  if factorize:
+    smooth.factor_m(m, d)
+  if m.opt.run_collision_detection:
+    collision_driver.collision(m, d)
   constraint.make_constraint(m, d)
   smooth.transmission(m, d)
 
@@ -625,6 +648,7 @@ def fwd_velocity(m: Model, d: Data):
 def _actuator_force(
   # Model:
   na: int,
+  opt_timestep: wp.array(dtype=float),
   actuator_dyntype: wp.array(dtype=int),
   actuator_gaintype: wp.array(dtype=int),
   actuator_biastype: wp.array(dtype=int),
@@ -632,11 +656,14 @@ def _actuator_force(
   actuator_actnum: wp.array(dtype=int),
   actuator_ctrllimited: wp.array(dtype=bool),
   actuator_forcelimited: wp.array(dtype=bool),
+  actuator_actlimited: wp.array(dtype=bool),
   actuator_dynprm: wp.array2d(dtype=vec10f),
   actuator_gainprm: wp.array2d(dtype=vec10f),
   actuator_biasprm: wp.array2d(dtype=vec10f),
+  actuator_actearly: wp.array(dtype=bool),
   actuator_ctrlrange: wp.array2d(dtype=wp.vec2),
   actuator_forcerange: wp.array2d(dtype=wp.vec2),
+  actuator_actrange: wp.array2d(dtype=wp.vec2),
   actuator_acc0: wp.array(dtype=float),
   actuator_lengthrange: wp.array(dtype=wp.vec2),
   # Data in:
@@ -657,32 +684,45 @@ def _actuator_force(
   if actuator_ctrllimited[uid] and not dsbl_clampctrl:
     ctrlrange = actuator_ctrlrange[worldid, uid]
     ctrl = wp.clamp(ctrl, ctrlrange[0], ctrlrange[1])
-
-  if na:
-    actadr = actuator_actadr[uid]
-
-    if actadr > -1:
-      dyntype = actuator_dyntype[uid]
-      act_dot = 0.0
-      if dyntype == int(DynType.INTEGRATOR.value):
-        act_dot = ctrl
-      elif dyntype == int(DynType.FILTER.value) or dyntype == int(DynType.FILTEREXACT.value):
-        dynprm = actuator_dynprm[worldid, uid]
-        act = act_in[worldid, actadr]
-        act_dot = (ctrl - act) / wp.max(dynprm[0], MJ_MINVAL)
-      elif dyntype == int(DynType.MUSCLE.value):
-        dynprm = actuator_dynprm[worldid, uid]
-        act = act_in[worldid, actadr]
-        act_dot = util_misc.muscle_dynamics(ctrl, act, dynprm)
-
-      act_dot_out[worldid, actadr] = act_dot
-
   ctrl_act = ctrl
-  if na:
-    if actuator_actadr[uid] > -1:
-      ctrl_act = act_in[worldid, actuator_actadr[uid] + actuator_actnum[uid] - 1]
 
-  # TODO(team): actuator_actearly
+  act_first = actuator_actadr[uid]
+  if na and act_first >= 0:
+    act_last = act_first + actuator_actnum[uid] - 1
+    dyntype = actuator_dyntype[uid]
+
+    if dyntype == int(DynType.INTEGRATOR.value):
+      act_dot = ctrl
+    elif dyntype == int(DynType.FILTER.value) or dyntype == int(DynType.FILTEREXACT.value):
+      dynprm = actuator_dynprm[worldid, uid]
+      act = act_in[worldid, act_last]
+      act_dot = (ctrl - act) / wp.max(dynprm[0], MJ_MINVAL)
+    elif dyntype == int(DynType.MUSCLE.value):
+      dynprm = actuator_dynprm[worldid, uid]
+      act = act_in[worldid, act_last]
+      act_dot = util_misc.muscle_dynamics(ctrl, act, dynprm)
+    else:  # DynType.NONE
+      act_dot = 0.0
+
+    act_dot_out[worldid, act_last] = act_dot
+
+    if actuator_actearly[uid]:
+      if dyntype == int(DynType.INTEGRATOR.value) or dyntype == int(DynType.NONE.value):
+        dynprm = actuator_dynprm[worldid, uid]
+        act = act_in[worldid, act_last]
+
+      ctrl_act = _next_act(
+        opt_timestep[worldid],
+        dyntype,
+        dynprm,
+        actuator_actrange[worldid, uid],
+        act,
+        act_dot,
+        1.0,
+        actuator_actlimited[uid],
+      )
+    else:
+      ctrl_act = act_in[worldid, act_last]
 
   length = actuator_length_in[worldid, uid]
   velocity = actuator_velocity_in[worldid, uid]
@@ -838,6 +878,7 @@ def fwd_actuation(m: Model, d: Data):
     dim=(d.nworld, m.nu),
     inputs=[
       m.na,
+      m.opt.timestep,
       m.actuator_dyntype,
       m.actuator_gaintype,
       m.actuator_biastype,
@@ -845,11 +886,14 @@ def fwd_actuation(m: Model, d: Data):
       m.actuator_actnum,
       m.actuator_ctrllimited,
       m.actuator_forcelimited,
+      m.actuator_actlimited,
       m.actuator_dynprm,
       m.actuator_gainprm,
       m.actuator_biasprm,
+      m.actuator_actearly,
       m.actuator_ctrlrange,
       m.actuator_forcerange,
+      m.actuator_actrange,
       m.actuator_acc0,
       m.actuator_lengthrange,
       d.act,
@@ -911,7 +955,7 @@ def _qfrc_smooth(
 
 
 @event_scope
-def fwd_acceleration(m: Model, d: Data):
+def fwd_acceleration(m: Model, d: Data, factorize: bool = False):
   """Add up all non-constraint forces, compute qacc_smooth."""
 
   wp.launch(
@@ -929,7 +973,19 @@ def fwd_acceleration(m: Model, d: Data):
   )
   xfrc_accumulate(m, d, d.qfrc_smooth)
 
-  smooth.solve_m(m, d, d.qacc_smooth, d.qfrc_smooth)
+  if factorize:
+    smooth.factor_solve_i(m, d, d.qM, d.qLD, d.qLDiagInv, d.qacc_smooth, d.qfrc_smooth)
+  else:
+    smooth.solve_m(m, d, d.qacc_smooth, d.qfrc_smooth)
+
+
+@wp.kernel
+def _zero_energy(
+  # Data out:
+  energy_out: wp.array(dtype=wp.vec2),
+):
+  tid = wp.tid()
+  energy_out[tid] = wp.vec2(0.0, 0.0)
 
 
 @event_scope
@@ -937,14 +993,18 @@ def forward(m: Model, d: Data):
   """Forward dynamics."""
   energy = m.opt.enableflags & EnableBit.ENERGY
 
-  fwd_position(m, d)
+  fwd_position(m, d, factorize=False)
   sensor.sensor_pos(m, d)
 
   if energy:
     if m.sensor_e_potential == 0:  # not computed by sensor
       sensor.energy_pos(m, d)
   else:
-    d.energy.zero_()
+    wp.launch(
+      _zero_energy,
+      dim=d.nworld,
+      inputs=[d.energy],
+    )
 
   fwd_velocity(m, d)
   sensor.sensor_vel(m, d)
@@ -954,7 +1014,7 @@ def forward(m: Model, d: Data):
       sensor.energy_vel(m, d)
 
   fwd_actuation(m, d)
-  fwd_acceleration(m, d)
+  fwd_acceleration(m, d, factorize=True)
   sensor.sensor_acc(m, d)
 
   solver.solve(m, d)

@@ -33,6 +33,32 @@ from .warp_util import event_scope
 wp.set_module_options({"enable_backward": False})
 
 
+@wp.kernel
+def _zero_collision_arrays(
+  # Data in:
+  nworld_in: int,
+  # In:
+  hfield_geom_pair_in: int,
+  # Data out:
+  ncon_out: wp.array(dtype=int),
+  ncon_hfield_out: wp.array(dtype=int),  # kernel_analyzer: ignore
+  collision_hftri_index_out: wp.array(dtype=int),
+  ncollision_out: wp.array(dtype=int),
+):
+  tid = wp.tid()
+
+  if tid == 0:
+    # Zero the single collision counter
+    ncollision_out[0] = 0
+    ncon_out[0] = 0
+
+  if tid < hfield_geom_pair_in * nworld_in:
+    ncon_hfield_out[tid] = 0
+
+  # Zero collision pair indices
+  collision_hftri_index_out[tid] = 0
+
+
 @wp.func
 def _sphere_filter(
   # Model:
@@ -399,10 +425,6 @@ def _nxn_broadphase(
 ):
   worldid, elementid = wp.tid()
 
-  # check for valid geom pair
-  if nxn_pairid[elementid] < -1:
-    return
-
   geom = nxn_geom_pair[elementid]
   geom1 = geom[0]
   geom2 = geom[1]
@@ -436,38 +458,67 @@ def _nxn_broadphase(
 def nxn_broadphase(m: Model, d: Data):
   """Broadphase collision detection via brute-force search."""
 
-  if m.nxn_geom_pair.shape[0]:
-    wp.launch(
-      _nxn_broadphase,
-      dim=(d.nworld, m.nxn_geom_pair.shape[0]),
-      inputs=[
-        m.geom_type,
-        m.geom_rbound,
-        m.geom_margin,
-        m.nxn_geom_pair,
-        m.nxn_pairid,
-        d.nconmax,
-        d.geom_xpos,
-        d.geom_xmat,
-      ],
-      outputs=[
-        d.collision_pair,
-        d.collision_hftri_index,
-        d.collision_pairid,
-        d.collision_worldid,
-        d.ncollision,
-      ],
-    )
+  wp.launch(
+    _nxn_broadphase,
+    dim=(d.nworld, m.nxn_geom_pair_filtered.shape[0]),
+    inputs=[
+      m.geom_type,
+      m.geom_rbound,
+      m.geom_margin,
+      m.nxn_geom_pair_filtered,
+      m.nxn_pairid_filtered,
+      d.nconmax,
+      d.geom_xpos,
+      d.geom_xmat,
+    ],
+    outputs=[
+      d.collision_pair,
+      d.collision_hftri_index,
+      d.collision_pairid,
+      d.collision_worldid,
+      d.ncollision,
+    ],
+  )
+
+
+def _narrowphase(m, d):
+  # Process heightfield collisions
+  if m.nhfield > 0:
+    hfield_midphase(m, d)
+
+  # TODO(team): we should reject far-away contacts in the narrowphase instead of constraint
+  #             partitioning because we can move some pressure of the atomics
+  convex_narrowphase(m, d)
+  primitive_narrowphase(m, d)
+
+  if m.has_sdf_geom:
+    sdf_narrowphase(m, d)
+
+
+def narrowphase(m, d):
+  if m.opt.graph_conditional:
+    wp.capture_if(condition=d.ncollision, on_true=_narrowphase, m=m, d=d)
+  else:
+    _narrowphase(m, d)
 
 
 @event_scope
 def collision(m: Model, d: Data):
   """Collision detection."""
 
-  d.ncollision.zero_()
-  d.ncon.zero_()
-  d.ncon_hfield.zero_()
-  d.collision_hftri_index.zero_()
+  # zero collision-related arrays
+  wp.launch(
+    _zero_collision_arrays,
+    dim=d.nconmax,
+    inputs=[
+      d.nworld,
+      d.ncon_hfield.shape[1],
+      d.ncon,
+      d.ncon_hfield.reshape(-1),
+      d.collision_hftri_index,
+      d.ncollision,
+    ],
+  )
 
   if d.nconmax == 0:
     return
@@ -481,15 +532,4 @@ def collision(m: Model, d: Data):
   else:
     sap_broadphase(m, d)
 
-  # Process heightfield collisions
-  if m.nhfield > 0:
-    hfield_midphase(m, d)
-
-  # TODO(team): we should reject far-away contacts in the narrowphase instead of constraint
-  #             partitioning because we can move some pressure of the atomics
-  # TODO(team) switch between collision functions and GJK/EPA here
-  convex_narrowphase(m, d)
-  primitive_narrowphase(m, d)
-
-  if m.has_sdf_geom:
-    sdf_narrowphase(m, d)
+  narrowphase(m, d)

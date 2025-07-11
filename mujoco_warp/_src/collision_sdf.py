@@ -26,6 +26,7 @@ from .types import Data
 from .types import GeomType
 from .types import Model
 from .types import vec5
+from .util_misc import halton
 from .warp_util import event_scope
 
 
@@ -268,23 +269,6 @@ def gradient_descent(
   return dist, pos3, n
 
 
-@wp.func
-def halton(index: int, base: int) -> float:
-  n0 = index
-  b = float(base)
-  f = float(1.0) / b
-  hn = float(0.0)
-
-  while n0 > 0:
-    n1 = n0 // base
-    r = n0 - n1 * base
-    hn += f * float(r)
-    f /= b
-    n0 = n1
-
-  return hn
-
-
 @wp.kernel
 def _sdf_narrowphase(
   # Model:
@@ -312,6 +296,15 @@ def _sdf_narrowphase(
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_graphadr: wp.array(dtype=int),
   mesh_graph: wp.array(dtype=int),
+  mesh_polynum: wp.array(dtype=int),
+  mesh_polyadr: wp.array(dtype=int),
+  mesh_polynormal: wp.array(dtype=wp.vec3),
+  mesh_polyvertadr: wp.array(dtype=int),
+  mesh_polyvertnum: wp.array(dtype=int),
+  mesh_polyvert: wp.array(dtype=int),
+  mesh_polymapadr: wp.array(dtype=int),
+  mesh_polymapnum: wp.array(dtype=int),
+  mesh_polymap: wp.array(dtype=int),
   pair_dim: wp.array(dtype=int),
   pair_solref: wp.array2d(dtype=wp.vec2),
   pair_solreffriction: wp.array2d(dtype=wp.vec2),
@@ -402,6 +395,15 @@ def _sdf_narrowphase(
     mesh_vert,
     mesh_graphadr,
     mesh_graph,
+    mesh_polynum,
+    mesh_polyadr,
+    mesh_polynormal,
+    mesh_polyvertadr,
+    mesh_polyvertnum,
+    mesh_polyvert,
+    mesh_polymapadr,
+    mesh_polymapnum,
+    mesh_polymap,
     geom_xpos_in,
     geom_xmat_in,
     worldid,
@@ -422,6 +424,15 @@ def _sdf_narrowphase(
     mesh_vert,
     mesh_graphadr,
     mesh_graph,
+    mesh_polynum,
+    mesh_polyadr,
+    mesh_polynormal,
+    mesh_polyvertadr,
+    mesh_polyvertnum,
+    mesh_polyvert,
+    mesh_polymapadr,
+    mesh_polymapnum,
+    mesh_polymap,
     geom_xpos_in,
     geom_xmat_in,
     worldid,
@@ -541,6 +552,15 @@ def sdf_narrowphase(m: Model, d: Data):
       m.mesh_vert,
       m.mesh_graphadr,
       m.mesh_graph,
+      m.mesh_polynum,
+      m.mesh_polyadr,
+      m.mesh_polynormal,
+      m.mesh_polyvertadr,
+      m.mesh_polyvertnum,
+      m.mesh_polyvert,
+      m.mesh_polymapadr,
+      m.mesh_polymapnum,
+      m.mesh_polymap,
       m.pair_dim,
       m.pair_solref,
       m.pair_solreffriction,
