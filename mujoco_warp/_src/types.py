@@ -63,7 +63,7 @@ class BlockDim:
 
 
 class BroadphaseFilter(enum.IntFlag):
-  """Broadphase filter.
+  """Bitmask specifying which collision functions to run during broadphase.
 
   Attributes:
     PLANE: collision between bounding sphere and plane.
