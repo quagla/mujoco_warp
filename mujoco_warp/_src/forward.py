@@ -563,12 +563,12 @@ def fwd_position(m: Model, d: Data, factorize: bool = True):
   smooth.transmission(m, d)
 
 
-# TODO(team): sparse version
-def _actuator_velocity_sparse(m: Model, d: Data):
+# TODO(team): sparse actuator_moment version
+def _actuator_velocity(m: Model, d: Data):
   NV = m.nv
 
   @kernel
-  def actuator_velocity_sparse(
+  def actuator_velocity(
     # Data in:
     qvel_in: wp.array2d(dtype=float),
     actuator_moment_in: wp.array3d(dtype=float),
@@ -580,10 +580,10 @@ def _actuator_velocity_sparse(m: Model, d: Data):
     qvel_tile = wp.tile_load(qvel_in[worldid], shape=NV)
     moment_qvel_tile = wp.tile_map(wp.mul, moment_tile, qvel_tile)
     actuator_velocity_tile = wp.tile_reduce(wp.add, moment_qvel_tile)
-    wp.tile_store(actuator_velocity_out[worldid], actuator_velocity_tile)
+    actuator_velocity_out[worldid, actid] = actuator_velocity_tile[0]
 
   wp.launch_tiled(
-    actuator_velocity_sparse,
+    actuator_velocity,
     dim=(d.nworld, m.nu),
     inputs=[
       d.qvel,
@@ -592,45 +592,8 @@ def _actuator_velocity_sparse(m: Model, d: Data):
     outputs=[
       d.actuator_velocity,
     ],
-    block_dim=m.block_dim.actuator_velocity_sparse,
+    block_dim=m.block_dim.actuator_velocity,
   )
-
-
-@cache_kernel
-def _tile_actuator_velocity_dense(
-  tile_nu: TileSet,
-  tile_nv: TileSet,
-):
-  @nested_kernel
-  def actuator_velocity_dense(
-    # Data in:
-    qvel_in: wp.array3d(dtype=float),
-    actuator_moment_in: wp.array3d(dtype=float),
-    # In:
-    tile_nu_adr: wp.array(dtype=int),
-    tile_nv_adr: wp.array(dtype=int),
-    # Data out:
-    actuator_velocity_out: wp.array3d(dtype=float),
-  ):
-    worldid, nodeid = wp.tid()
-
-    TILE_NU_SIZE = wp.static(int(tile_nu.size))
-    TILE_NV_SIZE = wp.static(int(tile_nv.size))
-
-    offset_nu = tile_nu_adr[nodeid]
-    offset_nv = tile_nv_adr[nodeid]
-
-    actuator_moment_tile = wp.tile_load(
-      actuator_moment_in[worldid],
-      shape=(TILE_NU_SIZE, TILE_NV_SIZE),
-      offset=(offset_nu, offset_nv),
-    )
-    qvel_tile = wp.tile_load(qvel_in[worldid], shape=(TILE_NV_SIZE, 1), offset=(offset_nv, 0))
-    velocity_tile = wp.tile_matmul(actuator_moment_tile, qvel_tile)
-
-    wp.tile_store(actuator_velocity_out[worldid], velocity_tile, offset=(offset_nu, 0))
-
-  return actuator_velocity_dense
 
 
 def _tendon_velocity(m: Model, d: Data):
@@ -649,7 +612,7 @@ def _tendon_velocity(m: Model, d: Data):
     qvel_tile = wp.tile_load(qvel_in[worldid], shape=NV)
     ten_J_qvel_tile = wp.tile_map(wp.mul, ten_J_tile, qvel_tile)
     ten_velocity_tile = wp.tile_reduce(wp.add, ten_J_qvel_tile)
-    wp.tile_store(ten_velocity_out[worldid], ten_velocity_tile)
+    ten_velocity_out[worldid, tenid] = ten_velocity_tile[0]
 
   wp.launch_tiled(
     tendon_velocity,
@@ -669,21 +632,7 @@ def _tendon_velocity(m: Model, d: Data):
 def fwd_velocity(m: Model, d: Data):
   """Velocity-dependent computations."""
 
-  if m.opt.is_sparse:
-    _actuator_velocity_sparse(m, d)
-  else:
-    for tile_nu, tile_nv in zip(m.actuator_moment_tiles_nu, m.actuator_moment_tiles_nv):
-      # TODO(team): avoid creating invalid tiles
-      if tile_nu.size == 0 or tile_nv.size == 0:
-        continue
-
-      wp.launch_tiled(
-        _tile_actuator_velocity_dense(tile_nu, tile_nv),
-        dim=(d.nworld, tile_nu.adr.size),
-        inputs=[d.qvel.reshape(d.qvel.shape + (1,)), d.actuator_moment, tile_nu.adr, tile_nv.adr],
-        outputs=[d.actuator_velocity.reshape(d.actuator_velocity.shape + (1,))],
-        block_dim=m.block_dim.actuator_velocity_dense,
-      )
+  _actuator_velocity(m, d)
 
   if m.ntendon > 0:
     # TODO(team): sparse version
@@ -859,102 +808,61 @@ def _tendon_actuator_force_clamp(
         actuator_force_out[worldid, actid] *= actfrcrange[1] / ten_actfrc
 
 
-@wp.kernel
-def _qfrc_actuator_sparse(
-  # Model:
-  nu: int,
-  ngravcomp: int,
-  jnt_actfrclimited: wp.array(dtype=bool),
-  jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
-  jnt_actgravcomp: wp.array(dtype=int),
-  dof_jntid: wp.array(dtype=int),
-  # Data in:
-  actuator_moment_in: wp.array3d(dtype=float),
-  qfrc_gravcomp_in: wp.array2d(dtype=float),
-  actuator_force_in: wp.array2d(dtype=float),
-  # Data out:
-  qfrc_actuator_out: wp.array2d(dtype=float),
-):
-  worldid, dofid = wp.tid()
+def _qfrc_actuator(m: Model, d: Data):
+  NU = m.nu
 
-  qfrc = float(0.0)
-  for uid in range(nu):
-    # TODO consider using Tile API or transpose moment for better access pattern
-    qfrc += actuator_moment_in[worldid, uid, dofid] * actuator_force_in[worldid, uid]
-
-  jntid = dof_jntid[dofid]
-
-  # actuator-level gravity compensation, skip if added as passive force
-  if ngravcomp and jnt_actgravcomp[jntid]:
-    qfrc += qfrc_gravcomp_in[worldid, dofid]
-
-  if jnt_actfrclimited[jntid]:
-    frcrange = jnt_actfrcrange[worldid, jntid]
-    qfrc = wp.clamp(qfrc, frcrange[0], frcrange[1])
-
-  qfrc_actuator_out[worldid, dofid] = qfrc
-
-
-@wp.kernel
-def _qfrc_actuator_limited(
-  # Model:
-  ngravcomp: int,
-  jnt_actfrclimited: wp.array(dtype=bool),
-  jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
-  jnt_actgravcomp: wp.array(dtype=int),
-  dof_jntid: wp.array(dtype=int),
-  # Data in:
-  qfrc_gravcomp_in: wp.array2d(dtype=float),
-  qfrc_actuator_in: wp.array2d(dtype=float),
-  # Data out:
-  qfrc_actuator_out: wp.array2d(dtype=float),
-):
-  worldid, dofid = wp.tid()
-  jntid = dof_jntid[dofid]
-  qfrc_dof = qfrc_actuator_in[worldid, dofid]
-
-  # actuator-level gravity compensation, skip if added as a passive force
-  if ngravcomp and jnt_actgravcomp[jntid]:
-    qfrc_dof += qfrc_gravcomp_in[worldid, dofid]
-
-  if jnt_actfrclimited[jntid]:
-    frcrange = jnt_actfrcrange[worldid, jntid]
-    qfrc_dof = wp.clamp(qfrc_dof, frcrange[0], frcrange[1])
-
-  qfrc_actuator_out[worldid, dofid] = qfrc_dof
-
-
-@cache_kernel
-def _tile_qfrc_actuator(tile_nu: TileSet, tile_nv: TileSet):
-  @nested_kernel
+  @wp.kernel
   def qfrc_actuator(
+    # Model:
+    ngravcomp: int,
+    jnt_actfrclimited: wp.array(dtype=bool),
+    jnt_actfrcrange: wp.array2d(dtype=wp.vec2),
+    jnt_actgravcomp: wp.array(dtype=int),
+    dof_jntid: wp.array(dtype=int),
     # Data in:
-    actuator_force_in: wp.array3d(dtype=float),
     actuator_moment_in: wp.array3d(dtype=float),
-    # In:
-    tile_nu_adr: wp.array(dtype=int),
-    tile_nv_adr: wp.array(dtype=int),
+    qfrc_gravcomp_in: wp.array2d(dtype=float),
+    actuator_force_in: wp.array2d(dtype=float),
     # Data out:
-    qfrc_actuator_out: wp.array3d(dtype=float),
+    qfrc_actuator_out: wp.array2d(dtype=float),
   ):
-    worldid, nodeid = wp.tid()
+    worldid, dofid = wp.tid()
 
-    TILE_NU_SIZE = wp.static(int(tile_nu.size))
-    TILE_NV_SIZE = wp.static(int(tile_nv.size))
+    actuator_moment_tile = wp.tile_load(actuator_moment_in[worldid], shape=(NU, 1), offset=(0, dofid))
+    actuator_moment_tile = wp.tile_squeeze(actuator_moment_tile, axis=(1,))
+    actuator_force_tile = wp.tile_load(actuator_force_in[worldid], shape=NU)
+    actuator_moment_force_tile = wp.tile_map(wp.mul, actuator_moment_tile, actuator_force_tile)
+    qfrc_tile = wp.tile_reduce(wp.add, actuator_moment_force_tile)
+    qfrc = qfrc_tile[0]
 
-    offset_nu = tile_nu_adr[nodeid]
-    offset_nv = tile_nv_adr[nodeid]
+    jntid = dof_jntid[dofid]
 
-    actuator_moment_tile = wp.tile_load(
-      actuator_moment_in[worldid], shape=(TILE_NU_SIZE, TILE_NV_SIZE), offset=(offset_nu, offset_nv)
-    )
-    actuator_moment_T_tile = wp.tile_transpose(actuator_moment_tile)
+    # actuator-level gravity compensation, skip if added as passive force
+    if ngravcomp and jnt_actgravcomp[jntid]:
+      qfrc += qfrc_gravcomp_in[worldid, dofid]
 
-    force_tile = wp.tile_load(actuator_force_in[worldid], shape=(TILE_NU_SIZE, 1), offset=(offset_nu, 0))
-    qfrc_tile = wp.tile_matmul(actuator_moment_T_tile, force_tile)
-    wp.tile_store(qfrc_actuator_out[worldid], qfrc_tile, offset=(offset_nv, 0))
+    if jnt_actfrclimited[jntid]:
+      frcrange = jnt_actfrcrange[worldid, jntid]
+      qfrc = wp.clamp(qfrc, frcrange[0], frcrange[1])
 
-  return qfrc_actuator
+    qfrc_actuator_out[worldid, dofid] = qfrc
+
+  wp.launch_tiled(
+    qfrc_actuator,
+    dim=(d.nworld, m.nv),
+    inputs=[
+      m.ngravcomp,
+      m.jnt_actfrclimited,
+      m.jnt_actfrcrange,
+      m.jnt_actgravcomp,
+      m.dof_jntid,
+      d.actuator_moment,
+      d.qfrc_gravcomp,
+      d.actuator_force,
+    ],
+    outputs=[d.qfrc_actuator],
+    block_dim=m.block_dim.qfrc_actuator,
+  )
 
 
 @event_scope
@@ -1024,60 +932,7 @@ def fwd_actuation(m: Model, d: Data):
       outputs=[d.actuator_force],
     )
 
-  if m.opt.is_sparse:
-    wp.launch(
-      _qfrc_actuator_sparse,
-      dim=(d.nworld, m.nv),
-      inputs=[
-        m.nu,
-        m.ngravcomp,
-        m.jnt_actfrclimited,
-        m.jnt_actfrcrange,
-        m.jnt_actgravcomp,
-        m.dof_jntid,
-        d.actuator_moment,
-        d.qfrc_gravcomp,
-        d.actuator_force,
-      ],
-      outputs=[d.qfrc_actuator],
-    )
-
-  else:
-    for tile_nu, tile_nv in zip(m.actuator_moment_tiles_nu, m.actuator_moment_tiles_nv):
-      if tile_nu.size == 0 or tile_nv.size == 0:
-        continue
-
-      wp.launch_tiled(
-        _tile_qfrc_actuator(tile_nu, tile_nv),
-        dim=(d.nworld, tile_nu.adr.size),
-        inputs=[
-          d.actuator_force.reshape(d.actuator_force.shape + (1,)),
-          d.actuator_moment,
-          tile_nu.adr,
-          tile_nv.adr,
-        ],
-        outputs=[
-          d.qfrc_actuator.reshape(d.qfrc_actuator.shape + (1,)),
-        ],
-        block_dim=m.block_dim.qfrc_actuator,
-      )
-
-    wp.launch(
-      _qfrc_actuator_limited,
-      dim=(d.nworld, m.nv),
-      inputs=[
-        m.ngravcomp,
-        m.jnt_actfrclimited,
-        m.jnt_actfrcrange,
-        m.jnt_actgravcomp,
-        m.dof_jntid,
-        d.qfrc_gravcomp,
-        d.qfrc_actuator,
-      ],
-      outputs=[d.qfrc_actuator],
-    )
-
-  # TODO actuator-level gravity compensation, skip if added as passive force
+  _qfrc_actuator(m, d)
 
 
 @wp.kernel

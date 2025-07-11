@@ -242,16 +242,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   actuator_moment_tiles_nv, actuator_moment_tiles_nu = tuple(), tuple()
 
-  # TODO(team): tile support
-  if (mjm.actuator_trntype == mujoco.mjtTrn.mjTRN_BODY).any():
-    actuator_moment_tiles_nv += (types.TileSet(adr=wp.zeros(1, dtype=int), size=mjm.nv),)
-    actuator_moment_tiles_nu += (types.TileSet(adr=wp.zeros(1, dtype=int), size=mjm.nu),)
-  else:
-    for (nv, nu), adr in sorted(tiles.items()):
-      adr_nv = wp.array([nv for nv, _ in adr], dtype=int)
-      adr_nu = wp.array([nu for _, nu in adr], dtype=int)
-      actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
-      actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
+  for (nv, nu), adr in sorted(tiles.items()):
+    adr_nv = wp.array([nv for nv, _ in adr], dtype=int)
+    adr_nu = wp.array([nu for _, nu in adr], dtype=int)
+    actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
+    actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
 
   # fixed tendon
   tendon_jnt_adr = []
