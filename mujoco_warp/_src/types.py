@@ -535,6 +535,9 @@ class Option:
     graph_conditional: flag to use cuda graph conditional, should be False when JAX is used
     sdf_initpoints: number of starting points for gradient descent
     sdf_iterations: max number of iterations for gradient descent
+    run_collision_detection: if False, skips collision detection and allows user-populated
+      contacts during the physics step (as opposed to DisableBit.CONTACT which explicitly
+      zeros out the contacts at each step)
   """
 
   timestep: wp.array(dtype=float)
@@ -564,6 +567,7 @@ class Option:
   graph_conditional: bool  # warp only
   sdf_initpoints: int
   sdf_iterations: int
+  run_collision_detection: bool  # warp only
 
 
 @dataclasses.dataclass
@@ -921,8 +925,13 @@ class Model:
     actuator_cranklength: crank length for slider-crank      (nu,)
     actuator_acc0: acceleration from unit force in qpos0     (nu,)
     actuator_lengthrange: feasible actuator length range     (nu, 2)
-    nxn_geom_pair: valid collision pair geom ids             (<= ngeom * (ngeom - 1) // 2,)
-    nxn_pairid: predefined pair id, -1 if not predefined     (<= ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair: collision pair geom ids [-2, ngeom-1]     (<= ngeom * (ngeom - 1) // 2,)
+    nxn_geom_pair_filtered: valid collision pair geom ids    (<= ngeom * (ngeom - 1) // 2,)
+                            [-1, ngeom - 1]
+    nxn_pairid: predefined pair id, -1 if not predefined,    (<= ngeom * (ngeom - 1) // 2,)
+                -2 if skipped
+    nxn_pairid_filtered: predefined pair id, -1 if not       (<= ngeom * (ngeom - 1) // 2,)
+                         predefined
     pair_dim: contact dimensionality                         (npair,)
     pair_geom1: id of geom1                                  (npair,)
     pair_geom2: id of geom2                                  (npair,)
@@ -1227,7 +1236,9 @@ class Model:
   actuator_acc0: wp.array(dtype=float)
   actuator_lengthrange: wp.array(dtype=wp.vec2)
   nxn_geom_pair: wp.array(dtype=wp.vec2i)  # warp only
+  nxn_geom_pair_filtered: wp.array(dtype=wp.vec2i)  # warp only
   nxn_pairid: wp.array(dtype=int)  # warp only
+  nxn_pairid_filtered: wp.array(dtype=int)  # warp only
   pair_dim: wp.array(dtype=int)
   pair_geom1: wp.array(dtype=int)
   pair_geom2: wp.array(dtype=int)
