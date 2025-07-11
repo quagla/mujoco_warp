@@ -548,8 +548,7 @@ class Option:
     density: density of medium
     viscosity: viscosity of medium
     broadphase: broadphase type, 0: nxn, 1: sap_tile, 2: sap_segmented
-    broadphase_filter: broadphase filter, 0: sphere, 1: aabb, 2: obb, 3: sphere -> aabb,
-                                          4: sphere -> obb, 5: sphere -> aabb -> obb
+    broadphase_filter: broadphase filter bitflag
     graph_conditional: flag to use cuda graph conditional, should be False when JAX is used
     sdf_initpoints: number of starting points for gradient descent
     sdf_iterations: max number of iterations for gradient descent
