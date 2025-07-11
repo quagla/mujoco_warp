@@ -16,8 +16,8 @@
 import warp as wp
 
 from .collision_gjk import ccd
-from .collision_gjk_legacy import gjk_legacy
 from .collision_gjk_legacy import epa_legacy
+from .collision_gjk_legacy import gjk_legacy
 from .collision_gjk_legacy import multicontact_legacy
 from .collision_primitive import _geom
 from .collision_primitive import contact_params
