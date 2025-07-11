@@ -557,7 +557,8 @@ def fwd_position(m: Model, d: Data, factorize: bool = True):
   smooth.tendon_armature(m, d)
   if factorize:
     smooth.factor_m(m, d)
-  collision_driver.collision(m, d)
+  if m.opt.run_collision_detection:
+    collision_driver.collision(m, d)
   constraint.make_constraint(m, d)
   smooth.transmission(m, d)
 
