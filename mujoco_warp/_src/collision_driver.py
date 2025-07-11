@@ -23,6 +23,7 @@ from .collision_primitive import primitive_narrowphase
 from .collision_sdf import sdf_narrowphase
 from .math import upper_tri_index
 from .types import MJ_MAXVAL
+from .types import BroadphaseFilter
 from .types import BroadphaseType
 from .types import Data
 from .types import DisableBit
@@ -60,82 +61,65 @@ def _zero_collision_arrays(
 
 
 @wp.func
-def _sphere_filter(
-  # Model:
-  geom_rbound: wp.array2d(dtype=float),
-  geom_margin: wp.array2d(dtype=float),
-  # Data in:
-  geom_xpos_in: wp.array2d(dtype=wp.vec3),
-  geom_xmat_in: wp.array2d(dtype=wp.mat33),
-  # In:
-  geom1: int,
-  geom2: int,
-  worldid: int,
+def _plane_filter(
+  size1: float, size2: float, margin1: float, margin2: float, xpos1: wp.vec3, xpos2: wp.vec3, xmat1: wp.mat33, xmat2: wp.mat33
 ) -> bool:
-  margin1 = geom_margin[worldid, geom1]
-  margin2 = geom_margin[worldid, geom2]
-  pos1 = geom_xpos_in[worldid, geom1]
-  pos2 = geom_xpos_in[worldid, geom2]
-  size1 = geom_rbound[worldid, geom1]
-  size2 = geom_rbound[worldid, geom2]
+  if size1 == 0.0:
+    # geom1 is a plane
+    dist = wp.dot(xpos2 - xpos1, wp.vec3(xmat1[0, 2], xmat1[1, 2], xmat1[2, 2]))
+    return dist <= size2 + wp.max(margin1, margin2)
+  elif size2 == 0.0:
+    # geom2 is a plane
+    dist = wp.dot(xpos1 - xpos2, wp.vec3(xmat2[0, 2], xmat2[1, 2], xmat2[2, 2]))
+    return dist <= size1 + wp.max(margin1, margin2)
 
+  return True
+
+
+@wp.func
+def _sphere_filter(size1: float, size2: float, margin1: float, margin2: float, xpos1: wp.vec3, xpos2: wp.vec3) -> bool:
   bound = size1 + size2 + wp.max(margin1, margin2)
-  dif = pos2 - pos1
+  dif = xpos2 - xpos1
 
   if size1 != 0.0 and size2 != 0.0:
     # neither geom is a plane
     dist_sq = wp.dot(dif, dif)
     return dist_sq <= bound * bound
-  elif size1 == 0.0:
-    # geom1 is a plane
-    xmat1 = geom_xmat_in[worldid, geom1]
-    dist = wp.dot(dif, wp.vec3(xmat1[0, 2], xmat1[1, 2], xmat1[2, 2]))
-    return dist <= bound
-  else:
-    # geom2 is a plane
-    xmat2 = geom_xmat_in[worldid, geom2]
-    dist = wp.dot(-dif, wp.vec3(xmat2[0, 2], xmat2[1, 2], xmat2[2, 2]))
-    return dist <= bound
+
+  return True
 
 
 @wp.func
 def _aabb_filter(
-  # Model:
-  geom_aabb: wp.array2d(dtype=wp.vec3),
-  geom_margin: wp.array2d(dtype=float),
-  # Data in:
-  geom_xpos_in: wp.array2d(dtype=wp.vec3),
-  geom_xmat_in: wp.array2d(dtype=wp.mat33),
-  # In:
-  geom1: int,
-  geom2: int,
-  worldid: int,
+  center1: wp.vec3,
+  center2: wp.vec3,
+  size1: wp.vec3,
+  size2: wp.vec3,
+  margin1: float,
+  margin2: float,
+  xpos1: wp.vec3,
+  xpos2: wp.vec3,
+  xmat1: wp.mat33,
+  xmat2: wp.mat33,
 ) -> bool:
   """Axis aligned boxes collision.
 
   references: mju_raySlab: see Ericson, Real-time Collision Detection section 5.3.3.
               filterBox: filter contact based on global AABBs.
   """
-  size1_local = geom_aabb[geom1, 1]
-  size2_local = geom_aabb[geom2, 1]
-
   # get infinite dimensions (planes only)
-  inf1 = wp.vec3i(int(size1_local[0] >= MJ_MAXVAL), int(size1_local[1] >= MJ_MAXVAL), int(size1_local[2] >= MJ_MAXVAL))
-  inf2 = wp.vec3i(int(size2_local[0] >= MJ_MAXVAL), int(size2_local[1] >= MJ_MAXVAL), int(size2_local[2] >= MJ_MAXVAL))
+  inf1 = wp.vec3i(int(size1[0] >= MJ_MAXVAL), int(size1[1] >= MJ_MAXVAL), int(size1[2] >= MJ_MAXVAL))
+  inf2 = wp.vec3i(int(size2[0] >= MJ_MAXVAL), int(size2[1] >= MJ_MAXVAL), int(size2[2] >= MJ_MAXVAL))
 
   # if a bounding box is infinite, there must be a collision
   if (inf1[0] and inf1[1] and inf1[2]) or (inf2[0] and inf2[1] and inf2[2]):
     return True
 
-  xmat1 = geom_xmat_in[worldid, geom1]
-  center1 = xmat1 @ geom_aabb[geom1, 0] + geom_xpos_in[worldid, geom1]
-  size1 = xmat1 @ size1_local
-  margin1 = geom_margin[worldid, geom1]
+  center1 = xmat1 @ center1 + xpos1
+  size1 = xmat1 @ size1
 
-  xmat2 = geom_xmat_in[worldid, geom2]
-  center2 = xmat2 @ geom_aabb[geom2, 0] + geom_xpos_in[worldid, geom2]
-  size2 = xmat2 @ size2_local
-  margin2 = geom_margin[worldid, geom2]
+  center2 = xmat2 @ center2 + xpos2
+  size2 = xmat2 @ size2
 
   margin = wp.max(margin1, margin2)
   infinite = wp.vec2i(int(inf1[0] or inf1[1] or inf1[2]), int(inf2[0] or inf2[1] or inf2[2]))
@@ -163,21 +147,18 @@ mat63 = wp.types.matrix(shape=(6, 3), dtype=float)
 
 @wp.func
 def _obb_filter(
-  # Model:
-  geom_aabb: wp.array2d(dtype=wp.vec3),
-  geom_margin: wp.array2d(dtype=float),
-  # Data in:
-  geom_xpos_in: wp.array2d(dtype=wp.vec3),
-  geom_xmat_in: wp.array2d(dtype=wp.mat33),
-  # In:
-  geom1: int,
-  geom2: int,
-  worldid: int,
+  center1: wp.vec3,
+  center2: wp.vec3,
+  size1: wp.vec3,
+  size2: wp.vec3,
+  margin1: float,
+  margin2: float,
+  xpos1: wp.vec3,
+  xpos2: wp.vec3,
+  xmat1: wp.mat33,
+  xmat2: wp.mat33,
 ) -> bool:
   """Oriented bounding boxes collision (see Gottschalk et al.), see mj_collideOBB."""
-  size1 = geom_aabb[geom1, 1]
-  size2 = geom_aabb[geom2, 1]
-
   # get infinite dimensions (planes only)
   inf1 = wp.vec3i(int(size1[0] >= MJ_MAXVAL), int(size1[1] >= MJ_MAXVAL), int(size1[2] >= MJ_MAXVAL))
   inf2 = wp.vec3i(int(size2[0] >= MJ_MAXVAL), int(size2[1] >= MJ_MAXVAL), int(size2[2] >= MJ_MAXVAL))
@@ -185,16 +166,6 @@ def _obb_filter(
   # if a bounding box is infinite, there must be a collision
   if (inf1[0] and inf1[1] and inf1[2]) or (inf2[0] and inf2[1] and inf2[2]):
     return True
-
-  center1 = geom_aabb[geom1, 0]
-  xpos1 = geom_xpos_in[worldid, geom1]
-  xmat1 = geom_xmat_in[worldid, geom1]
-  margin1 = geom_margin[worldid, geom1]
-
-  center2 = geom_aabb[geom2, 0]
-  xpos2 = geom_xpos_in[worldid, geom2]
-  xmat2 = geom_xmat_in[worldid, geom2]
-  margin2 = geom_margin[worldid, geom2]
 
   margin = wp.max(margin1, margin2)
 
@@ -256,24 +227,42 @@ def _broadphase_filter(
   geom2: int,
   worldid: int,
 ) -> bool:
-  # 0: sphere
-  # 1: aabb
-  # 2: obb
-  # 3: sphere -> aabb
-  # 4: sphere -> obb
-  # 5: sphere -> aabb -> obb
+  # 1: plane
+  # 2: sphere
+  # 4: aabb
+  # 8: obb
 
-  sphere = True
-  aabb = True
-  obb = True
+  center1 = geom_aabb[geom1, 0]
+  center2 = geom_aabb[geom2, 0]
+  size1 = geom_aabb[geom1, 1]
+  size2 = geom_aabb[geom2, 1]
+  rbound1 = geom_rbound[worldid, geom1]
+  rbound2 = geom_rbound[worldid, geom2]
+  margin1 = geom_margin[worldid, geom1]
+  margin2 = geom_margin[worldid, geom2]
+  xpos1 = geom_xpos_in[worldid, geom1]
+  xpos2 = geom_xpos_in[worldid, geom2]
+  xmat1 = geom_xmat_in[worldid, geom1]
+  xmat2 = geom_xmat_in[worldid, geom2]
 
-  if opt_broadphase_filter == 0 or opt_broadphase_filter == 3 or opt_broadphase_filter == 4 or opt_broadphase_filter == 5:
-    sphere = _sphere_filter(geom_rbound, geom_margin, geom_xpos_in, geom_xmat_in, geom1, geom2, worldid)
-  if opt_broadphase_filter == 1 or opt_broadphase_filter == 3 or opt_broadphase_filter == 5:
-    aabb = _aabb_filter(geom_aabb, geom_margin, geom_xpos_in, geom_xmat_in, geom1, geom2, worldid)
-  if opt_broadphase_filter == 2 or opt_broadphase_filter == 4 or opt_broadphase_filter == 5:
-    obb = _obb_filter(geom_aabb, geom_margin, geom_xpos_in, geom_xmat_in, geom1, geom2, worldid)
-  return sphere and aabb and obb
+  if rbound1 == 0.0 or rbound2 == 0.0:
+    if opt_broadphase_filter & int(BroadphaseFilter.PLANE.value):
+      if not _plane_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
+        return False
+  else:
+    if opt_broadphase_filter & int(BroadphaseFilter.SPHERE.value):
+      if not _sphere_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2):
+        return False
+
+    if opt_broadphase_filter & int(BroadphaseFilter.AABB.value):
+      if not _aabb_filter(center1, center2, size1, size2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
+        return False
+
+    if opt_broadphase_filter & int(BroadphaseFilter.OBB.value):
+      if not _obb_filter(center1, center2, size1, size2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
+        return False
+
+  return True
 
 
 @wp.func

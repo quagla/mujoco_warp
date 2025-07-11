@@ -62,6 +62,22 @@ class BlockDim:
   mul_m_dense: int = 32
 
 
+class BroadphaseFilter(enum.IntFlag):
+  """Broadphase filter.
+
+  Attributes:
+    PLANE: collision between bounding sphere and plane.
+    SPHERE: collision between bounding spheres.
+    AABB: collision between axis-aligned bounding boxes.
+    OBB: collision between oriented bounding boxes.
+  """
+
+  PLANE = 1
+  SPHERE = 2
+  AABB = 4
+  OBB = 8
+
+
 class CamLightType(enum.IntEnum):
   """Type of camera light.
 

@@ -443,7 +443,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       epa_exact_neg_distance=False,
       depth_extension=0.1,
       broadphase=int(broadphase),
-      broadphase_filter=0,
+      broadphase_filter=int(
+        types.BroadphaseFilter.PLANE.value | types.BroadphaseFilter.SPHERE.value | types.BroadphaseFilter.AABB.value
+      ),
       graph_conditional=False,
       sdf_initpoints=mjm.opt.sdf_initpoints,
       sdf_iterations=mjm.opt.sdf_iterations,
