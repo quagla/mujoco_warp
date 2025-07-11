@@ -41,7 +41,7 @@ def _assert_eq(a, b, name):
 
 
 class ForwardTest(parameterized.TestCase):
-  # TODO(team): test sparse when actuator_moment and ten_J have sparse representations
+  # TODO(team): test sparse when actuator_moment and/or ten_J have sparse representation
   @parameterized.product(xml=["humanoid/humanoid.xml", "pendula.xml"])
   def test_fwd_velocity(self, xml):
     _, mjd, m, d = test_util.fixture(xml, kick=True)
