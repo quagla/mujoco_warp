@@ -103,14 +103,6 @@ def _aabb_filter(
   references: mju_raySlab: see Ericson, Real-time Collision Detection section 5.3.3.
               filterBox: filter contact based on global AABBs.
   """
-  # get infinite dimensions (planes only)
-  inf1 = wp.vec3i(int(size1[0] >= MJ_MAXVAL), int(size1[1] >= MJ_MAXVAL), int(size1[2] >= MJ_MAXVAL))
-  inf2 = wp.vec3i(int(size2[0] >= MJ_MAXVAL), int(size2[1] >= MJ_MAXVAL), int(size2[2] >= MJ_MAXVAL))
-
-  # if a bounding box is infinite, there must be a collision
-  if (inf1[0] and inf1[1] and inf1[2]) or (inf2[0] and inf2[1] and inf2[2]):
-    return True
-
   center1 = xmat1 @ center1 + xpos1
   size1 = xmat1 @ size1
 
@@ -119,17 +111,17 @@ def _aabb_filter(
 
   margin = wp.max(margin1, margin2)
 
-  if (center1[0] + size1[0] + margin < center2[0] - size2[0]) and not (inf1[0] or inf2[0]):
+  if center1[0] + size1[0] + margin < center2[0] - size2[0]:
     return False
-  if (center1[1] + size1[1] + margin < center2[1] - size2[1]) and not (inf1[1] or inf2[1]):
+  if center1[1] + size1[1] + margin < center2[1] - size2[1]:
     return False
-  if (center1[2] + size1[2] + margin < center2[2] - size2[2]) and not (inf1[2] or inf2[2]):
+  if center1[2] + size1[2] + margin < center2[2] - size2[2]:
     return False
-  if (center2[0] + size2[0] + margin < center1[0] - size1[0]) and not (inf1[0] or inf2[0]):
+  if center2[0] + size2[0] + margin < center1[0] - size1[0]:
     return False
-  if (center2[1] + size2[1] + margin < center1[1] - size1[1]) and not (inf1[1] or inf2[1]):
+  if center2[1] + size2[1] + margin < center1[1] - size1[1]:
     return False
-  if (center2[2] + size2[2] + margin < center1[2] - size1[2]) and not (inf1[2] or inf2[2]):
+  if center2[2] + size2[2] + margin < center1[2] - size1[2]:
     return False
 
   return True
@@ -154,21 +146,12 @@ def _obb_filter(
   xmat2: wp.mat33,
 ) -> bool:
   """Oriented bounding boxes collision (see Gottschalk et al.), see mj_collideOBB."""
-  # get infinite dimensions (planes only)
-  inf1 = wp.vec3i(int(size1[0] >= MJ_MAXVAL), int(size1[1] >= MJ_MAXVAL), int(size1[2] >= MJ_MAXVAL))
-  inf2 = wp.vec3i(int(size2[0] >= MJ_MAXVAL), int(size2[1] >= MJ_MAXVAL), int(size2[2] >= MJ_MAXVAL))
-
-  # if a bounding box is infinite, there must be a collision
-  if (inf1[0] and inf1[1] and inf1[2]) or (inf2[0] and inf2[1] and inf2[2]):
-    return True
-
   margin = wp.max(margin1, margin2)
 
   xcenter = mat23()
   normal = mat63()
   proj = wp.vec2()
   radius = wp.vec2()
-  infinite = wp.vec2i(int(inf1[0] or inf1[1] or inf1[2]), int(inf2[0] or inf2[1] or inf2[2]))
 
   # compute centers in local coordinates
   xcenter[0] = xmat1 @ center1 + xpos1
@@ -184,8 +167,6 @@ def _obb_filter(
 
   # check intersections
   for j in range(2):
-    if infinite[1 - j]:
-      continue  # skip test against an infinite body
     for k in range(3):
       for i in range(2):
         proj[i] = wp.dot(xcenter[i], normal[3 * j + k])
@@ -247,11 +228,9 @@ def _broadphase_filter(
     if opt_broadphase_filter & int(BroadphaseFilter.SPHERE.value):
       if not _sphere_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2):
         return False
-
     if opt_broadphase_filter & int(BroadphaseFilter.AABB.value):
       if not _aabb_filter(center1, center2, size1, size2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
         return False
-
     if opt_broadphase_filter & int(BroadphaseFilter.OBB.value):
       if not _obb_filter(center1, center2, size1, size2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
         return False
