@@ -80,17 +80,13 @@ def _plane_filter(
 def _sphere_filter(size1: float, size2: float, margin1: float, margin2: float, xpos1: wp.vec3, xpos2: wp.vec3) -> bool:
   bound = size1 + size2 + wp.max(margin1, margin2)
   dif = xpos2 - xpos1
-
-  if size1 != 0.0 and size2 != 0.0:
-    # neither geom is a plane
-    dist_sq = wp.dot(dif, dif)
-    return dist_sq <= bound * bound
-
-  return True
+  dist_sq = wp.dot(dif, dif)
+  return dist_sq <= bound * bound
 
 
 @wp.func
 def _aabb_filter(
+  # In:
   center1: wp.vec3,
   center2: wp.vec3,
   size1: wp.vec3,
@@ -122,21 +118,19 @@ def _aabb_filter(
   size2 = xmat2 @ size2
 
   margin = wp.max(margin1, margin2)
-  infinite = wp.vec2i(int(inf1[0] or inf1[1] or inf1[2]), int(inf2[0] or inf2[1] or inf2[2]))
 
-  if not infinite[0] and not infinite[1]:
-    if center1[0] + size1[0] + margin < center2[0] - size2[0]:
-      return False
-    if center1[1] + size1[1] + margin < center2[1] - size2[1]:
-      return False
-    if center1[2] + size1[2] + margin < center2[2] - size2[2]:
-      return False
-    if center2[0] + size2[0] + margin < center1[0] - size1[0]:
-      return False
-    if center2[1] + size2[1] + margin < center1[1] - size1[1]:
-      return False
-    if center2[2] + size2[2] + margin < center1[2] - size1[2]:
-      return False
+  if (center1[0] + size1[0] + margin < center2[0] - size2[0]) and not (inf1[0] or inf2[0]):
+    return False
+  if (center1[1] + size1[1] + margin < center2[1] - size2[1]) and not (inf1[1] or inf2[1]):
+    return False
+  if (center1[2] + size1[2] + margin < center2[2] - size2[2]) and not (inf1[2] or inf2[2]):
+    return False
+  if (center2[0] + size2[0] + margin < center1[0] - size1[0]) and not (inf1[0] or inf2[0]):
+    return False
+  if (center2[1] + size2[1] + margin < center1[1] - size1[1]) and not (inf1[1] or inf2[1]):
+    return False
+  if (center2[2] + size2[2] + margin < center1[2] - size1[2]) and not (inf1[2] or inf2[2]):
+    return False
 
   return True
 
@@ -147,6 +141,7 @@ mat63 = wp.types.matrix(shape=(6, 3), dtype=float)
 
 @wp.func
 def _obb_filter(
+  # In:
   center1: wp.vec3,
   center2: wp.vec3,
   size1: wp.vec3,
@@ -247,8 +242,7 @@ def _broadphase_filter(
 
   if rbound1 == 0.0 or rbound2 == 0.0:
     if opt_broadphase_filter & int(BroadphaseFilter.PLANE.value):
-      if not _plane_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2, xmat1, xmat2):
-        return False
+      return _plane_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2, xmat1, xmat2)
   else:
     if opt_broadphase_filter & int(BroadphaseFilter.SPHERE.value):
       if not _sphere_filter(rbound1, rbound2, margin1, margin2, xpos1, xpos2):
