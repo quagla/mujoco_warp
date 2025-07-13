@@ -1599,6 +1599,7 @@ def _tendon_bias_qfrc(
 @event_scope
 def tendon_bias(m: Model, d: Data, qfrc: wp.array2d(dtype=float)):
   """Add bias force due to tendon armature."""
+  d.ten_Jdot.zero_()
   wp.launch(
     _tendon_dot,
     dim=(d.nworld, m.ntendon),
@@ -1628,6 +1629,7 @@ def tendon_bias(m: Model, d: Data, qfrc: wp.array2d(dtype=float)):
     ],
   )
 
+  d.ten_bias_coef.zero_()
   wp.launch(
     _tendon_bias_coef,
     dim=(d.nworld, m.ntendon, m.nv),
