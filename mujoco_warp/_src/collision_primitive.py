@@ -716,6 +716,70 @@ def plane_capsule(
 
 
 @wp.func
+def plane_ellipsoid(
+  # Data in:
+  nconmax_in: int,
+  # In:
+  plane: Geom,
+  ellipsoid: Geom,
+  worldid: int,
+  margin: float,
+  gap: float,
+  condim: int,
+  friction: vec5,
+  solref: wp.vec2f,
+  solreffriction: wp.vec2f,
+  solimp: vec5,
+  geoms: wp.vec2i,
+  # Data out:
+  ncon_out: wp.array(dtype=int),
+  contact_dist_out: wp.array(dtype=float),
+  contact_pos_out: wp.array(dtype=wp.vec3),
+  contact_frame_out: wp.array(dtype=wp.mat33),
+  contact_includemargin_out: wp.array(dtype=float),
+  contact_friction_out: wp.array(dtype=vec5),
+  contact_solref_out: wp.array(dtype=wp.vec2),
+  contact_solreffriction_out: wp.array(dtype=wp.vec2),
+  contact_solimp_out: wp.array(dtype=vec5),
+  contact_dim_out: wp.array(dtype=int),
+  contact_geom_out: wp.array(dtype=wp.vec2i),
+  contact_worldid_out: wp.array(dtype=int),
+):
+  sphere_support = -wp.normalize(wp.cw_mul(wp.transpose(ellipsoid.rot) @ plane.normal, ellipsoid.size))
+  pos = ellipsoid.pos + ellipsoid.rot @ wp.cw_mul(sphere_support, ellipsoid.size)
+  dist = wp.dot(plane.normal, pos - plane.pos)
+  pos = pos - plane.normal * dist * 0.5
+
+  write_contact(
+    nconmax_in,
+    dist,
+    pos,
+    make_frame(plane.normal),
+    margin,
+    gap,
+    condim,
+    friction,
+    solref,
+    solreffriction,
+    solimp,
+    geoms,
+    worldid,
+    ncon_out,
+    contact_dist_out,
+    contact_pos_out,
+    contact_frame_out,
+    contact_includemargin_out,
+    contact_friction_out,
+    contact_solref_out,
+    contact_solreffriction_out,
+    contact_solimp_out,
+    contact_dim_out,
+    contact_geom_out,
+    contact_worldid_out,
+  )
+
+
+@wp.func
 def plane_box(
   # Data in:
   nconmax_in: int,
@@ -2436,6 +2500,7 @@ def box_box(
 _PRIMITIVE_COLLISIONS = {
   (GeomType.PLANE.value, GeomType.SPHERE.value): plane_sphere,
   (GeomType.PLANE.value, GeomType.CAPSULE.value): plane_capsule,
+  (GeomType.PLANE.value, GeomType.ELLIPSOID.value): plane_ellipsoid,
   (GeomType.PLANE.value, GeomType.CYLINDER.value): plane_cylinder,
   (GeomType.PLANE.value, GeomType.BOX.value): plane_box,
   (GeomType.PLANE.value, GeomType.MESH.value): plane_convex,
