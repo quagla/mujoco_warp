@@ -237,7 +237,7 @@ def benchmark(
           ctrl_noise,
           dim=(d.nworld, m.nu),
           inputs=[
-            m.actuator_ctrllimited, m.actuator_ctrlrange, i, 0.0
+            m.actuator_ctrllimited, m.actuator_ctrlrange, i, 0.01
           ],
           outputs=[d.ctrl])  # fmt: skip
 
