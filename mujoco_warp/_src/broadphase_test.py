@@ -132,6 +132,10 @@ class BroadphaseTest(parameterized.TestCase):
       np.vstack([np.expand_dims(mjd1.geom_xpos, axis=0), np.expand_dims(mjd2.geom_xpos, axis=0)]),
       dtype=wp.vec3,
     )
+    d3.geom_xmat = wp.array(
+      np.vstack([np.expand_dims(mjd1.geom_xmat, axis=0), np.expand_dims(mjd2.geom_xmat, axis=0)]),
+      dtype=wp.mat33,
+    )
     broadphase_caller(m, d3)
 
     ncollision = d3.ncollision.numpy()[0]

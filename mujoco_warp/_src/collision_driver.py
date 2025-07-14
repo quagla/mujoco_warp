@@ -104,24 +104,55 @@ def _aabb_filter(
               filterBox: filter contact based on global AABBs.
   """
   center1 = xmat1 @ center1 + xpos1
-  size1 = xmat1 @ size1
-
   center2 = xmat2 @ center2 + xpos2
-  size2 = xmat2 @ size2
 
   margin = wp.max(margin1, margin2)
 
-  if center1[0] + size1[0] + margin < center2[0] - size2[0]:
+  max_x2 = -MJ_MAXVAL
+  max_y2 = -MJ_MAXVAL
+  max_z2 = -MJ_MAXVAL
+  min_x2 = MJ_MAXVAL
+  min_y2 = MJ_MAXVAL
+  min_z2 = MJ_MAXVAL
+
+  sign = wp.vec2(-1.0, 1.0)
+
+  # transform to geom1 frame
+  for i in range(2):
+    for j in range(2):
+      for k in range(2):
+        corner = wp.vec3(sign[i] * size2[0], sign[j] * size2[1], sign[k] * size2[2])
+        pos2 = wp.transpose(xmat1) @ (center2 + xmat2 @ corner - center1)
+
+        if pos2[0] > max_x2:
+          max_x2 = pos2[0]
+
+        if pos2[1] > max_y2:
+          max_y2 = pos2[1]
+
+        if pos2[2] > max_z2:
+          max_z2 = pos2[2]
+
+        if pos2[0] < min_x2:
+          min_x2 = pos2[0]
+
+        if pos2[1] < min_y2:
+          min_y2 = pos2[1]
+
+        if pos2[2] < min_z2:
+          min_z2 = pos2[2]
+
+  if size1[0] + margin < min_x2:
     return False
-  if center1[1] + size1[1] + margin < center2[1] - size2[1]:
+  if size1[1] + margin < min_y2:
     return False
-  if center1[2] + size1[2] + margin < center2[2] - size2[2]:
+  if size1[2] + margin < min_z2:
     return False
-  if center2[0] + size2[0] + margin < center1[0] - size1[0]:
+  if max_x2 + margin < -size1[0]:
     return False
-  if center2[1] + size2[1] + margin < center1[1] - size1[1]:
+  if max_y2 + margin < -size1[1]:
     return False
-  if center2[2] + size2[2] + margin < center1[2] - size1[2]:
+  if max_z2 + margin < -size1[2]:
     return False
 
   return True
