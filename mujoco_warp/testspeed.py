@@ -63,6 +63,7 @@ _INTEGRATOR = flags.DEFINE_string("integrator", None, "Integrator (mjtIntegrator
 _BROADPHASE = flags.DEFINE_integer("broadphase", None, "Broadphase collision routine.")
 _BROADPHASE_FILTER = flags.DEFINE_integer("broadphase_filter", None, "Broadphase collision filter routine.")
 _CTRL_NOISE = flags.DEFINE_bool("ctrl_noise", None, "Add noise to ctrl.")
+_GRAPH_CONDITIONAL = flags.DEFINE_bool("graph_conditional", None, "CUDA graph conditional.")
 
 
 def _print_table(matrix, headers):
@@ -158,6 +159,9 @@ def _main(argv: Sequence[str]):
     m.opt.broadphase = _BROADPHASE.value
   if _BROADPHASE_FILTER.value is not None:
     m.opt.broadphase_filter = _BROADPHASE_FILTER.value
+
+  if _GRAPH_CONDITIONAL.value is not None:
+    m.opt.graph_conditional = _GRAPH_CONDITIONAL.value
 
   d = mjwarp.put_data(mjm, mjd, nworld=_BATCH_SIZE.value, nconmax=_NCONMAX.value, njmax=_NJMAX.value)
 
