@@ -56,6 +56,15 @@ class Geom:
   vert: wp.array(dtype=wp.vec3)
   graphadr: int
   graph: wp.array(dtype=int)
+  mesh_polynum: int
+  mesh_polyadr: int
+  mesh_polynormal: wp.array(dtype=wp.vec3)
+  mesh_polyvertadr: wp.array(dtype=int)
+  mesh_polyvertnum: wp.array(dtype=int)
+  mesh_polyvert: wp.array(dtype=int)
+  mesh_polymapadr: wp.array(dtype=int)
+  mesh_polymapnum: wp.array(dtype=int)
+  mesh_polymap: wp.array(dtype=int)
   index: int
 
 
@@ -75,6 +84,15 @@ def _geom(
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_graphadr: wp.array(dtype=int),
   mesh_graph: wp.array(dtype=int),
+  mesh_polynum: wp.array(dtype=int),
+  mesh_polyadr: wp.array(dtype=int),
+  mesh_polynormal: wp.array(dtype=wp.vec3),
+  mesh_polyvertadr: wp.array(dtype=int),
+  mesh_polyvertnum: wp.array(dtype=int),
+  mesh_polyvert: wp.array(dtype=int),
+  mesh_polymapadr: wp.array(dtype=int),
+  mesh_polymapnum: wp.array(dtype=int),
+  mesh_polymap: wp.array(dtype=int),
   # Data in:
   geom_xpos_in: wp.array2d(dtype=wp.vec3),
   geom_xmat_in: wp.array2d(dtype=wp.mat33),
@@ -96,14 +114,25 @@ def _geom(
     geom.vertadr = mesh_vertadr[dataid]
     geom.vertnum = mesh_vertnum[dataid]
     geom.graphadr = mesh_graphadr[dataid]
+    geom.mesh_polynum = mesh_polynum[dataid]
+    geom.mesh_polyadr = mesh_polyadr[dataid]
   else:
     geom.vertadr = -1
     geom.vertnum = -1
     geom.graphadr = -1
+    geom.mesh_polynum = -1
+    geom.mesh_polyadr = -1
 
   if geom_type[gid] == int(GeomType.MESH.value):
     geom.vert = mesh_vert
     geom.graph = mesh_graph
+    geom.mesh_polynormal = mesh_polynormal
+    geom.mesh_polyvertadr = mesh_polyvertadr
+    geom.mesh_polyvertnum = mesh_polyvertnum
+    geom.mesh_polyvert = mesh_polyvert
+    geom.mesh_polymapadr = mesh_polymapadr
+    geom.mesh_polymapnum = mesh_polymapnum
+    geom.mesh_polymap = mesh_polymap
 
   # If geom is HFIELD triangle, compute triangle prism verts
   if geom_type[gid] == int(GeomType.HFIELD.value):
@@ -2437,7 +2466,7 @@ _primitive_collisions_types = []
 _primitive_collisions_func = []
 
 
-def primitive_narrowphase_builder(m: Model):
+def _primitive_narrowphase_builder(m: Model):
   for types, func in _PRIMITIVE_COLLISIONS.items():
     idx = upper_trid_index(len(GeomType), types[0], types[1])
     if m.geom_pair_type_count[idx] and types not in _primitive_collisions_types:
@@ -2468,6 +2497,15 @@ def primitive_narrowphase_builder(m: Model):
     mesh_vert: wp.array(dtype=wp.vec3),
     mesh_graphadr: wp.array(dtype=int),
     mesh_graph: wp.array(dtype=int),
+    mesh_polynum: wp.array(dtype=int),
+    mesh_polyadr: wp.array(dtype=int),
+    mesh_polynormal: wp.array(dtype=wp.vec3),
+    mesh_polyvertadr: wp.array(dtype=int),
+    mesh_polyvertnum: wp.array(dtype=int),
+    mesh_polyvert: wp.array(dtype=int),
+    mesh_polymapadr: wp.array(dtype=int),
+    mesh_polymapnum: wp.array(dtype=int),
+    mesh_polymap: wp.array(dtype=int),
     pair_dim: wp.array(dtype=int),
     pair_solref: wp.array2d(dtype=wp.vec2),
     pair_solreffriction: wp.array2d(dtype=wp.vec2),
@@ -2510,79 +2548,97 @@ def primitive_narrowphase_builder(m: Model):
     type1 = geom_type[g1]
     type2 = geom_type[g2]
 
+    worldid = collision_worldid_in[tid]
+
+    _, margin, gap, condim, friction, solref, solreffriction, solimp = contact_params(
+      geom_condim,
+      geom_priority,
+      geom_solmix,
+      geom_solref,
+      geom_solimp,
+      geom_friction,
+      geom_margin,
+      geom_gap,
+      pair_dim,
+      pair_solref,
+      pair_solreffriction,
+      pair_solimp,
+      pair_margin,
+      pair_gap,
+      pair_friction,
+      collision_pair_in,
+      collision_pairid_in,
+      tid,
+      worldid,
+    )
+
+    hftri_index = collision_hftri_index_in[tid]
+
+    geom1 = _geom(
+      geom_type,
+      geom_dataid,
+      geom_size,
+      hfield_adr,
+      hfield_nrow,
+      hfield_ncol,
+      hfield_size,
+      hfield_data,
+      mesh_vertadr,
+      mesh_vertnum,
+      mesh_vert,
+      mesh_graphadr,
+      mesh_graph,
+      mesh_polynum,
+      mesh_polyadr,
+      mesh_polynormal,
+      mesh_polyvertadr,
+      mesh_polyvertnum,
+      mesh_polyvert,
+      mesh_polymapadr,
+      mesh_polymapnum,
+      mesh_polymap,
+      geom_xpos_in,
+      geom_xmat_in,
+      worldid,
+      g1,
+      hftri_index,
+    )
+
+    geom2 = _geom(
+      geom_type,
+      geom_dataid,
+      geom_size,
+      hfield_adr,
+      hfield_nrow,
+      hfield_ncol,
+      hfield_size,
+      hfield_data,
+      mesh_vertadr,
+      mesh_vertnum,
+      mesh_vert,
+      mesh_graphadr,
+      mesh_graph,
+      mesh_polynum,
+      mesh_polyadr,
+      mesh_polynormal,
+      mesh_polyvertadr,
+      mesh_polyvertnum,
+      mesh_polyvert,
+      mesh_polymapadr,
+      mesh_polymapnum,
+      mesh_polymap,
+      geom_xpos_in,
+      geom_xmat_in,
+      worldid,
+      g2,
+      hftri_index,
+    )
+
     for i in range(wp.static(len(_primitive_collisions_func))):
       collision_type1 = wp.static(_primitive_collisions_types[i][0])
       collision_type2 = wp.static(_primitive_collisions_types[i][1])
 
       if collision_type1 == type1 and collision_type2 == type2:
-        worldid = collision_worldid_in[tid]
-
-        _, margin, gap, condim, friction, solref, solreffriction, solimp = contact_params(
-          geom_condim,
-          geom_priority,
-          geom_solmix,
-          geom_solref,
-          geom_solimp,
-          geom_friction,
-          geom_margin,
-          geom_gap,
-          pair_dim,
-          pair_solref,
-          pair_solreffriction,
-          pair_solimp,
-          pair_margin,
-          pair_gap,
-          pair_friction,
-          collision_pair_in,
-          collision_pairid_in,
-          tid,
-          worldid,
-        )
-
-        hftri_index = collision_hftri_index_in[tid]
-
-        geom1 = _geom(
-          geom_type,
-          geom_dataid,
-          geom_size,
-          hfield_adr,
-          hfield_nrow,
-          hfield_ncol,
-          hfield_size,
-          hfield_data,
-          mesh_vertadr,
-          mesh_vertnum,
-          mesh_vert,
-          mesh_graphadr,
-          mesh_graph,
-          geom_xpos_in,
-          geom_xmat_in,
-          worldid,
-          g1,
-          hftri_index,
-        )
-
-        geom2 = _geom(
-          geom_type,
-          geom_dataid,
-          geom_size,
-          hfield_adr,
-          hfield_nrow,
-          hfield_ncol,
-          hfield_size,
-          hfield_data,
-          mesh_vertadr,
-          mesh_vertnum,
-          mesh_vert,
-          mesh_graphadr,
-          mesh_graph,
-          geom_xpos_in,
-          geom_xmat_in,
-          worldid,
-          g2,
-          hftri_index,
-        )
-
         wp.static(_primitive_collisions_func[i])(
           nconmax_in,
           geom1,
@@ -2615,10 +2671,24 @@ def primitive_narrowphase_builder(m: Model):
 
 @event_scope
 def primitive_narrowphase(m: Model, d: Data):
+  """Runs collision detection on primitive geom pairs discovered during broadphase.
+
+  This function processes collision pairs involving primitive shapes that were
+  identified during the broadphase stage. It computes detailed contact information
+  such as distance, position, and frame, and populates the `d.contact` array.
+
+  The primitive geom types handled are PLANE, SPHERE, CAPSULE, CYLINDER, BOX.
+
+  It also handles collisions between planes and convex hulls.
+
+  To improve performance, it dynamically builds and launches a kernel tailored to
+  the specific primitive collision types present in the model, avoiding
+  unnecessary checks for non-existent collision pairs.
+  """
   # we need to figure out how to keep the overhead of this small - not launching anything
   # for pair types without collisions, as well as updating the launch dimensions.
   wp.launch(
-    primitive_narrowphase_builder(m),
+    _primitive_narrowphase_builder(m),
     dim=d.nconmax,
     inputs=[
       m.geom_type,
@@ -2642,6 +2712,15 @@ def primitive_narrowphase(m: Model, d: Data):
       m.mesh_vert,
       m.mesh_graphadr,
       m.mesh_graph,
+      m.mesh_polynum,
+      m.mesh_polyadr,
+      m.mesh_polynormal,
+      m.mesh_polyvertadr,
+      m.mesh_polyvertnum,
+      m.mesh_polyvert,
+      m.mesh_polymapadr,
+      m.mesh_polymapnum,
+      m.mesh_polymap,
       m.pair_dim,
       m.pair_solref,
       m.pair_solreffriction,

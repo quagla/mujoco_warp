@@ -19,6 +19,8 @@ import mujoco
 import numpy as np
 import warp as wp
 
+from mujoco_warp._src.warp_util import conditional_graph_supported
+
 from . import math
 from . import types
 
@@ -116,9 +118,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     raise ValueError(f"Dense is unsupported for nv > {nv_max} (nv = {mjm.nv}).")
 
   is_sparse = mujoco.mj_isSparse(mjm)
-
-  if mjm.opt.integrator == mujoco.mjtIntegrator.mjINT_IMPLICITFAST and is_sparse:
-    raise NotImplementedError("implicitfast integrator and sparse option is unsupported.")
 
   # calculate some fields that cannot be easily computed inline
   nlsp = mjm.opt.ls_iterations  # TODO(team): how to set nlsp?
@@ -240,16 +239,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   actuator_moment_tiles_nv, actuator_moment_tiles_nu = tuple(), tuple()
 
-  # TODO(team): tile support
-  if (mjm.actuator_trntype == mujoco.mjtTrn.mjTRN_BODY).any():
-    actuator_moment_tiles_nv += (types.TileSet(adr=wp.zeros(1, dtype=int), size=mjm.nv),)
-    actuator_moment_tiles_nu += (types.TileSet(adr=wp.zeros(1, dtype=int), size=mjm.nu),)
-  else:
-    for (nv, nu), adr in sorted(tiles.items()):
-      adr_nv = wp.array([nv for nv, _ in adr], dtype=int)
-      adr_nu = wp.array([nu for _, nu in adr], dtype=int)
-      actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
-      actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
+  for (nv, nu), adr in sorted(tiles.items()):
+    adr_nv = wp.array([nv for nv, _ in adr], dtype=int)
+    adr_nu = wp.array([nu for _, nu in adr], dtype=int)
+    actuator_moment_tiles_nv += (types.TileSet(adr=adr_nv, size=nv),)
+    actuator_moment_tiles_nu += (types.TileSet(adr=adr_nu, size=nu),)
 
   # fixed tendon
   tendon_jnt_adr = []
@@ -345,6 +339,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
     nxn_pairid[pairid] = i
 
+  include = nxn_pairid > -2
+  nxn_pairid_filtered = nxn_pairid[include]
+  nxn_geom_pair_filtered = nxn_geom_pair[include]
+
   # count contact pair types
   geom_type_pair_count = np.bincount(
     [
@@ -377,6 +375,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   rangefinder_sensor_adr = np.full(mjm.nsensor, -1)
   rangefinder_sensor_adr[sensor_rangefinder_adr] = np.arange(len(sensor_rangefinder_adr))
 
+  # TODO(team): improve heuristic for selecting broadphase routine
   if mjm.ngeom > 1000:
     broadphase = types.BroadphaseType.SAP_SEGMENTED
   elif mjm.ngeom > 100:
@@ -416,6 +415,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     nmeshvert=mjm.nmeshvert,
     nmeshface=mjm.nmeshface,
     nmeshgraph=mjm.nmeshgraph,
+    nmeshpoly=mjm.nmeshpoly,
+    nmeshpolyvert=mjm.nmeshpolyvert,
+    nmeshpolymap=mjm.nmeshpolymap,
     nlsp=nlsp,
     npair=mjm.npair,
     opt=types.Option(
@@ -440,15 +442,14 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       ls_parallel=False,
       gjk_iterations=MJ_CCD_ITERATIONS,
       epa_iterations=MJ_CCD_ITERATIONS,
-      epa_exact_neg_distance=False,
-      depth_extension=0.1,
       broadphase=int(broadphase),
       broadphase_filter=int(
         types.BroadphaseFilter.PLANE.value | types.BroadphaseFilter.SPHERE.value | types.BroadphaseFilter.OBB.value
       ),
-      graph_conditional=False,
+      graph_conditional=True and conditional_graph_supported(),
       sdf_initpoints=mjm.opt.sdf_initpoints,
       sdf_iterations=mjm.opt.sdf_iterations,
+      run_collision_detection=True,
     ),
     stat=types.Statistic(
       meaninertia=mjm.stat.meaninertia,
@@ -595,6 +596,15 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_face=wp.array(mjm.mesh_face, dtype=wp.vec3i),
     mesh_graphadr=wp.array(mjm.mesh_graphadr, dtype=int),
     mesh_graph=wp.array(mjm.mesh_graph, dtype=int),
+    mesh_polynum=wp.array(mjm.mesh_polynum, dtype=int),
+    mesh_polyadr=wp.array(mjm.mesh_polyadr, dtype=int),
+    mesh_polynormal=wp.array(mjm.mesh_polynormal, dtype=wp.vec3),
+    mesh_polyvertadr=wp.array(mjm.mesh_polyvertadr, dtype=int),
+    mesh_polyvertnum=wp.array(mjm.mesh_polyvertnum, dtype=int),
+    mesh_polyvert=wp.array(mjm.mesh_polyvert, dtype=int),
+    mesh_polymapadr=wp.array(mjm.mesh_polymapadr, dtype=int),
+    mesh_polymapnum=wp.array(mjm.mesh_polymapnum, dtype=int),
+    mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -630,6 +640,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     actuator_dynprm=create_nmodel_batched_array(mjm.actuator_dynprm, dtype=types.vec10f),
     actuator_gainprm=create_nmodel_batched_array(mjm.actuator_gainprm, dtype=types.vec10f),
     actuator_biasprm=create_nmodel_batched_array(mjm.actuator_biasprm, dtype=types.vec10f),
+    actuator_actearly=wp.array(mjm.actuator_actearly, dtype=bool),
     actuator_ctrlrange=create_nmodel_batched_array(mjm.actuator_ctrlrange, dtype=wp.vec2),
     actuator_forcerange=create_nmodel_batched_array(mjm.actuator_forcerange, dtype=wp.vec2),
     actuator_actrange=create_nmodel_batched_array(mjm.actuator_actrange, dtype=wp.vec2),
@@ -644,7 +655,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       or np.any(mjm.actuator_gaintype == types.GainType.AFFINE.value)
     ),
     nxn_geom_pair=wp.array(nxn_geom_pair, dtype=wp.vec2i),
+    nxn_geom_pair_filtered=wp.array(nxn_geom_pair_filtered, dtype=wp.vec2i),
     nxn_pairid=wp.array(nxn_pairid, dtype=int),
+    nxn_pairid_filtered=wp.array(nxn_pairid_filtered, dtype=int),
     pair_dim=wp.array(mjm.pair_dim, dtype=int),
     pair_geom1=wp.array(mjm.pair_geom1, dtype=int),
     pair_geom2=wp.array(mjm.pair_geom2, dtype=int),
