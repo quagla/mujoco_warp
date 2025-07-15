@@ -176,8 +176,111 @@ class BroadphaseTest(parameterized.TestCase):
     np.testing.assert_allclose(d5.collision_pair.numpy()[0][0], 3)
     np.testing.assert_allclose(d5.collision_pair.numpy()[0][1], 2)
 
-    # TODO(team): test margin
-    # TODO(team): test DisableBit.FILTERPARENT
+  def test_broadphase_filter(self):
+    plane = BroadphaseFilter.PLANE.value
+    sphere = BroadphaseFilter.SPHERE.value
+    aabb = BroadphaseFilter.AABB.value
+    obb = BroadphaseFilter.OBB.value
+    plane_sphere = plane | sphere
+    plane_aabb = plane | aabb
+    plane_obb = plane | obb
+
+    _PLANE_CAPSULE_CAPSULE = """
+      <mujoco>
+        <option gravity="0 0 0"/>
+        <worldbody>
+          <light type="directional" pos="0 0 1"/>
+          <geom name="floor" size="10 10 .001" type="plane"/>
+          <body>
+            <geom type="capsule" size=".05 .1" rgba="0 1 0 1"/>
+            <joint type="slide" axis="1 0 0"/>
+            <joint type="slide" axis="0 0 1"/>
+            <joint type="hinge" axis="0 1 0"/>
+          </body>
+          <body>
+            <geom type="capsule" size=".05 .1" rgba="1 0 0 1"/>
+            <joint type="slide" axis="1 0 0"/>
+            <joint type="slide" axis="0 0 1"/>
+            <joint type="hinge" axis="0 1 0"/>
+          </body>
+        </worldbody>
+        <keyframe>
+          <key qpos="-.5 .25 0 .5 .25 0"/>
+          <key qpos="-.5 .075 1.57 .5 .25 0"/>
+          <key qpos="-.075 .25 0 .075 .25 0"/>
+          <key qpos="0 .25 .7853 0 .45 .7853"/>
+        </keyframe>
+      </mujoco>
+    """
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=0)
+    m.opt.broadphase_filter = plane_sphere
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=0)
+    m.opt.broadphase_filter = plane_aabb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=0)
+    m.opt.broadphase_filter = plane_obb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=1)
+    m.opt.broadphase_filter = plane_sphere
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    # note: collision_driver._plane_filter checks bounding sphere
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=1)
+    m.opt.broadphase_filter = plane
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 2)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=1)
+    m.opt.broadphase_filter = plane_sphere
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=1)
+    m.opt.broadphase_filter = plane_obb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=2)
+    m.opt.broadphase_filter = plane_sphere
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=2)
+    m.opt.broadphase_filter = plane_aabb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=2)
+    m.opt.broadphase_filter = plane_obb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=3)
+    m.opt.broadphase_filter = plane_sphere
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=3)
+    m.opt.broadphase_filter = plane_aabb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 1)
+
+    _, _, m, d = test_util.fixture(xml=_PLANE_CAPSULE_CAPSULE, keyframe=3)
+    m.opt.broadphase_filter = plane_obb
+    broadphase_caller(m, d)
+    self.assertEqual(d.ncollision.numpy()[0], 0)
+
+  # TODO(team): test margin
+  # TODO(team): test DisableBit.FILTERPARENT
 
 
 if __name__ == "__main__":
