@@ -100,7 +100,7 @@ def _aabb_filter(
 ) -> bool:
   """Axis aligned boxes collision.
 
-  references: mju_raySlab: see Ericson, Real-time Collision Detection section 5.3.3.
+  references: see Ericson, Real-time Collision Detection section 4.2.
               filterBox: filter contact based on global AABBs.
   """
   center1 = xmat1 @ center1 + xpos1
