@@ -108,6 +108,13 @@ def _aabb_filter(
 
   margin = wp.max(margin1, margin2)
 
+  max_x1 = -MJ_MAXVAL
+  max_y1 = -MJ_MAXVAL
+  max_z1 = -MJ_MAXVAL
+  min_x1 = MJ_MAXVAL
+  min_y1 = MJ_MAXVAL
+  min_z1 = MJ_MAXVAL
+
   max_x2 = -MJ_MAXVAL
   max_y2 = -MJ_MAXVAL
   max_z2 = -MJ_MAXVAL
@@ -117,12 +124,32 @@ def _aabb_filter(
 
   sign = wp.vec2(-1.0, 1.0)
 
-  # transform to geom1 frame
   for i in range(2):
     for j in range(2):
       for k in range(2):
-        corner = wp.vec3(sign[i] * size2[0], sign[j] * size2[1], sign[k] * size2[2])
-        pos2 = wp.transpose(xmat1) @ (center2 + xmat2 @ corner - center1)
+        corner1 = wp.vec3(sign[i] * size1[0], sign[j] * size1[1], sign[k] * size1[2])
+        pos1 = center1 + xmat1 @ corner1
+
+        corner2 = wp.vec3(sign[i] * size2[0], sign[j] * size2[1], sign[k] * size2[2])
+        pos2 = center2 + xmat2 @ corner2
+
+        if pos1[0] > max_x1:
+          max_x1 = pos1[0]
+
+        if pos1[1] > max_y1:
+          max_y1 = pos1[1]
+
+        if pos1[2] > max_z1:
+          max_z1 = pos1[2]
+
+        if pos1[0] < min_x1:
+          min_x1 = pos1[0]
+
+        if pos1[1] < min_y1:
+          min_y1 = pos1[1]
+
+        if pos1[2] < min_z1:
+          min_z1 = pos1[2]
 
         if pos2[0] > max_x2:
           max_x2 = pos2[0]
@@ -142,17 +169,17 @@ def _aabb_filter(
         if pos2[2] < min_z2:
           min_z2 = pos2[2]
 
-  if size1[0] + margin < min_x2:
+  if max_x1 + margin < min_x2:
     return False
-  if size1[1] + margin < min_y2:
+  if max_y1 + margin < min_y2:
     return False
-  if size1[2] + margin < min_z2:
+  if max_z1 + margin < min_z2:
     return False
-  if max_x2 + margin < -size1[0]:
+  if max_x2 + margin < min_x1:
     return False
-  if max_y2 + margin < -size1[1]:
+  if max_y2 + margin < min_y1:
     return False
-  if max_z2 + margin < -size1[2]:
+  if max_z2 + margin < min_z1:
     return False
 
   return True
