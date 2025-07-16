@@ -129,10 +129,10 @@ def _aabb_filter(
     for j in range(2):
       for k in range(2):
         corner1 = wp.vec3(sign[i] * size1[0], sign[j] * size1[1], sign[k] * size1[2])
-        pos1 = center1 + xmat1 @ corner1
+        pos1 = xmat1 @ corner1
 
         corner2 = wp.vec3(sign[i] * size2[0], sign[j] * size2[1], sign[k] * size2[2])
-        pos2 = center2 + xmat2 @ corner2
+        pos2 = xmat2 @ corner2
 
         if pos1[0] > max_x1:
           max_x1 = pos1[0]
@@ -170,17 +170,17 @@ def _aabb_filter(
         if pos2[2] < min_z2:
           min_z2 = pos2[2]
 
-  if max_x1 + margin < min_x2:
+  if center1[0] + max_x1 + margin < center2[0] + min_x2:
     return False
-  if max_y1 + margin < min_y2:
+  if center1[1] + max_y1 + margin < center2[1] + min_y2:
     return False
-  if max_z1 + margin < min_z2:
+  if center1[2] + max_z1 + margin < center2[2] + min_z2:
     return False
-  if max_x2 + margin < min_x1:
+  if center2[0] + max_x2 + margin < center1[0] + min_x1:
     return False
-  if max_y2 + margin < min_y1:
+  if center2[1] + max_y2 + margin < center1[1] + min_y1:
     return False
-  if max_z2 + margin < min_z1:
+  if center2[2] + max_z2 + margin < center1[2] + min_z1:
     return False
 
   return True
