@@ -97,6 +97,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   if mjm.nflex > 1:
     raise NotImplementedError("Only one flex is unsupported.")
 
+  if ((mjm.flex_contype != 0) | (mjm.flex_conaffinity != 0)).any():
+    raise NotImplementedError("Flex collisions are not implemented.")
+
   if mjm.geom_fluid.any():
     raise NotImplementedError("Ellipsoid fluid model not implemented.")
 
@@ -422,14 +425,14 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     npair=mjm.npair,
     opt=types.Option(
       timestep=create_nmodel_batched_array(np.array(mjm.opt.timestep), dtype=float, expand_dim=False),
-      tolerance=mjm.opt.tolerance,
-      ls_tolerance=mjm.opt.ls_tolerance,
+      tolerance=create_nmodel_batched_array(np.array(mjm.opt.tolerance), dtype=float, expand_dim=False),
+      ls_tolerance=create_nmodel_batched_array(np.array(mjm.opt.ls_tolerance), dtype=float, expand_dim=False),
       gravity=create_nmodel_batched_array(mjm.opt.gravity, dtype=wp.vec3, expand_dim=False),
       magnetic=create_nmodel_batched_array(mjm.opt.magnetic, dtype=wp.vec3, expand_dim=False),
       wind=create_nmodel_batched_array(mjm.opt.wind, dtype=wp.vec3, expand_dim=False),
       has_fluid=bool(mjm.opt.wind.any() or mjm.opt.density or mjm.opt.viscosity),
-      density=mjm.opt.density,
-      viscosity=mjm.opt.viscosity,
+      density=create_nmodel_batched_array(np.array(mjm.opt.density), dtype=float, expand_dim=False),
+      viscosity=create_nmodel_batched_array(np.array(mjm.opt.viscosity), dtype=float, expand_dim=False),
       cone=mjm.opt.cone,
       solver=mjm.opt.solver,
       iterations=mjm.opt.iterations,
@@ -437,7 +440,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       integrator=mjm.opt.integrator,
       disableflags=mjm.opt.disableflags,
       enableflags=mjm.opt.enableflags,
-      impratio=mjm.opt.impratio,
+      impratio=create_nmodel_batched_array(np.array(mjm.opt.impratio), dtype=float, expand_dim=False),
       is_sparse=bool(is_sparse),
       ls_parallel=False,
       gjk_iterations=MJ_CCD_ITERATIONS,
@@ -1003,12 +1006,14 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     qLD_integration=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
     qLDiagInv_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     # sweep-and-prune broadphase
-    sap_projection_lower=wp.zeros((2 * nworld, mjm.ngeom), dtype=float),
+    sap_projection_lower=wp.zeros((nworld, mjm.ngeom, 2), dtype=float),
     sap_projection_upper=wp.zeros((nworld, mjm.ngeom), dtype=float),
-    sap_sort_index=wp.zeros((2 * nworld, mjm.ngeom), dtype=int),
+    sap_sort_index=wp.zeros((nworld, mjm.ngeom, 2), dtype=int),
     sap_range=wp.zeros((nworld, mjm.ngeom), dtype=int),
-    sap_cumulative_sum=wp.zeros(nworld * mjm.ngeom, dtype=int),
-    sap_segment_index=wp.array([i * mjm.ngeom for i in range(nworld + 1)], dtype=int),
+    sap_cumulative_sum=wp.zeros((nworld, mjm.ngeom), dtype=int),
+    sap_segment_index=wp.array(
+      np.array([i * mjm.ngeom if i < nworld + 1 else 0 for i in range(2 * nworld)]).reshape((nworld, 2)), dtype=int
+    ),
     # collision driver
     collision_pair=wp.zeros((nconmax,), dtype=wp.vec2i),
     collision_hftri_index=wp.zeros((nconmax,), dtype=int),
@@ -1356,12 +1361,12 @@ def put_data(
     qLD_integration=tile(qLD_integration),
     qLDiagInv_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     # TODO(team): skip allocation if broadphase != sap
-    sap_projection_lower=wp.zeros((2 * nworld, mjm.ngeom), dtype=float),
+    sap_projection_lower=wp.zeros((nworld, mjm.ngeom, 2), dtype=float),
     sap_projection_upper=wp.zeros((nworld, mjm.ngeom), dtype=float),
-    sap_sort_index=wp.zeros((2 * nworld, mjm.ngeom), dtype=int),
+    sap_sort_index=wp.zeros((nworld, mjm.ngeom, 2), dtype=int),
     sap_range=wp.zeros((nworld, mjm.ngeom), dtype=int),
-    sap_cumulative_sum=wp.zeros(nworld * mjm.ngeom, dtype=int),
-    sap_segment_index=arr([i * mjm.ngeom for i in range(nworld + 1)]),
+    sap_cumulative_sum=wp.zeros((nworld, mjm.ngeom), dtype=int),
+    sap_segment_index=arr(np.array([i * mjm.ngeom if i < nworld + 1 else 0 for i in range(2 * nworld)]).reshape((nworld, 2))),
     # collision driver
     collision_pair=wp.empty(nconmax, dtype=wp.vec2i),
     collision_hftri_index=wp.empty(nconmax, dtype=int),
