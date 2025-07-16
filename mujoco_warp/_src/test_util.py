@@ -190,7 +190,6 @@ def benchmark(
   event_trace: bool = False,
   measure_alloc: bool = False,
   measure_solver_niter: bool = False,
-  ctrl_noise: bool = False,
 ) -> Tuple[float, float, dict, list, list, list]:
   """Benchmark a function of Model and Data.
 
@@ -232,14 +231,13 @@ def benchmark(
 
     time_vec = np.zeros(nstep)
     for i in range(nstep):
-      if ctrl_noise:
-        wp.launch(
-          ctrl_noise,
-          dim=(d.nworld, m.nu),
-          inputs=[
-            m.actuator_ctrllimited, m.actuator_ctrlrange, i, 0.01
-          ],
-          outputs=[d.ctrl])  # fmt: skip
+      wp.launch(
+        ctrl_noise,
+        dim=(d.nworld, m.nu),
+        inputs=[
+          m.actuator_ctrllimited, m.actuator_ctrlrange, i, 0.01
+        ],
+        outputs=[d.ctrl])  # fmt: skip
 
       run_beg = time.perf_counter()
       wp.capture_launch(graph)
