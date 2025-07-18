@@ -173,7 +173,7 @@ def _support(geom: Geom, geomtype: int, dir: wp.vec3):
 
 @wp.func
 def _attach_face(pt: Polytope, idx: int, v1: int, v2: int, v3: int):
-  # out of memory, returning 0. will force EPA to return early without finding contact
+  # out of memory, returning 0 will force EPA to return early without contact
   if pt.nface == pt.face.shape[0]:
     return 0.0
 
