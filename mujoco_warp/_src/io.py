@@ -97,6 +97,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   if mjm.nflex > 1:
     raise NotImplementedError("Only one flex is unsupported.")
 
+  if ((mjm.flex_contype != 0) | (mjm.flex_conaffinity != 0)).any():
+    raise NotImplementedError("Flex collisions are not implemented.")
+
   if mjm.geom_fluid.any():
     raise NotImplementedError("Ellipsoid fluid model not implemented.")
 
@@ -422,14 +425,14 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     npair=mjm.npair,
     opt=types.Option(
       timestep=create_nmodel_batched_array(np.array(mjm.opt.timestep), dtype=float, expand_dim=False),
-      tolerance=mjm.opt.tolerance,
-      ls_tolerance=mjm.opt.ls_tolerance,
+      tolerance=create_nmodel_batched_array(np.array(mjm.opt.tolerance), dtype=float, expand_dim=False),
+      ls_tolerance=create_nmodel_batched_array(np.array(mjm.opt.ls_tolerance), dtype=float, expand_dim=False),
       gravity=create_nmodel_batched_array(mjm.opt.gravity, dtype=wp.vec3, expand_dim=False),
       magnetic=create_nmodel_batched_array(mjm.opt.magnetic, dtype=wp.vec3, expand_dim=False),
       wind=create_nmodel_batched_array(mjm.opt.wind, dtype=wp.vec3, expand_dim=False),
       has_fluid=bool(mjm.opt.wind.any() or mjm.opt.density or mjm.opt.viscosity),
-      density=mjm.opt.density,
-      viscosity=mjm.opt.viscosity,
+      density=create_nmodel_batched_array(np.array(mjm.opt.density), dtype=float, expand_dim=False),
+      viscosity=create_nmodel_batched_array(np.array(mjm.opt.viscosity), dtype=float, expand_dim=False),
       cone=mjm.opt.cone,
       solver=mjm.opt.solver,
       iterations=mjm.opt.iterations,
@@ -437,12 +440,15 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       integrator=mjm.opt.integrator,
       disableflags=mjm.opt.disableflags,
       enableflags=mjm.opt.enableflags,
-      impratio=mjm.opt.impratio,
+      impratio=create_nmodel_batched_array(np.array(mjm.opt.impratio), dtype=float, expand_dim=False),
       is_sparse=bool(is_sparse),
       ls_parallel=False,
       gjk_iterations=MJ_CCD_ITERATIONS,
       epa_iterations=MJ_CCD_ITERATIONS,
       broadphase=int(broadphase),
+      broadphase_filter=int(
+        types.BroadphaseFilter.PLANE.value | types.BroadphaseFilter.SPHERE.value | types.BroadphaseFilter.OBB.value
+      ),
       graph_conditional=True and conditional_graph_supported(),
       sdf_initpoints=mjm.opt.sdf_initpoints,
       sdf_iterations=mjm.opt.sdf_iterations,
@@ -539,7 +545,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     geom_solref=create_nmodel_batched_array(mjm.geom_solref, dtype=wp.vec2),
     geom_solimp=create_nmodel_batched_array(mjm.geom_solimp, dtype=types.vec5),
     geom_size=create_nmodel_batched_array(mjm.geom_size, dtype=wp.vec3),
-    geom_aabb=wp.array(mjm.geom_aabb, dtype=wp.vec3),
+    geom_aabb=wp.array2d(mjm.geom_aabb, dtype=wp.vec3),
     geom_rbound=create_nmodel_batched_array(mjm.geom_rbound, dtype=float),
     geom_pos=create_nmodel_batched_array(mjm.geom_pos, dtype=wp.vec3),
     geom_quat=create_nmodel_batched_array(mjm.geom_quat, dtype=wp.quat),
@@ -805,7 +811,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     mjm (mujoco.MjModel): The model containing kinematic and dynamic information (host).
     nworld (int, optional): Number of worlds. Defaults to 1.
     nconmax (int, optional): Maximum number of contacts for all worlds. Defaults to -1.
-    njmax (int, optiona): Maximum number of constraints for all worlds. Defaults to -1.
+    njmax (int, optional): Maximum number of constraints for all worlds. Defaults to -1.
 
   Returns:
     Data: The data object containing the current state and output arrays (device).
@@ -976,8 +982,8 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       hi_next_alpha=wp.zeros((nworld,), dtype=float),
       mid=wp.zeros((nworld,), dtype=wp.vec3),
       mid_alpha=wp.zeros((nworld,), dtype=float),
-      cost_candidate=wp.zeros((nworld,), dtype=float),
-      quad_total_candidate=wp.zeros((nworld,), dtype=wp.vec3f),
+      cost_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=float),
+      quad_total_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=wp.vec3f),
       # elliptic cone
       u=wp.zeros((nconmax,), dtype=types.vec6),
       uu=wp.zeros((nconmax,), dtype=float),
@@ -1080,7 +1086,7 @@ def put_data(
     Data: The data object containing the current state and output arrays (device).
   """
   # TODO(team): move nconmax and njmax to Model?
-  # TODO(team): decide what to do about unintialized warp-only fields created by put_data
+  # TODO(team): decide what to do about uninitialized warp-only fields created by put_data
   #             we need to ensure these are only workspace fields and don't carry state
 
   nworld = nworld or 1
