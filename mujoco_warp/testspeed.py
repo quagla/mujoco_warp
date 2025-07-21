@@ -34,22 +34,6 @@ class OutputOptions(enum.IntEnum):
   TSV = 1
 
 
-class BroadphaseOptions(enum.IntEnum):
-  NXN = 0
-  SAP_TILE = 1
-  SAP_SEGMENTED = 2
-
-
-class SolverOptions(enum.IntEnum):
-  CG = mujoco.mjtSolver.mjSOL_CG
-  NEWTON = mujoco.mjtSolver.mjSOL_NEWTON
-
-
-class ConeOptions(enum.IntEnum):
-  PYRAMIDAL = mujoco.mjtCone.mjCONE_PYRAMIDAL
-  ELLIPTIC = mujoco.mjtCone.mjCONE_ELLIPTIC
-
-
 _FUNCTION = flags.DEFINE_enum(
   "function",
   "step",
@@ -59,12 +43,12 @@ _FUNCTION = flags.DEFINE_enum(
 _MJCF = flags.DEFINE_string("mjcf", None, "path to model `.xml` or `.mjb`", required=True)
 _NSTEP = flags.DEFINE_integer("nstep", 1000, "number of steps per rollout")
 _BATCH_SIZE = flags.DEFINE_integer("batch_size", 8192, "number of parallel rollouts")
-_SOLVER = flags.DEFINE_enum_class("solver", None, SolverOptions, "Override model constraint solver")
+_SOLVER = flags.DEFINE_enum_class("solver", None, mjwarp.SolverType, "Override model constraint solver")
 _ITERATIONS = flags.DEFINE_integer("iterations", None, "Override model solver iterations")
 _LS_ITERATIONS = flags.DEFINE_integer("ls_iterations", None, "Override model linesearch iterations")
 _LS_PARALLEL = flags.DEFINE_bool("ls_parallel", False, "solve with parallel linesearch")
 _IS_SPARSE = flags.DEFINE_bool("is_sparse", None, "Override model sparse config")
-_CONE = flags.DEFINE_enum_class("cone", ConeOptions.PYRAMIDAL, ConeOptions, "Friction cone type")
+_CONE = flags.DEFINE_enum_class("cone", mjwarp.ConeType.PYRAMIDAL, mjwarp.ConeType, "Friction cone type")
 _NCONMAX = flags.DEFINE_integer(
   "nconmax",
   None,
@@ -84,7 +68,7 @@ _MEASURE_SOLVER = flags.DEFINE_bool("measure_solver", False, "Measure the number
 _NUM_BUCKETS = flags.DEFINE_integer("num_buckets", 10, "Number of buckets to summarize measurements.")
 _INTEGRATOR = flags.DEFINE_string("integrator", None, "Integrator (mjtIntegrator).")
 _DEVICE = flags.DEFINE_string("device", None, "Override the default Warp device.")
-_BROADPHASE = flags.DEFINE_enum_class("broadphase", None, BroadphaseOptions, "Broadphase collision routine.")
+_BROADPHASE = flags.DEFINE_enum_class("broadphase", None, mjwarp.BroadphaseType, "Broadphase collision routine.")
 _BROADPHASE_FILTER = flags.DEFINE_integer("broadphase_filter", None, "Broadphase collision filter routine.")
 
 
@@ -161,8 +145,9 @@ def _main(argv: Sequence[str]):
   with wp.ScopedDevice(_DEVICE.value):
     m = mjwarp.put_model(mjm)
     if _EVENT_TRACE.value:
-      m.opt.graph_conditional = False  # graph conditional doesn't work with event trace
-
+      if m.opt.graph_conditional:
+        print("Warning: graph conditional is disabled, feature not supported with event tracing")
+        m.opt.graph_conditional = False  # graph conditional doesn't work with event trace
     # integrator
     IntegratorType = mjwarp._src.types.IntegratorType
     integrators = {IntegratorType.EULER: "Euler", IntegratorType.IMPLICITFAST: "implicitfast", IntegratorType.RK4: "RK4"}

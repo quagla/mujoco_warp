@@ -31,17 +31,6 @@ from absl import flags
 import mujoco_warp as mjwarp
 
 
-class BroadphaseOptions(enum.IntEnum):
-  NXN = 0
-  SAP_TILE = 1
-  SAP_SEGMENTED = 2
-
-
-class ConeOptions(enum.IntEnum):
-  PYRAMIDAL = mujoco.mjtCone.mjCONE_PYRAMIDAL
-  ELLIPTIC = mujoco.mjtCone.mjCONE_ELLIPTIC
-
-
 class EngineOptions(enum.IntEnum):
   MJWARP = 0
   MJC = 1
@@ -50,7 +39,7 @@ class EngineOptions(enum.IntEnum):
 _MODEL_PATH = flags.DEFINE_string("mjcf", None, "Path to a MuJoCo MJCF file.", required=True)
 _CLEAR_KERNEL_CACHE = flags.DEFINE_bool("clear_kernel_cache", False, "Clear kernel cache (to calculate full JIT time)")
 _ENGINE = flags.DEFINE_enum_class("engine", EngineOptions.MJWARP, EngineOptions, "Simulation engine")
-_CONE = flags.DEFINE_enum_class("cone", ConeOptions.PYRAMIDAL, ConeOptions, "Friction cone type")
+_CONE = flags.DEFINE_enum_class("cone", mjwarp.ConeType.PYRAMIDAL, mjwarp.ConeType, "Friction cone type")
 _LS_PARALLEL = flags.DEFINE_bool("ls_parallel", False, "Engine solver with parallel linesearch")
 _VIEWER_GLOBAL_STATE = {
   "running": True,
@@ -58,7 +47,7 @@ _VIEWER_GLOBAL_STATE = {
 }
 _NCONMAX = flags.DEFINE_integer("nconmax", None, "Maximum number of contacts.")
 _NJMAX = flags.DEFINE_integer("njmax", None, "Maximum number of constraints.")
-_BROADPHASE = flags.DEFINE_enum_class("broadphase", None, BroadphaseOptions, "Broadphase collision routine.")
+_BROADPHASE = flags.DEFINE_enum_class("broadphase", None, mjwarp.BroadphaseType, "Broadphase collision routine.")
 _BROADPHASE_FILTER = flags.DEFINE_integer("broadphase_filter", None, "Broadphase collision filter routine.")
 _KEYFRAME = flags.DEFINE_integer("keyframe", None, "Keyframe to initialize simulation.")
 
