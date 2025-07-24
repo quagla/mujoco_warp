@@ -115,6 +115,20 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   if mjm.opt.noslip_iterations > 0:
     raise NotImplementedError(f"noslip solver not implemented.")
 
+  # contact sensor
+  is_contact_sensor = mjm.sensor_type == types.SensorType.CONTACT
+  if is_contact_sensor.any():
+    # matching
+    if (
+      (mjm.sensor_objtype[is_contact_sensor] != types.ObjType.GEOM)
+      | (mjm.sensor_reftype[is_contact_sensor] != types.ObjType.GEOM)
+    ).any():
+      raise NotImplementedError("Contact sensor matching not implemented.")
+
+    # reduction
+    if (mjm.sensor_intprm[is_contact_sensor, 1] != 1).any():
+      raise NotImplementedError(f"Contact sensor reduction not implemented.")
+
   # TODO(team): remove after _update_gradient for Newton uses tile operations for islands
   nv_max = 60
   if mjm.nv > nv_max and mjm.opt.jacobian == mujoco.mjtJacobian.mjJAC_DENSE:
@@ -709,6 +723,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     sensor_objid=wp.array(mjm.sensor_objid, dtype=int),
     sensor_reftype=wp.array(mjm.sensor_reftype, dtype=int),
     sensor_refid=wp.array(mjm.sensor_refid, dtype=int),
+    sensor_intprm=wp.array(mjm.sensor_intprm, dtype=int),
     sensor_dim=wp.array(mjm.sensor_dim, dtype=int),
     sensor_adr=wp.array(mjm.sensor_adr, dtype=int),
     sensor_cutoff=wp.array(mjm.sensor_cutoff, dtype=float),
@@ -776,6 +791,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       mjm.sensor_type,
       [mujoco.mjtSensor.mjSENS_SUBTREELINVEL, mujoco.mjtSensor.mjSENS_SUBTREEANGMOM],
     ).any(),
+    sensor_contact=(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT).any(),
     sensor_rne_postconstraint=np.isin(
       mjm.sensor_type,
       [
@@ -1053,6 +1069,10 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
+    sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
+    sensor_contact_dist=wp.zeros((nconmax, 2), dtype=float),
+    sensor_contact_start_indices=wp.array(np.array([0, nconmax]), dtype=int),
+    sensor_contact_force=wp.zeros(nconmax, dtype=wp.spatial_vector),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),
@@ -1406,6 +1426,10 @@ def put_data(
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
+    sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
+    sensor_contact_dist=wp.zeros((nconmax, 2), dtype=float),
+    sensor_contact_start_indices=wp.array(np.array([0, nconmax]), dtype=int),
+    sensor_contact_force=wp.zeros(nconmax, dtype=wp.spatial_vector),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),
