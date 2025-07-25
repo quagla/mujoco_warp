@@ -461,7 +461,9 @@ class SensorTest(parameterized.TestCase):
     d.sensordata.zero_()
     mjwarp.forward(m, d)
 
-    _assert_eq(d.sensordata.numpy()[0], mjd.sensordata, "sensordata")
+    sensordata = d.sensordata.numpy()[0]
+    _assert_eq(sensordata, mjd.sensordata, "sensordata")
+    self.assertTrue(sensordata.any())  # check that sensordata is not empty
 
 
 if __name__ == "__main__":
