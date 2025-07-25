@@ -1612,10 +1612,7 @@ def _sensor_acc(
     reduce = sensor_intprm[sensorid, 1]
 
     # TODO(thowell): matching: none-none, geom1/geom2, site, body, subtree
-    assert (objtype == int(ObjType.GEOM.value)) and (reftype == int(ObjType.GEOM.value))
-
     # TODO(thowell): reduction: none, maxforce, netforce
-    assert reduce == 1  # mindist
 
     # found, force, torque, dist, pos, normal, tangent
     # TODO(thowell): precompute slot size
