@@ -1584,7 +1584,7 @@ def _sensor_acc(
   contact_dim_in: wp.array(dtype=int),
   contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_efc_address_in: wp.array2d(dtype=int),
-  efc_force_in: wp.array(dtype=float),
+  efc_force_in: wp.array2d(dtype=float),
   cacc_in: wp.array2d(dtype=wp.spatial_vector),
   cfrc_int_in: wp.array2d(dtype=wp.spatial_vector),
   sensor_contact_id_in: wp.array(dtype=int),  # kernel_analyzer: ignore
@@ -1693,6 +1693,7 @@ def _sensor_acc(
           contact_dim_in,
           contact_efc_address_in,
           efc_force_in,
+          worldid,
           cid,
           False,
         )
