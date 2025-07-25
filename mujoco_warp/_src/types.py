@@ -1378,6 +1378,7 @@ class Data:
     njmax: maximum number of constraints
     solver_niter: number of solver iterations                   (nworld,)
     ncon: number of detected contacts
+    ncon_world: number of detected contacts per world           (nworld,)
     ncon_hfield: number of contacts per geom pair with hfield   (nworld, nhfieldgeompair)
     ne: number of equality constraints
     ne_connect: number of equality connect constraints
@@ -1509,9 +1510,11 @@ class Data:
     sensor_rangefinder_dist: distances for rangefinder          (nworld, nrangefinder)
     sensor_rangefinder_geomid: geomids for rangefinder          (nworld, nrangefinder)
     sensor_contact_id: contact id for sorting                   (nconmax, 2)
-    sensor_contact_dist: contact dist for sorting               (nconmax, 2)
-    sensor_contact_start_indices: start end indices for sort    (2,)
-    sensor_contact_force: contact forces (force, torque).       (nconmax, 6)
+    sensor_contact_worldid: contact world id for sorting        (nconmax, 2)
+    sensor_contact_world_sort: value for reduce, sort by world  (nconmax,)
+    sensor_contact_start_indices: per-world contact start index (nworld,)
+    sensor_contact_end_indices: per-world contact end index     (nworld,)
+    sensor_contact_sort_indices: world sort start end indices   (2,)
     ray_bodyexclude: id of body to exclude from ray computation
     ray_dist: ray distance to nearest geom                      (nworld, 1)
     ray_geomid: id of geom that intersects with ray             (nworld, 1)
@@ -1524,6 +1527,7 @@ class Data:
   njmax: int  # warp only
   solver_niter: wp.array(dtype=int)
   ncon: wp.array(dtype=int)
+  ncon_world: wp.array(dtype=int)  # warp only
   ncon_hfield: wp.array2d(dtype=int)  # warp only
   ne: wp.array(dtype=int)
   ne_connect: wp.array(dtype=int)  # warp only
@@ -1668,9 +1672,11 @@ class Data:
   sensor_rangefinder_dist: wp.array2d(dtype=float)  # warp only
   sensor_rangefinder_geomid: wp.array2d(dtype=int)  # warp only
   sensor_contact_id: wp.array2d(dtype=int)  # warp only
-  sensor_contact_dist: wp.array2d(dtype=float)  # warp only
+  sensor_contact_worldid: wp.array2d(dtype=int)  # warp only
+  sensor_contact_world_sort: wp.array2d(dtype=float)  # warp only
   sensor_contact_start_indices: wp.array(dtype=int)  # warp only
-  sensor_contact_force: wp.array(dtype=wp.spatial_vector)  # warp only
+  sensor_contact_end_indices: wp.array(dtype=int)  # warp only
+  sensor_contact_sort_indices: wp.array(dtype=int)  # warp only
 
   # ray
   ray_bodyexclude: wp.array(dtype=int)  # warp only

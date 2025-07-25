@@ -408,7 +408,9 @@ class SensorTest(parameterized.TestCase):
     _assert_eq(d.energy.numpy()[0][1], mjd.energy[1], "kinetic energy")
 
   @parameterized.parameters(
-    'type="sphere" size=".1"', 'type="capsule" size=".1 .1" euler="0 89 89"', 'type="box" size=".1 .1 .1" euler=".02 .05 .1"'
+    'type="sphere" size=".1"',
+    'type="capsule" size=".1 .1" euler="0 89 89"',
+    'type="box" size=".1 .1 .1" euler=".02 .05 .1"',
   )
   def test_contact_sensor(self, geom):
     """Test contact sensor."""

@@ -857,6 +857,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     njmax=njmax,
     solver_niter=wp.zeros(nworld, dtype=int),
     ncon=wp.zeros(1, dtype=int),
+    ncon_world=wp.zeros(nworld, dtype=int),
     ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
     ne=wp.zeros(1, dtype=int),
     ne_connect=wp.zeros(1, dtype=int),  # warp only
@@ -1070,9 +1071,11 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
     sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_dist=wp.zeros((nconmax, 2), dtype=float),
-    sensor_contact_start_indices=wp.array(np.array([0, nconmax]), dtype=int),
-    sensor_contact_force=wp.zeros(nconmax, dtype=wp.spatial_vector),
+    sensor_contact_worldid=wp.zeros((nconmax, 2), dtype=int),
+    sensor_contact_world_sort=wp.zeros((nconmax, 2), dtype=float),
+    sensor_contact_start_indices=wp.zeros(nworld, dtype=int),
+    sensor_contact_end_indices=wp.zeros(nworld, dtype=int),
+    sensor_contact_sort_indices=wp.array(np.array([0, nconmax]), dtype=int),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),
@@ -1220,6 +1223,7 @@ def put_data(
     njmax=njmax,
     solver_niter=tile(mjd.solver_niter[0]),
     ncon=arr([mjd.ncon * nworld]),
+    ncon_world=wp.zeros(nworld, dtype=int),
     ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
     ne=arr([mjd.ne * nworld]),
     ne_connect=arr([3 * nworld * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_CONNECT) & mjd.eq_active, dtype=int)]),
@@ -1427,9 +1431,11 @@ def put_data(
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
     sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_dist=wp.zeros((nconmax, 2), dtype=float),
-    sensor_contact_start_indices=wp.array(np.array([0, nconmax]), dtype=int),
-    sensor_contact_force=wp.zeros(nconmax, dtype=wp.spatial_vector),
+    sensor_contact_worldid=wp.zeros((nconmax, 2), dtype=int),
+    sensor_contact_world_sort=wp.zeros((nconmax, 2), dtype=float),
+    sensor_contact_start_indices=wp.zeros(nworld, dtype=int),
+    sensor_contact_end_indices=wp.zeros(nworld, dtype=int),
+    sensor_contact_sort_indices=wp.array(np.array([0, nconmax]), dtype=int),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),

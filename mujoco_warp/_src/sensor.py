@@ -1555,6 +1555,7 @@ def _frameangacc(
 @wp.kernel
 def _sensor_acc(
   # Model:
+  opt_cone: int,
   body_rootid: wp.array(dtype=int),
   jnt_dofadr: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
@@ -1573,6 +1574,7 @@ def _sensor_acc(
   sensor_acc_adr: wp.array(dtype=int),
   # Data in:
   ncon_in: wp.array(dtype=int),
+  ncon_world_in: wp.array(dtype=int),
   xpos_in: wp.array2d(dtype=wp.vec3),
   xipos_in: wp.array2d(dtype=wp.vec3),
   geom_xpos_in: wp.array2d(dtype=wp.vec3),
@@ -1586,12 +1588,15 @@ def _sensor_acc(
   contact_dist_in: wp.array(dtype=float),
   contact_pos_in: wp.array(dtype=wp.vec3),
   contact_frame_in: wp.array(dtype=wp.mat33),
+  contact_friction_in: wp.array(dtype=vec5),
+  contact_dim_in: wp.array(dtype=int),
   contact_geom_in: wp.array(dtype=wp.vec2i),
-  contact_worldid_in: wp.array(dtype=int),
+  contact_efc_address_in: wp.array2d(dtype=int),
+  efc_force_in: wp.array(dtype=float),
   cacc_in: wp.array2d(dtype=wp.spatial_vector),
   cfrc_int_in: wp.array2d(dtype=wp.spatial_vector),
   sensor_contact_id_in: wp.array(dtype=int),  # kernel_analyzer: ignore
-  sensor_contact_force_in: wp.array(dtype=wp.spatial_vector),
+  sensor_contact_start_indices_in: wp.array(dtype=int),
   # Data out:
   sensordata_out: wp.array2d(dtype=float),
 ):
@@ -1602,7 +1607,7 @@ def _sensor_acc(
   out = sensordata_out[worldid]
 
   if sensortype == int(SensorType.CONTACT.value):
-    ncon = ncon_in[0]
+    ncon_world = ncon_world_in[worldid]
 
     dataspec = sensor_intprm[sensorid, 0]
     dim = sensor_dim[sensorid]
@@ -1652,21 +1657,19 @@ def _sensor_acc(
     num = dim // size  # number of slots
 
     adr = sensor_adr[sensorid]
+    contact_start = sensor_contact_start_indices_in[worldid]
 
-    # find match
     slot = int(0)
-    for i in range(ncon):
+    for i in range(ncon_world):
       slots_filled = slot >= num
 
       if slots_filled and not found:
         break
 
       # sorted contact id
-      cid = sensor_contact_id_in[i]
+      cid = sensor_contact_id_in[contact_start + i]
 
-      contact_worldid = contact_worldid_in[cid]
-      if not worldid == contact_worldid:
-        continue
+      # geom-geom match
       geom = contact_geom_in[cid]
       if objid == geom[0] and refid == geom[1]:
         dir = 1.0
@@ -1689,17 +1692,27 @@ def _sensor_acc(
       if slots_filled:
         continue
 
+      if force or torque:
+        contact_forcetorque = support.contact_force_fn(
+          opt_cone,
+          ncon_in,
+          contact_frame_in,
+          contact_friction_in,
+          contact_dim_in,
+          contact_efc_address_in,
+          efc_force_in,
+          cid,
+          False,
+        )
       if force:
-        contact_force = wp.spatial_top(sensor_contact_force_in[cid])
-        out[adr_slot + 0] = contact_force[0]
-        out[adr_slot + 1] = contact_force[1]
-        out[adr_slot + 2] = dir * contact_force[2]
+        out[adr_slot + 0] = contact_forcetorque[0]
+        out[adr_slot + 1] = contact_forcetorque[1]
+        out[adr_slot + 2] = dir * contact_forcetorque[2]
         adr_slot += 3
       if torque:
-        contact_torque = wp.spatial_bottom(sensor_contact_force_in[cid])
-        out[adr_slot + 0] = contact_torque[0]
-        out[adr_slot + 1] = contact_torque[1]
-        out[adr_slot + 2] = dir * contact_torque[2]
+        out[adr_slot + 0] = contact_forcetorque[3]
+        out[adr_slot + 1] = contact_forcetorque[4]
+        out[adr_slot + 2] = dir * contact_forcetorque[5]
         adr_slot += 3
       if dist:
         out[adr_slot] = contact_dist_in[cid]
@@ -1878,43 +1891,42 @@ def _sensor_touch(
 
 @wp.kernel
 def _contact_init(
-  # Model:
-  opt_cone: int,
   # Data in:
   ncon_in: wp.array(dtype=int),
-  contact_dist_in: wp.array(dtype=float),
-  contact_frame_in: wp.array(dtype=wp.mat33),
-  contact_friction_in: wp.array(dtype=vec5),
-  contact_dim_in: wp.array(dtype=int),
-  contact_efc_address_in: wp.array2d(dtype=int),
-  efc_force_in: wp.array(dtype=float),
+  contact_worldid_in: wp.array(dtype=int),
   # Data out:
+  ncon_world_out: wp.array(dtype=int),
   sensor_contact_id_out: wp.array(dtype=int),  # kernel_analyzer: ignore
-  sensor_contact_dist_out: wp.array(dtype=float),  # kernel_analyzer: ignore
-  sensor_contact_force_out: wp.array(dtype=wp.spatial_vector),
+  sensor_contact_worldid_out: wp.array(dtype=int),  # kernel_analyzer: ignore
 ):
   cid = wp.tid()
 
   if cid >= ncon_in[0]:
     return
 
+  # contacts per world
+  contact_worldid = contact_worldid_in[cid]
+  wp.atomic_add(ncon_world_out, contact_worldid, 1)
+
   sensor_contact_id_out[cid] = cid
-  sensor_contact_dist_out[cid] = contact_dist_in[cid]
+  sensor_contact_worldid_out[cid] = contact_worldid
 
-  # compute contact force
-  contact_force = support.contact_force_fn(
-    opt_cone,
-    ncon_in,
-    contact_frame_in,
-    contact_friction_in,
-    contact_dim_in,
-    contact_efc_address_in,
-    efc_force_in,
-    cid,
-    False,
-  )
 
-  sensor_contact_force_out[cid] = contact_force
+@wp.kernel
+def _contact_world_sort(
+  # Data in:
+  ncon_in: wp.array(dtype=int),
+  contact_dist_in: wp.array(dtype=float),
+  sensor_contact_id_in: wp.array(dtype=int),  # kernel_analyzer: ignore
+  # Data out:
+  sensor_contact_world_sort_out: wp.array(dtype=float),  # kernel_analyzer: ignore
+):
+  cid = wp.tid()
+
+  if cid >= ncon_in[0]:
+    return
+
+  sensor_contact_world_sort_out[cid] = contact_dist_in[sensor_contact_id_in[cid]]
 
 
 @event_scope
@@ -1964,32 +1976,50 @@ def sensor_acc(m: Model, d: Data):
   )
 
   if m.sensor_contact:
-    # initialize contact ids and dists for sorting and (force,torque)s
+    # initialize contact ids for sorting and compute number of contacts per world
+    d.ncon_world.zero_()
     wp.launch(
       _contact_init,
       dim=(d.nconmax,),
       inputs=[
-        m.opt.cone,
         d.ncon,
-        d.contact.dist,
-        d.contact.frame,
-        d.contact.friction,
-        d.contact.dim,
-        d.contact.efc_address,
-        d.efc.force,
+        d.contact.worldid,
       ],
-      outputs=[d.sensor_contact_id.reshape(-1), d.sensor_contact_dist.reshape(-1), d.sensor_contact_force],
+      outputs=[d.ncon_world, d.sensor_contact_id.reshape(-1), d.sensor_contact_worldid.reshape(-1)],
     )
 
-    # sort contacts by mindist
-    # TODO(thowell): maxforce reduction
-
+    # sort contact ids by world
     # TODO(thowell): tile sort option
     wp.utils.segmented_sort_pairs(
-      d.sensor_contact_dist,
+      d.sensor_contact_worldid,
+      d.sensor_contact_id,
+      d.nconmax,
+      d.sensor_contact_sort_indices,
+    )
+
+    # sort contact value for reduction criteria by world
+    wp.launch(
+      _contact_world_sort,
+      dim=(d.nconmax,),
+      inputs=[
+        d.ncon,
+        d.contact.dist,
+        d.sensor_contact_id.reshape(-1),
+      ],
+      outputs=[d.sensor_contact_world_sort.reshape(-1)],
+    )
+
+    # per-world contact start end indices
+    wp.utils.array_scan(d.ncon_world, d.sensor_contact_start_indices, False)
+    wp.utils.array_scan(d.ncon_world, d.sensor_contact_end_indices, True)
+
+    # per-world contact id sort
+    wp.utils.segmented_sort_pairs(
+      d.sensor_contact_world_sort,
       d.sensor_contact_id,
       d.nconmax,
       d.sensor_contact_start_indices,
+      d.sensor_contact_end_indices,
     )
 
   if m.sensor_rne_postconstraint:
@@ -1999,6 +2029,7 @@ def sensor_acc(m: Model, d: Data):
     _sensor_acc,
     dim=(d.nworld, m.sensor_acc_adr.size),
     inputs=[
+      m.opt.cone,
       m.body_rootid,
       m.jnt_dofadr,
       m.geom_bodyid,
@@ -2016,6 +2047,7 @@ def sensor_acc(m: Model, d: Data):
       m.sensor_cutoff,
       m.sensor_acc_adr,
       d.ncon,
+      d.ncon_world,
       d.xpos,
       d.xipos,
       d.geom_xpos,
@@ -2029,12 +2061,15 @@ def sensor_acc(m: Model, d: Data):
       d.contact.dist,
       d.contact.pos,
       d.contact.frame,
+      d.contact.friction,
+      d.contact.dim,
       d.contact.geom,
-      d.contact.worldid,
+      d.contact.efc_address,
+      d.efc.force,
       d.cacc,
       d.cfrc_int,
       d.sensor_contact_id.reshape(-1),
-      d.sensor_contact_force,
+      d.sensor_contact_start_indices,
     ],
     outputs=[d.sensordata],
   )
