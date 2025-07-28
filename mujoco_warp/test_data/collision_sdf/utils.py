@@ -80,7 +80,7 @@ def register_sdf_plugins(collision_sdf) -> Dict[str, int]:
     elif sdf_type == wp.static(sdf_types[SDFType.BOLT.value]):
       result = bolt(p, attr)
     elif sdf_type == wp.static(sdf_types[SDFType.TORUS.value]):
-      result = torus(p)
+      result = torus(p, attr)
     return result
 
   @wp.func

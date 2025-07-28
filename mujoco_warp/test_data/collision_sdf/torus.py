@@ -2,9 +2,9 @@ import math
 import warp as wp
 
 @wp.func
-def torus(p: wp.vec3):
-    major_radius = 0.15
-    minor_radius = 0.05
+def torus(p: wp.vec3, attr: wp.vec3):
+    major_radius = attr[0]
+    minor_radius = attr[1]
     
     q = math.sqrt(p[0]*p[0] + p[1]*p[1]) - major_radius
     sdf = math.sqrt(q*q + p[2]*p[2]) - minor_radius
