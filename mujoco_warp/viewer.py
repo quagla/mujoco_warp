@@ -19,11 +19,6 @@ import logging
 import pickle
 import time
 from typing import Sequence
-import sys
-import os
-# Add the parent directory to Python path so it can find mujoco_warp
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
 
 import mujoco
 import mujoco.viewer
@@ -63,9 +58,8 @@ def _load_model():
   # check if the file has any mujoco.sdf test plugins
   if any(p.plugin_name.startswith("mujoco.sdf") for p in spec.plugins):
     from mujoco_warp.test_data.collision_sdf.utils import register_sdf_plugins as register_sdf_plugins
-    from mujoco_warp._src import collision_sdf
 
-    register_sdf_plugins(collision_sdf)
+    register_sdf_plugins(mjwarp._src.collision_sdf)
   return spec.compile()
 
 
@@ -110,21 +104,7 @@ def _main(argv: Sequence[str]) -> None:
     if _BROADPHASE_FILTER.value is not None:
       m.opt.broadphase_filter = _BROADPHASE_FILTER.value
 
-    # todo: move this to io.py
-    volumes = []
-    for mesh_id in mjm.geom_dataid:
-      if mesh_id != -1:
-        octree_id = mjm.mesh_octadr[mesh_id]
-        if octree_id == -1:
-          volumes.append(0)
-        else:
-          volume = mjwarp._src.io.mujoco_octree_to_warp_volume(mjm, octree_id, resolution=64)
-          volumes.append(volume.id)
-    
-    m.volumes = wp.array(data=volumes, dtype=wp.uint64)
-
     d = mjwarp.put_data(mjm, mjd, nconmax=_NCONMAX.value, njmax=_NJMAX.value)
-
 
     if _CLEAR_KERNEL_CACHE.value:
       wp.clear_kernel_cache()
@@ -178,7 +158,4 @@ def main():
 
 
 if __name__ == "__main__":
- # wp.clear_kernel_cache()
-  # or 
- # wp.init() 
   main()

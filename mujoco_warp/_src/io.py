@@ -608,7 +608,8 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_polymapadr=wp.array(mjm.mesh_polymapadr, dtype=int),
     mesh_polymapnum=wp.array(mjm.mesh_polymapnum, dtype=int),
     mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
-    volumes=wp.array(),
+    volume_ids=wp.array(),
+    volumes = tuple(),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -801,6 +802,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
   )
 
+  mujoco_octree_to_warp_volume(mjm, m)
+  return m
+
+def mujoco_octree_to_warp_volume(mjm, m):
   volumes = []
   for mesh_id in mjm.geom_dataid:
       if mesh_id != -1:
@@ -808,11 +813,39 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
         if octree_id == -1:
           volumes.append(0)
         else:
-          volume = mujoco_octree_to_warp_volume(mjm, octree_id, resolution=64)
-          volumes.append(volume.id)
+          octadr = octree_id
+          resolution = 64
+          oct_child = mjm.oct_child[8*octadr:].reshape(-1, 8)
+          oct_aabb = mjm.oct_aabb[6*octadr:].reshape(-1, 6)
+          oct_coeff = mjm.oct_coeff[8*octadr:].reshape(-1, 8)
+          
+          root_aabb = oct_aabb[0]
+          center = root_aabb[:3]
+          half_size = root_aabb[3:]
+          vmin = center - half_size
+          vmax = center + half_size
+          
+          x = np.linspace(vmin[0], vmax[0], resolution)
+          y = np.linspace(vmin[1], vmax[1], resolution) 
+          z = np.linspace(vmin[2], vmax[2], resolution)
+          
+          sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
+          
+          for i, px in enumerate(x):
+              for j, py in enumerate(y):
+                  for k, pz in enumerate(z):
+                      point = np.array([px, py, pz])
+                      sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
+                      sdf_values[i, j, k] = sdf_val
+
+          
+          volume = wp.Volume.load_from_numpy(sdf_values)
+         
+          volumes.append(volume)
     
-  m.volumes = wp.array(data=volumes, dtype=wp.uint64)
-  return m
+  volume_ids = [volume.id if volume!=0 else 0 for volume in volumes]
+  m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
+  m.volumes =tuple(volumes)
 
 
 def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: int = -1) -> types.Data:
@@ -1586,36 +1619,6 @@ def get_data_into(
   # sensors
   result.sensordata[:] = d.sensordata.numpy()
 
-
-def mujoco_octree_to_warp_volume(mjm, octadr, resolution=64):    
-    oct_child = mjm.oct_child[8*octadr:].reshape(-1, 8)
-    oct_aabb = mjm.oct_aabb[6*octadr:].reshape(-1, 6)
-    oct_coeff = mjm.oct_coeff[8*octadr:].reshape(-1, 8)
-    
-    root_aabb = oct_aabb[0]
-    center = root_aabb[:3]
-    half_size = root_aabb[3:]
-    vmin = center - half_size
-    vmax = center + half_size
-    
-    x = np.linspace(vmin[0], vmax[0], resolution)
-    y = np.linspace(vmin[1], vmax[1], resolution) 
-    z = np.linspace(vmin[2], vmax[2], resolution)
-    
-    sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
-    
-    for i, px in enumerate(x):
-        for j, py in enumerate(y):
-            for k, pz in enumerate(z):
-                point = np.array([px, py, pz])
-                sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
-                sdf_values[i, j, k] = sdf_val
-
-    
-    volume = wp.Volume.load_from_numpy(sdf_values)
-
-    
-    return volume
 
 
 def sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff):

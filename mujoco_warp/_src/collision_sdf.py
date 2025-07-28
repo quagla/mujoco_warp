@@ -583,7 +583,7 @@ def sdf_narrowphase(m: Model, d: Data):
       m.pair_margin,
       m.pair_gap,
       m.pair_friction,
-      m.volumes,
+      m.volume_ids,
       m.plugin,
       m.plugin_attr,
       m.geom_plugin_index,
