@@ -21,6 +21,7 @@ from . import math
 from . import ray
 from . import smooth
 from . import support
+from .types import MJ_MAXCONPAIR
 from .types import MJ_MINVAL
 from .types import ConeType
 from .types import ConstraintType
@@ -1557,16 +1558,14 @@ def _sensor_acc(
   sensor_datatype: wp.array(dtype=int),
   sensor_objtype: wp.array(dtype=int),
   sensor_objid: wp.array(dtype=int),
-  sensor_reftype: wp.array(dtype=int),
-  sensor_refid: wp.array(dtype=int),
   sensor_intprm: wp.array2d(dtype=int),
   sensor_dim: wp.array(dtype=int),
   sensor_adr: wp.array(dtype=int),
   sensor_cutoff: wp.array(dtype=float),
   sensor_acc_adr: wp.array(dtype=int),
+  sensor_contact_adr: wp.array(dtype=int),
   # Data in:
   ncon_in: wp.array(dtype=int),
-  ncon_world_in: wp.array(dtype=int),
   xpos_in: wp.array2d(dtype=wp.vec3),
   xipos_in: wp.array2d(dtype=wp.vec3),
   geom_xpos_in: wp.array2d(dtype=wp.vec3),
@@ -1582,13 +1581,13 @@ def _sensor_acc(
   contact_frame_in: wp.array(dtype=wp.mat33),
   contact_friction_in: wp.array(dtype=vec5),
   contact_dim_in: wp.array(dtype=int),
-  contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_efc_address_in: wp.array2d(dtype=int),
   efc_force_in: wp.array2d(dtype=float),
   cacc_in: wp.array2d(dtype=wp.spatial_vector),
   cfrc_int_in: wp.array2d(dtype=wp.spatial_vector),
-  sensor_contact_id_in: wp.array(dtype=int),  # kernel_analyzer: ignore
-  sensor_contact_start_indices_in: wp.array(dtype=int),
+  sensor_contact_nmatch_in: wp.array2d(dtype=int),
+  sensor_contact_matchid_in: wp.array3d(dtype=int),
+  sensor_contact_direction_in: wp.array3d(dtype=float),
   # Data out:
   sensordata_out: wp.array2d(dtype=float),
 ):
@@ -1599,17 +1598,9 @@ def _sensor_acc(
   out = sensordata_out[worldid]
 
   if sensortype == int(SensorType.CONTACT.value):
-    ncon_world = ncon_world_in[worldid]
-
     dataspec = sensor_intprm[sensorid, 0]
     dim = sensor_dim[sensorid]
     objtype = sensor_objtype[sensorid]
-    reftype = sensor_reftype[sensorid]
-    refid = sensor_refid[sensorid]
-    reduce = sensor_intprm[sensorid, 1]
-
-    # TODO(thowell): matching: none-none, geom1/geom2, site, body, subtree
-    # TODO(thowell): reduction: none, maxforce, netforce
 
     # found, force, torque, dist, pos, normal, tangent
     # TODO(thowell): precompute slot size
@@ -1649,41 +1640,28 @@ def _sensor_acc(
     num = dim // size  # number of slots
 
     adr = sensor_adr[sensorid]
-    contact_start = sensor_contact_start_indices_in[worldid]
 
-    slot = int(0)
-    for i in range(ncon_world):
-      slots_filled = slot >= num
-
-      if slots_filled and not found:
+    # TODO(team): precompute sensorid to contactsensorid mapping
+    contactsensorid = int(0)
+    for i in range(sensor_contact_adr.size):
+      if sensorid == sensor_contact_adr[i]:
+        contactsensorid = i
         break
 
+    nmatch = sensor_contact_nmatch_in[worldid, contactsensorid]
+
+    for i in range(wp.min(nmatch, num)):
       # sorted contact id
-      cid = sensor_contact_id_in[contact_start + i]
+      cid = sensor_contact_matchid_in[worldid, contactsensorid, i]
 
-      # geom-geom match
-      geom = contact_geom_in[cid]
-      if objid == geom[0] and refid == geom[1]:
-        dir = 1.0
-      elif objid == geom[1] and refid == geom[0]:
-        dir = -1.0
-      else:
-        continue
+      # contact direction
+      dir = sensor_contact_direction_in[worldid, contactsensorid, i]
 
-      adr_slot = adr + slot * size
+      adr_slot = adr + i * size
 
       if found:
-        if not slots_filled:
-          out[adr_slot] = float(slot) + 1.0
-          adr_slot += 1
-        if slot > 0:
-          for i in range(slot):
-            out[adr + i * size] += 1.0
-
-      # slots filled
-      if slots_filled:
-        continue
-
+        out[adr_slot] = float(nmatch)
+        adr_slot += 1
       if force or torque:
         contact_forcetorque = support.contact_force_fn(
           opt_cone,
@@ -1729,10 +1707,8 @@ def _sensor_acc(
         out[adr_slot + 2] = dir * contact_tangent[2]
         adr_slot += 3
 
-      slot += 1
-
     # zero remaining slots
-    for i in range(slot, num):
+    for i in range(nmatch, num):
       for j in range(size):
         out[adr + i * size + j] = 0.0
 
@@ -1883,43 +1859,79 @@ def _sensor_touch(
 
 
 @wp.kernel
-def _contact_init(
-  # Data in:
-  ncon_in: wp.array(dtype=int),
-  contact_worldid_in: wp.array(dtype=int),
-  # Data out:
-  ncon_world_out: wp.array(dtype=int),
-  sensor_contact_id_out: wp.array(dtype=int),  # kernel_analyzer: ignore
-  sensor_contact_worldid_out: wp.array(dtype=int),  # kernel_analyzer: ignore
-):
-  cid = wp.tid()
-
-  if cid >= ncon_in[0]:
-    return
-
-  # contacts per world
-  contact_worldid = contact_worldid_in[cid]
-  wp.atomic_add(ncon_world_out, contact_worldid, 1)
-
-  sensor_contact_id_out[cid] = cid
-  sensor_contact_worldid_out[cid] = contact_worldid
-
-
-@wp.kernel
-def _contact_world_sort(
+def _contact_match(
+  # Model:
+  sensor_objid: wp.array(dtype=int),
+  sensor_refid: wp.array(dtype=int),
+  sensor_contact_adr: wp.array(dtype=int),
   # Data in:
   ncon_in: wp.array(dtype=int),
   contact_dist_in: wp.array(dtype=float),
-  sensor_contact_id_in: wp.array(dtype=int),  # kernel_analyzer: ignore
+  contact_geom_in: wp.array(dtype=wp.vec2i),
+  contact_worldid_in: wp.array(dtype=int),
   # Data out:
-  sensor_contact_world_sort_out: wp.array(dtype=float),  # kernel_analyzer: ignore
+  sensor_contact_nmatch_out: wp.array2d(dtype=int),
+  sensor_contact_matchid_out: wp.array3d(dtype=int),
+  sensor_contact_criteria_out: wp.array3d(dtype=float),
+  sensor_contact_direction_out: wp.array3d(dtype=float),
 ):
-  cid = wp.tid()
+  contactsensorid, contactid = wp.tid()
+  sensorid = sensor_contact_adr[contactsensorid]
 
-  if cid >= ncon_in[0]:
+  if contactid >= ncon_in[0]:
     return
 
-  sensor_contact_world_sort_out[cid] = contact_dist_in[sensor_contact_id_in[cid]]
+  # sensor information
+  objid = sensor_objid[sensorid]
+  refid = sensor_refid[sensorid]
+
+  # contact information
+  geom = contact_geom_in[contactid]
+
+  # geom-geom match
+  geom0geom1 = objid == geom[0] and refid == geom[1]
+  geom1geom0 = objid == geom[1] and refid == geom[0]
+  if geom0geom1 or geom1geom0:
+    worldid = contact_worldid_in[contactid]
+
+    contactmatchid = wp.atomic_add(sensor_contact_nmatch_out[worldid], contactsensorid, 1)
+    sensor_contact_matchid_out[worldid, contactsensorid, contactmatchid] = contactid
+
+    # TODO(thowell): alternative criteria
+    sensor_contact_criteria_out[worldid, contactsensorid, contactmatchid] = contact_dist_in[contactid]
+
+    # contact direction
+    if geom1geom0:
+      sensor_contact_direction_out[worldid, contactsensorid, contactmatchid] = -1.0
+    else:
+      sensor_contact_direction_out[worldid, contactsensorid, contactmatchid] = 1.0
+
+    return
+
+  # TODO(thowell): alternative matching
+
+
+@wp.kernel
+def _contact_sort(
+  # Data in:
+  sensor_contact_nmatch_in: wp.array2d(dtype=int),
+  sensor_contact_matchid_in: wp.array3d(dtype=int),
+  sensor_contact_criteria_in: wp.array3d(dtype=float),
+  # Data out:
+  sensor_contact_matchid_out: wp.array3d(dtype=int),
+):
+  worldid, contactsensorid = wp.tid()
+
+  nmatch = sensor_contact_nmatch_in[worldid, contactsensorid]
+
+  # skip sort
+  if nmatch == 1:
+    return
+
+  criteria_tile = wp.tile_load(sensor_contact_criteria_in[worldid, contactsensorid], shape=MJ_MAXCONPAIR)
+  matchid_tile = wp.tile_load(sensor_contact_matchid_in[worldid, contactsensorid], shape=MJ_MAXCONPAIR)
+  wp.tile_sort(criteria_tile, matchid_tile)
+  wp.tile_store(sensor_contact_matchid_out[worldid, contactsensorid], matchid_tile)
 
 
 @event_scope
@@ -1968,51 +1980,45 @@ def sensor_acc(m: Model, d: Data):
     ],
   )
 
-  if m.sensor_contact:
-    # initialize contact ids for sorting and compute number of contacts per world
-    d.ncon_world.zero_()
-    wp.launch(
-      _contact_init,
-      dim=(d.nconmax,),
-      inputs=[
-        d.ncon,
-        d.contact.worldid,
-      ],
-      outputs=[d.ncon_world, d.sensor_contact_id.reshape(-1), d.sensor_contact_worldid.reshape(-1)],
-    )
+  if m.sensor_contact_adr.size:
+    # match criteria
+    d.sensor_contact_nmatch.zero_()
+    d.sensor_contact_matchid.zero_()
+    d.sensor_contact_criteria.zero_()
 
-    # sort contact ids by world
-    # TODO(thowell): tile sort option
-    wp.utils.segmented_sort_pairs(
-      d.sensor_contact_worldid,
-      d.sensor_contact_id,
-      d.nconmax,
-      d.sensor_contact_sort_indices,
-    )
-
-    # sort contact value for reduction criteria by world
     wp.launch(
-      _contact_world_sort,
-      dim=(d.nconmax,),
+      _contact_match,
+      dim=(m.sensor_contact_adr.size, d.nconmax),
       inputs=[
+        m.sensor_objid,
+        m.sensor_refid,
+        m.sensor_contact_adr,
         d.ncon,
         d.contact.dist,
-        d.sensor_contact_id.reshape(-1),
+        d.contact.geom,
+        d.contact.worldid,
       ],
-      outputs=[d.sensor_contact_world_sort.reshape(-1)],
+      outputs=[
+        d.sensor_contact_nmatch,
+        d.sensor_contact_matchid,
+        d.sensor_contact_criteria,
+        d.sensor_contact_direction,
+      ],
     )
 
-    # per-world contact start end indices
-    wp.utils.array_scan(d.ncon_world, d.sensor_contact_start_indices, False)
-    wp.utils.array_scan(d.ncon_world, d.sensor_contact_end_indices, True)
-
-    # per-world contact id sort
-    wp.utils.segmented_sort_pairs(
-      d.sensor_contact_world_sort,
-      d.sensor_contact_id,
-      d.nconmax,
-      d.sensor_contact_start_indices,
-      d.sensor_contact_end_indices,
+    # sorting
+    wp.launch_tiled(
+      _contact_sort,
+      dim=(d.nworld, m.sensor_contact_adr.size),
+      inputs=[
+        d.sensor_contact_nmatch,
+        d.sensor_contact_matchid,
+        d.sensor_contact_criteria,
+      ],
+      outputs=[
+        d.sensor_contact_matchid,
+      ],
+      block_dim=m.block_dim.contact_sort,
     )
 
   if m.sensor_rne_postconstraint:
@@ -2032,15 +2038,13 @@ def sensor_acc(m: Model, d: Data):
       m.sensor_datatype,
       m.sensor_objtype,
       m.sensor_objid,
-      m.sensor_reftype,
-      m.sensor_refid,
       m.sensor_intprm,
       m.sensor_dim,
       m.sensor_adr,
       m.sensor_cutoff,
       m.sensor_acc_adr,
+      m.sensor_contact_adr,
       d.ncon,
-      d.ncon_world,
       d.xpos,
       d.xipos,
       d.geom_xpos,
@@ -2056,13 +2060,13 @@ def sensor_acc(m: Model, d: Data):
       d.contact.frame,
       d.contact.friction,
       d.contact.dim,
-      d.contact.geom,
       d.contact.efc_address,
       d.efc.force,
       d.cacc,
       d.cfrc_int,
-      d.sensor_contact_id.reshape(-1),
-      d.sensor_contact_start_indices,
+      d.sensor_contact_nmatch,
+      d.sensor_contact_matchid,
+      d.sensor_contact_direction,
     ],
     outputs=[d.sensordata],
   )

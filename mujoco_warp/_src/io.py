@@ -795,7 +795,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       mjm.sensor_type,
       [mujoco.mjtSensor.mjSENS_SUBTREELINVEL, mujoco.mjtSensor.mjSENS_SUBTREEANGMOM],
     ).any(),
-    sensor_contact=(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT).any(),
+    sensor_contact_adr=wp.array(np.nonzero(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)[0], dtype=int),
     sensor_rne_postconstraint=np.isin(
       mjm.sensor_type,
       [
@@ -864,6 +864,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     qM = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
     qLD = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
 
+  nsensorcontact = np.sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)
   nrangefinder = sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_RANGEFINDER)
 
   return types.Data(
@@ -1083,12 +1084,10 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
-    sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_worldid=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_world_sort=wp.zeros((nconmax, 2), dtype=float),
-    sensor_contact_start_indices=wp.zeros(nworld, dtype=int),
-    sensor_contact_end_indices=wp.zeros(nworld, dtype=int),
-    sensor_contact_sort_indices=wp.array(np.array([0, nconmax]), dtype=int),
+    sensor_contact_nmatch=wp.zeros((nworld, nsensorcontact), dtype=int),
+    sensor_contact_matchid=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=int),
+    sensor_contact_criteria=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
+    sensor_contact_direction=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),
@@ -1230,6 +1229,7 @@ def put_data(
   efc_force_fill[:, :nefc] = np.tile(mjd.efc_force, (nworld, 1))
   efc_margin_fill[:, :nefc] = np.tile(mjd.efc_margin, (nworld, 1))
 
+  nsensorcontact = np.sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)
   nrangefinder = sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_RANGEFINDER)
 
   # some helper functions to simplify the data field definitions below
@@ -1468,12 +1468,10 @@ def put_data(
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
-    sensor_contact_id=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_worldid=wp.zeros((nconmax, 2), dtype=int),
-    sensor_contact_world_sort=wp.zeros((nconmax, 2), dtype=float),
-    sensor_contact_start_indices=wp.zeros(nworld, dtype=int),
-    sensor_contact_end_indices=wp.zeros(nworld, dtype=int),
-    sensor_contact_sort_indices=wp.array(np.array([0, nconmax]), dtype=int),
+    sensor_contact_nmatch=wp.zeros((nworld, nsensorcontact), dtype=int),
+    sensor_contact_matchid=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=int),
+    sensor_contact_criteria=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
+    sensor_contact_direction=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),

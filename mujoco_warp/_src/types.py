@@ -48,6 +48,7 @@ class BlockDim:
   # ray
   ray: int = 64
   # sensor
+  contact_sort: int = 64
   energy_vel_kinetic: int = 32
   # smooth
   cholesky_factorize: int = 32
@@ -1011,7 +1012,7 @@ class Model:
     sensor_e_kinetic: evaluate energy_vel
     sensor_tendonactfrc_adr: address for tendonactfrc sensor (<=nsensor,)
     sensor_subtree_vel: evaluate subtree_vel
-    sensor_contact: addresses for contact sensors
+    sensor_contact_adr: addresses for contact sensors
     sensor_rne_postconstraint: evaluate rne_postconstraint
     sensor_rangefinder_bodyid: bodyid for rangefinder        (nrangefinder,)
     plugin: globally registered plugin slot number           (nplugin,)
@@ -1317,7 +1318,7 @@ class Model:
   sensor_e_kinetic: bool  # warp only
   sensor_tendonactfrc_adr: wp.array(dtype=int)  # warp only
   sensor_subtree_vel: bool  # warp only
-  sensor_contact: bool  # warp only
+  sensor_contact_adr: wp.array(dtype=int)  # warp only
   sensor_rne_postconstraint: bool  # warp only
   sensor_rangefinder_bodyid: wp.array(dtype=int)  # warp only
   plugin: wp.array(dtype=int)
@@ -1506,12 +1507,10 @@ class Data:
     sensor_rangefinder_vec: directions for rangefinder          (nworld, nrangefinder, 3)
     sensor_rangefinder_dist: distances for rangefinder          (nworld, nrangefinder)
     sensor_rangefinder_geomid: geomids for rangefinder          (nworld, nrangefinder)
-    sensor_contact_id: contact id for sorting                   (nconmax, 2)
-    sensor_contact_worldid: contact world id for sorting        (nconmax, 2)
-    sensor_contact_world_sort: value for reduce, sort by world  (nconmax,)
-    sensor_contact_start_indices: per-world contact start index (nworld,)
-    sensor_contact_end_indices: per-world contact end index     (nworld,)
-    sensor_contact_sort_indices: world sort start end indices   (2,)
+    sensor_contact_nmatch: match count for each world-sensor    (nworld, <=nsensor)
+    sensor_contact_matchid: id for matching contact             (nworld, <=nsensor, MJ_MAXCONPAIR)
+    sensor_contact_criteria: critera for reduction              (nworld, <=nsensor, MJ_MAXCONPAIR)
+    sensor_contact_direction: direction of contact              (nworld, <=nsensor, MJ_MAXCONPAIR)
     ray_bodyexclude: id of body to exclude from ray computation
     ray_dist: ray distance to nearest geom                      (nworld, 1)
     ray_geomid: id of geom that intersects with ray             (nworld, 1)
@@ -1668,12 +1667,10 @@ class Data:
   sensor_rangefinder_vec: wp.array2d(dtype=wp.vec3)  # warp only
   sensor_rangefinder_dist: wp.array2d(dtype=float)  # warp only
   sensor_rangefinder_geomid: wp.array2d(dtype=int)  # warp only
-  sensor_contact_id: wp.array2d(dtype=int)  # warp only
-  sensor_contact_worldid: wp.array2d(dtype=int)  # warp only
-  sensor_contact_world_sort: wp.array2d(dtype=float)  # warp only
-  sensor_contact_start_indices: wp.array(dtype=int)  # warp only
-  sensor_contact_end_indices: wp.array(dtype=int)  # warp only
-  sensor_contact_sort_indices: wp.array(dtype=int)  # warp only
+  sensor_contact_nmatch: wp.array2d(dtype=int)  # warp only
+  sensor_contact_matchid: wp.array3d(dtype=int)  # warp only
+  sensor_contact_criteria: wp.array3d(dtype=float)  # warp only
+  sensor_contact_direction: wp.array3d(dtype=float)  # warp only
 
   # ray
   ray_bodyexclude: wp.array(dtype=int)  # warp only
