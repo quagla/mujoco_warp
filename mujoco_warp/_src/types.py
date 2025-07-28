@@ -900,7 +900,7 @@ class Model:
     mesh_polymapadr: first polygon address per vertex        (nmeshvert,)
     mesh_polymapnum: number of polygons per vertex           (nmeshvert,)
     mesh_polymap: vertex to polygon map                      (nmeshpolymap,)
-    volume_ids: wp.array(dtype=wp.uint64)                     (nvolume,)
+    volume_ids: wp.array(dtype=wp.uint64)                    (nvolume,)
     eq_type: constraint type (mjtEq)                         (neq,)
     eq_obj1id: id of object 1                                (neq,)
     eq_obj2id: id of object 2                                (neq,)

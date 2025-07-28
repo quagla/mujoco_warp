@@ -115,6 +115,7 @@ def _main(argv: Sequence[str]) -> None:
     elapsed = time.time() - start
     print(f"Compilation took {elapsed}s.")
 
+
   viewer = mujoco.viewer.launch_passive(mjm, mjd, key_callback=key_callback)
   with viewer:
     while True:
