@@ -19,6 +19,11 @@ import logging
 import pickle
 import time
 from typing import Sequence
+import sys
+import os
+# Add the parent directory to Python path so it can find mujoco_warp
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parent_dir)
 
 import mujoco
 import mujoco.viewer
@@ -58,8 +63,9 @@ def _load_model():
   # check if the file has any mujoco.sdf test plugins
   if any(p.plugin_name.startswith("mujoco.sdf") for p in spec.plugins):
     from mujoco_warp.test_data.collision_sdf.utils import register_sdf_plugins as register_sdf_plugins
+    from mujoco_warp._src import collision_sdf
 
-    register_sdf_plugins(mjwarp.collision_sdf)
+    register_sdf_plugins(collision_sdf)
   return spec.compile()
 
 
@@ -72,77 +78,6 @@ def _compile_step(m, d):
     mjwarp.step(m, d)
   return capture.graph
 
-
-def mujoco_octree_to_warp_volume(mjm, octadr, resolution=64):    
-    oct_child = mjm.oct_child[8*octadr:].reshape(-1, 8)
-    oct_aabb = mjm.oct_aabb[6*octadr:].reshape(-1, 6)
-    oct_coeff = mjm.oct_coeff[8*octadr:].reshape(-1, 8)
-    
-    root_aabb = oct_aabb[0]
-    center = root_aabb[:3]
-    half_size = root_aabb[3:]
-    vmin = center - half_size
-    vmax = center + half_size
-    
-    x = np.linspace(vmin[0], vmax[0], resolution)
-    y = np.linspace(vmin[1], vmax[1], resolution) 
-    z = np.linspace(vmin[2], vmax[2], resolution)
-    
-    sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
-    
-    for i, px in enumerate(x):
-        for j, py in enumerate(y):
-            for k, pz in enumerate(z):
-                point = np.array([px, py, pz])
-                sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
-                sdf_values[i, j, k] = sdf_val
-    
-    volume = wp.Volume.load_from_numpy(sdf_values)
-    
-    return volume
-
-
-def sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff):
-    eps = 1e-6
-    node = 0
-    
-    while True:
-        aabb = oct_aabb[node]
-        center = aabb[:3]
-        half_size = aabb[3:]
-        vmin = center - half_size
-        vmax = center + half_size
-        
-        if (point[0] + eps < vmin[0] or point[0] - eps > vmax[0] or
-            point[1] + eps < vmin[1] or point[1] - eps > vmax[1] or  
-            point[2] + eps < vmin[2] or point[2] - eps > vmax[2]):
-            return 1.0
-        
-        coord = (point - vmin) / (vmax - vmin)
-        
-        children = oct_child[node]
-        if np.all(children == -1):
-            sdf = 0.0
-            coeffs = oct_coeff[node]
-            
-            for j in range(8):
-                w = ((coord[0] if (j & 1) else (1 - coord[0])) *
-                     (coord[1] if (j & 2) else (1 - coord[1])) *
-                     (coord[2] if (j & 4) else (1 - coord[2])))
-                sdf += w * coeffs[j]
-            
-            return sdf
-        
-        x_child = 0 if coord[0] >= 0.5 else 1
-        y_child = 0 if coord[1] >= 0.5 else 1
-        z_child = 0 if coord[2] >= 0.5 else 1
-        child_idx = 4*z_child + 2*y_child + x_child
-
-        next_node = children[child_idx]
-        if next_node == -1:
-            return 1.0
-
-        node = next_node 
 
 def _main(argv: Sequence[str]) -> None:
   """Launches MuJoCo passive viewer fed by MJWarp."""
@@ -175,8 +110,6 @@ def _main(argv: Sequence[str]) -> None:
     if _BROADPHASE_FILTER.value is not None:
       m.opt.broadphase_filter = _BROADPHASE_FILTER.value
 
-    d = mjwarp.put_data(mjm, mjd, nconmax=_NCONMAX.value, njmax=_NJMAX.value)
-
     # todo: move this to io.py
     volumes = []
     for mesh_id in mjm.geom_dataid:
@@ -185,10 +118,13 @@ def _main(argv: Sequence[str]) -> None:
         if octree_id == -1:
           volumes.append(0)
         else:
-          volume = mujoco_octree_to_warp_volume(mjm, octree_id, resolution=64)
+          volume = mjwarp._src.io.mujoco_octree_to_warp_volume(mjm, octree_id, resolution=64)
           volumes.append(volume.id)
     
     m.volumes = wp.array(data=volumes, dtype=wp.uint64)
+
+    d = mjwarp.put_data(mjm, mjd, nconmax=_NCONMAX.value, njmax=_NJMAX.value)
+
 
     if _CLEAR_KERNEL_CACHE.value:
       wp.clear_kernel_cache()
@@ -242,4 +178,7 @@ def main():
 
 
 if __name__ == "__main__":
+ # wp.clear_kernel_cache()
+  # or 
+ # wp.init() 
   main()
