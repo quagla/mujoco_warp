@@ -1925,7 +1925,7 @@ def _contact_sort(
   nmatch = sensor_contact_nmatch_in[worldid, contactsensorid]
 
   # skip sort
-  if nmatch == 1:
+  if nmatch <= 1:
     return
 
   criteria_tile = wp.tile_load(sensor_contact_criteria_in[worldid, contactsensorid], shape=MJ_MAXCONPAIR)
