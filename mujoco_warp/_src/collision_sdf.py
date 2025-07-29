@@ -187,7 +187,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_id: wp.uint6
 @wp.func
 def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_id: wp.uint64 = 0) -> wp.vec3:
   if type == int(GeomType.PLANE.value):
-    grad = wp.vec3(0.0, 1.0, 0.0)
+    grad = wp.vec3(0.0, 0.0, 1.0)
     return grad
   elif type == int(GeomType.SPHERE.value):
     return grad_sphere(p)
