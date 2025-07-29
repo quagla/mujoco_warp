@@ -14,8 +14,8 @@ def torus(p: wp.vec3, attr: wp.vec3):
 @wp.func
 def torus_sdf_grad(p: wp.vec3, attr: wp.vec3) -> wp.vec3:
     grad = wp.vec3()
-    major_radius = 0.15
-    minor_val = 1e-6
+    major_radius = attr[0]
+    minor_val = attr[1]
     
     len_xy = math.sqrt(p[0]*p[0] + p[1]*p[1])
     q = len_xy - major_radius

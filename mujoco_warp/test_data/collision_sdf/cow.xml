@@ -11,7 +11,7 @@
   <asset>
     <texture name="texspot" type="2d" file="spot.png"/>
     <material name="matspot" texture="texspot"/>
-    <mesh name="spot" file="spot.obj"/>
+    <mesh name="spot" file="asset/spot.obj"/>
     <mesh name="torus">
       <plugin instance="torus"/>
     </mesh>
