@@ -166,7 +166,7 @@ def sample_grad_volume_sdf_world(xyz: wp.vec3, volume: wp.uint64) -> wp.vec3:
         gradient[1] * float(resolution - 1) / range_vec[1], 
         gradient[2] * float(resolution - 1) / range_vec[2]
     )
-    return gradient
+    return world_gradient
 
 @wp.func
 def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_id: wp.uint64 = 0) -> float:
