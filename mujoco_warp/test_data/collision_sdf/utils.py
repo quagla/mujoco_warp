@@ -33,7 +33,7 @@ class SDFType(enum.Enum):
   BOLT = "BOLT"
 
 
-def register_sdf_plugins(collision_sdf) -> Dict[str, int]:
+def register_sdf_plugins(mjwarp) -> Dict[str, int]:
   xml = """<mujoco>
         <extension>
         <plugin plugin="mujoco.sdf.nut"><instance name="n"/></plugin>
@@ -80,7 +80,7 @@ def register_sdf_plugins(collision_sdf) -> Dict[str, int]:
       return bolt_sdf_grad(p, attr)
     return wp.vec3()
 
-  collision_sdf.user_sdf = user_sdf
-  collision_sdf.user_sdf_grad = user_sdf_grad
+  mjwarp._src.collision_sdf.user_sdf = user_sdf
+  mjwarp._src.collision_sdf.user_sdf_grad = user_sdf_grad
 
   return sdf_types

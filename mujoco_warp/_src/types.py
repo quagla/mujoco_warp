@@ -382,6 +382,7 @@ class SensorType(enum.IntEnum):
     TENDONLIMITFRC: tendon limit force
     FRAMELINACC: 3D linear acceleration
     FRAMEANGACC: 3D angular acceleration
+    TACTILE: tactile sensor
   """
 
   MAGNETOMETER = mujoco.mjtSensor.mjSENS_MAGNETOMETER
@@ -425,6 +426,7 @@ class SensorType(enum.IntEnum):
   TENDONLIMITFRC = mujoco.mjtSensor.mjSENS_TENDONLIMITFRC
   FRAMELINACC = mujoco.mjtSensor.mjSENS_FRAMELINACC
   FRAMEANGACC = mujoco.mjtSensor.mjSENS_FRAMEANGACC
+  TACTILE = mujoco.mjtSensor.mjSENS_TACTILE
 
 
 class ObjType(enum.IntEnum):

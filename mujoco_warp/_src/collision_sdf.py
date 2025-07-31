@@ -128,7 +128,9 @@ def user_sdf_grad(p: wp.vec3, attr: wp.vec3, sdf_type: int) -> wp.vec3:
 
 @wp.func
 def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int) -> float:
-  if type == int(GeomType.SPHERE.value):
+  if type == int(GeomType.PLANE.value):
+    return p[2]
+  elif type == int(GeomType.SPHERE.value):
     return sphere(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return ellipsoid(p, attr)
@@ -140,7 +142,10 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int) -> float:
 
 @wp.func
 def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int) -> wp.vec3:
-  if type == int(GeomType.SPHERE.value):
+  if type == int(GeomType.PLANE.value):
+    grad = wp.vec3(0.0, 0.0, 1.0)
+    return grad
+  elif type == int(GeomType.SPHERE.value):
     return grad_sphere(p)
   elif type == int(GeomType.ELLIPSOID.value):
     return grad_ellipsoid(p, attr)
