@@ -1726,6 +1726,23 @@ def _sensor_touch(
       wp.atomic_add(sensordata_out[worldid], adr, normalforce)
 
 
+@wp.kernel
+def _sensor_tactile(
+  # Model:
+  sensor_adr: wp.array(dtype=int),
+  sensor_dim: wp.array(dtype=int),
+  # Data in:
+  ncon_in: wp.array(dtype=int),
+  # Data out:
+  sensordata_out: wp.array2d(dtype=float),
+):
+  conid, taxelid = wp.tid()
+
+  if conid > ncon_in[0]:
+    return
+
+
+
 @event_scope
 def sensor_acc(m: Model, d: Data):
   """Compute acceleration-dependent sensor values."""
@@ -1766,6 +1783,19 @@ def sensor_acc(m: Model, d: Data):
       d.contact.efc_address,
       d.contact.worldid,
       d.efc.force,
+    ],
+    outputs=[
+      d.sensordata,
+    ],
+  )
+
+  wp.launch(
+    _sensor_tactile,
+    dim=(d.nconmax, m.nsensortaxel),
+    inputs=[
+      d.ncon,
+      m.sensor_adr,
+      m.sensor_dim,
     ],
     outputs=[
       d.sensordata,

@@ -755,6 +755,7 @@ class Model:
     nwrap: number of wrap objects in all tendon paths
     nsensor: number of sensors
     nsensordata: number of elements in sensor data vector
+    nsensortaxel: number of taxels in all tactile sensors
     nmeshvert: number of vertices for all meshes
     nmeshface: number of faces for all meshes
     nmeshgraph: number of ints in mesh auxiliary data
@@ -1049,6 +1050,7 @@ class Model:
   nwrap: int
   nsensor: int
   nsensordata: int
+  nsensortaxel: int
   nmeshvert: int
   nmeshface: int
   nmeshgraph: int
