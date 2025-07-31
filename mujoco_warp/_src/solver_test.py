@@ -132,12 +132,12 @@ class SolverTest(parameterized.TestCase):
       return efc_uv, efc_vv
 
     efc_search_np = d.efc.search.numpy()[0]
-    efc_J_np = d.efc.J.numpy()
+    efc_J_np = d.efc.J.numpy()[0]
     efc_gauss_np = d.efc.gauss.numpy()
     efc_Ma_np = d.efc.Ma.numpy()
-    efc_Jaref_np = d.efc.Jaref.numpy()
-    efc_D_np = d.efc.D.numpy()
-    efc_floss_np = d.efc.frictionloss.numpy()
+    efc_Jaref_np = d.efc.Jaref.numpy()[0]
+    efc_D_np = d.efc.D.numpy()[0]
+    efc_floss_np = d.efc.frictionloss.numpy()[0]
     efc_u_np = d.efc.u.numpy()
     qfrc_smooth_np = d.qfrc_smooth.numpy()
     contact_friction_np = d.contact.friction.numpy()
@@ -158,9 +158,9 @@ class SolverTest(parameterized.TestCase):
     solver._linesearch(m, d)
 
     _assert_eq(target_mv, d.efc.mv.numpy()[0], name="efc.mv")
-    _assert_eq(target_jv, d.efc.jv.numpy(), name="efc.jv")
+    _assert_eq(target_jv, d.efc.jv.numpy()[0], name="efc.jv")
     _assert_eq(target_quad_gauss, d.efc.quad_gauss.numpy()[0], name="efc.quad_gauss")
-    _assert_eq(target_quad, d.efc.quad.numpy(), name="efc.quad")
+    _assert_eq(target_quad, d.efc.quad.numpy()[0], name="efc.quad")
     if cone == ConeType.ELLIPTIC:
       _assert_eq(target_efc_uv, d.efc.uv.numpy(), name="efc.uv")
       _assert_eq(target_efc_vv, d.efc.vv.numpy(), name="efc.vv")
