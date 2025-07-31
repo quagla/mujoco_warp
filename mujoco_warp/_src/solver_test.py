@@ -15,8 +15,6 @@
 
 """Tests for solver functions."""
 
-import time
-
 import mujoco
 import numpy as np
 import warp as wp
