@@ -806,7 +806,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     block_dim=types.BlockDim(),
     geom_pair_type_count=tuple(geom_type_pair_count),
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
-    taxel_vertadr=wp.array([j + mjm.mesh_vertadr[mjm.sensor_objid[i]] for j in range(mjm.mesh_vertnum[mjm.sensor_objid[i]]) for i in range(mjm.nsensor) if mjm.sensor_type[i] == mujoco.mjtSensor.mjSENS_TACTILE])
+    taxel_vertadr=wp.array([j + mjm.mesh_vertadr[mjm.sensor_objid[i]] for i in range(mjm.nsensor) if mjm.sensor_type[i] == mujoco.mjtSensor.mjSENS_TACTILE for j in range(mjm.mesh_vertnum[mjm.sensor_objid[i]])])
   )
 
   return m

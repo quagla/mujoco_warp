@@ -1748,6 +1748,7 @@ def _sensor_tactile(
   sensor_dim: wp.array(dtype=int),
   sensor_objid: wp.array(dtype=int),
   sensor_refid: wp.array(dtype=int),
+  sensor_type: wp.array(dtype=int),
   taxel_vertadr: wp.array(dtype=int),
   plugin: wp.array(dtype=int),
   plugin_attr: wp.array(dtype=wp.vec3f),
@@ -1765,7 +1766,7 @@ def _sensor_tactile(
 ):
   conid, taxelid = wp.tid()
 
-  if conid > ncon_in[0]:
+  if conid >= ncon_in[0]:
     return
 
   worldid = contact_worldid_in[conid]
@@ -1774,6 +1775,8 @@ def _sensor_tactile(
   ntaxel = int(0)
   sensor_id = int(0)
   for i in range(nsensor):
+    if (sensor_type[i] != int(SensorType.TACTILE.value)):
+      continue
     dim = sensor_dim[i] / 3
     ntaxel += dim
     if taxelid < ntaxel:
@@ -1836,9 +1839,10 @@ def _sensor_tactile(
 
   # add to sensor output
   dataid = vertid - mesh_vertadr[mesh_id]
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+0*dataid, forceT[0])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+1*dataid, forceT[1])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+2*dataid, forceT[2])
+  dim = sensor_dim[sensor_id] / 3
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 0*dim + dataid, forceT[0])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 1*dim + dataid, forceT[1])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 2*dim + dataid, forceT[2])
 
 
 @event_scope
@@ -1903,6 +1907,7 @@ def sensor_acc(m: Model, d: Data):
       m.sensor_dim,
       m.sensor_objid,
       m.sensor_refid,
+      m.sensor_type,
       m.taxel_vertadr,
       m.plugin,
       m.plugin_attr,
