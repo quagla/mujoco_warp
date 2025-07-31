@@ -1829,7 +1829,7 @@ def _sensor_tactile(
   tang2 = math.rot_vec_quat(mesh_normal[3*mesh_id+2], mesh_quat[mesh_id])
   kMaxDepth = 0.05
   pressure = depth / (kMaxDepth - depth)
-  force = wp.div(normal, pressure)
+  force = wp.mul(normal, pressure)
 
   # one row of mat^T * force
   forceT = wp.vec3()
