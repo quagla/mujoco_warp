@@ -16,6 +16,7 @@
 """Tests for solver functions."""
 
 import time
+
 import mujoco
 import numpy as np
 import warp as wp
@@ -36,7 +37,7 @@ _TOLERANCE = 5e-3
 
 
 def _assert_eq(a, b, name):
-  tol = _TOLERANCE * 20  # avoid test noise
+  tol = _TOLERANCE * 15  # avoid test noise
   err_msg = f"mismatch: {name}"
   np.testing.assert_allclose(a, b, err_msg=err_msg, atol=tol, rtol=tol)
 
@@ -69,7 +70,6 @@ class SolverTest(parameterized.TestCase):
       mjwarp_cost = d.efc.cost.numpy()[0] - d.efc.gauss.numpy()[0]
 
       _assert_eq(mjwarp_cost, mj_cost, name="cost")
-
 
   @parameterized.parameters(ConeType.PYRAMIDAL, ConeType.ELLIPTIC)
   def test_init_linesearch(self, cone):
@@ -150,7 +150,9 @@ class SolverTest(parameterized.TestCase):
     target_quad_gauss = calc_quad_gauss(efc_gauss_np, efc_search_np, efc_Ma_np, qfrc_smooth_np, target_mv)
     target_quad = calc_quad(d.njmax, efc_Jaref_np, target_jv, efc_D_np, efc_floss_np)
     if cone == ConeType.ELLIPTIC:
-      target_efc_uv, target_efc_vv = elliptic_effect(d.nconmax, target_quad, target_jv, efc_u_np, contact_friction_np, contact_dim_np, contact_efc_address_np)
+      target_efc_uv, target_efc_vv = elliptic_effect(
+        d.nconmax, target_quad, target_jv, efc_u_np, contact_friction_np, contact_dim_np, contact_efc_address_np
+      )
 
     # launch linesearch with 0 iteration just doing the initialization step
     d.efc.jv.zero_()
@@ -164,7 +166,6 @@ class SolverTest(parameterized.TestCase):
     if cone == ConeType.ELLIPTIC:
       _assert_eq(target_efc_uv, d.efc.uv.numpy(), name="efc.uv")
       _assert_eq(target_efc_vv, d.efc.vv.numpy(), name="efc.vv")
-
 
   @parameterized.parameters(
     (ConeType.PYRAMIDAL, SolverType.CG, 5, 5, False, False),
@@ -438,6 +439,5 @@ class SolverTest(parameterized.TestCase):
 
 
 if __name__ == "__main__":
-
   wp.init()
   absltest.main()
