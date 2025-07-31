@@ -1755,7 +1755,7 @@ def _sensor_tactile(
   ncon_in: wp.array(dtype=int),
   contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_worldid_in: wp.array(dtype=int),
-  cvel_in: wp.array2d(dtype=vec6),
+  cvel_in: wp.array2d(dtype=wp.spatial_vector),
   geom_xpos_in: wp.array2d(dtype=wp.vec3),
   geom_xmat_in: wp.array2d(dtype=wp.mat33),
   subtree_com_in: wp.array2d(dtype=wp.vec3),
@@ -1792,6 +1792,8 @@ def _sensor_tactile(
     geom = contact_geom_in[conid][1]
   elif body2 == parent_weld:
     geom = contact_geom_in[conid][0]
+  else:
+    return
   body = geom_bodyid[geom]
 
   # vertex local position
