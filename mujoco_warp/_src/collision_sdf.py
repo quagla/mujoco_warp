@@ -66,6 +66,16 @@ def transform_aabb(aabb_pos: wp.vec3, aabb_size: wp.vec3, pos: wp.vec3, ori: wp.
 
 
 @wp.func
+def radial_field(a: wp.vec3, x: wp.vec3, size: wp.vec3) -> wp.vec3:
+  field = wp.cw_div(-size, a)
+  field = wp.normalize(field)
+  field[0] *= wp.sign(x[0])
+  field[1] *= wp.sign(x[1])
+  field[2] *= wp.sign(x[2])
+  return field
+
+
+@wp.func
 def sphere(p: wp.vec3, size: wp.vec3) -> float:
   return wp.length(p) - size[0]
 
@@ -74,16 +84,12 @@ def sphere(p: wp.vec3, size: wp.vec3) -> float:
 @wp.func
 def box(p: wp.vec3, size: wp.vec3) -> float:
   a = wp.abs(p) - size
-  if a[0] >=0 or a[1] >=0 or a[2] >=0:
+  if a[0] >= 0 or a[1] >= 0 or a[2] >= 0:
     z = wp.vec3(0., 0., 0.)
     b = wp.max(a, z)
-    return wp.norm_l2(b) + min(wp.max(a), 0.0)
-  b = wp.cw_div(-size, a)
-  b = wp.normalize(b)
-  b[0] *= wp.sign(b[0])
-  b[1] *= wp.sign(b[1])
-  b[2] *= wp.sign(b[2])
-  t = wp.cw_div(a, wp.abs(b))
+    return wp.norm_l2(b) + wp.min(wp.max(a), 0.0)
+  b = radial_field(a, p, size)
+  t = -wp.cw_div(a, wp.abs(b))
   return -wp.min(t) * wp.norm_l2(b)
 
 
@@ -112,12 +118,7 @@ def grad_sphere(p: wp.vec3) -> wp.vec3:
 def grad_box(p: wp.vec3, size: wp.vec3) -> wp.vec3:
   a = wp.abs(p) - size
   if wp.max(a) < 0:
-    g = wp.cw_div(-size, a)
-    g = wp.normalize(g)
-    g[0] *= wp.sign(g[0])
-    g[1] *= wp.sign(g[1])
-    g[2] *= wp.sign(g[2])
-    return g
+    return radial_field(a, p, size)
   z = wp.vec3(0., 0., 0.)
   b = wp.max(a, z)
   c = wp.norm_l2(b)
@@ -128,6 +129,7 @@ def grad_box(p: wp.vec3, size: wp.vec3) -> wp.vec3:
     g[1] = 0.
   if a[2] <= 0:
     g[2] = 0.
+  return g
 
 
 @wp.func
