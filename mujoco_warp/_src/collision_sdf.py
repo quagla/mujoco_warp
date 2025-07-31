@@ -70,6 +70,23 @@ def sphere(p: wp.vec3, size: wp.vec3) -> float:
   return wp.length(p) - size[0]
 
 
+
+@wp.func
+def box(p: wp.vec3, size: wp.vec3) -> float:
+  a = wp.abs(p) - size
+  if a[0] >=0 or a[1] >=0 or a[2] >=0:
+    z = wp.vec3(0., 0., 0.)
+    b = wp.max(a, z)
+    return wp.norm_l2(b) + min(wp.max(a), 0.0)
+  b = wp.cw_div(-size, a)
+  b = wp.normalize(b)
+  b[0] *= wp.sign(b[0])
+  b[1] *= wp.sign(b[1])
+  b[2] *= wp.sign(b[2])
+  t = wp.cw_div(a, wp.abs(b))
+  return -wp.min(t) * wp.norm_l2(b)
+
+
 @wp.func
 def ellipsoid(p: wp.vec3, size: wp.vec3) -> float:
   scaled_p = wp.vec3(p[0] / size[0], p[1] / size[1], p[2] / size[2])
@@ -89,6 +106,28 @@ def grad_sphere(p: wp.vec3) -> wp.vec3:
     return p / c
   else:
     wp.vec3(0.0)
+
+
+@wp.func
+def grad_box(p: wp.vec3, size: wp.vec3) -> wp.vec3:
+  a = wp.abs(p) - size
+  if wp.max(a) < 0:
+    g = wp.cw_div(-size, a)
+    g = wp.normalize(g)
+    g[0] *= wp.sign(g[0])
+    g[1] *= wp.sign(g[1])
+    g[2] *= wp.sign(g[2])
+    return g
+  z = wp.vec3(0., 0., 0.)
+  b = wp.max(a, z)
+  c = wp.norm_l2(b)
+  g = wp.cw_mul(wp.div(b, c), wp.cw_div(p, wp.abs(p)))
+  if a[0] <= 0:
+    g[0] = 0.
+  if a[1] <= 0:
+    g[1] = 0.
+  if a[2] <= 0:
+    g[2] = 0.
 
 
 @wp.func
@@ -132,6 +171,8 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int) -> float:
     return p[2]
   elif type == int(GeomType.SPHERE.value):
     return sphere(p, attr)
+  elif type == int(GeomType.BOX.value):
+    return box(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return ellipsoid(p, attr)
   elif type == int(GeomType.SDF.value):
@@ -147,6 +188,8 @@ def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int) -> wp.vec3:
     return grad
   elif type == int(GeomType.SPHERE.value):
     return grad_sphere(p)
+  elif type == int(GeomType.BOX.value):
+    return grad_box(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return grad_ellipsoid(p, attr)
   elif type == int(GeomType.SDF.value):
