@@ -21,12 +21,14 @@ from . import math
 from . import ray
 from . import smooth
 from . import support
+from .collision_sdf import sdf
 from .types import MJ_MINVAL
 from .types import ConeType
 from .types import ConstraintType
 from .types import Data
 from .types import DataType
 from .types import DisableBit
+from .types import GeomType
 from .types import JointType
 from .types import Model
 from .types import ObjType
@@ -1726,13 +1728,35 @@ def _sensor_touch(
       wp.atomic_add(sensordata_out[worldid], adr, normalforce)
 
 
+@wp.func
+def _transform_spatial(res: wp.spatial_vector, vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
+  return wp.spatial_bottom(vec) - wp.cross(dif, wp.spatial_top(vec))
+
+
 @wp.kernel
 def _sensor_tactile(
   # Model:
+  body_rootid: wp.array(dtype=int),
+  body_weldid: wp.array(dtype=int),
+  geom_bodyid: wp.array(dtype=int),
+  mesh_quat: wp.array(dtype=wp.quat),
+  mesh_normal: wp.array(dtype=wp.vec3),
+  mesh_vert: wp.array(dtype=int),
   sensor_adr: wp.array(dtype=int),
   sensor_dim: wp.array(dtype=int),
+  sensor_objid: wp.array(dtype=int),
+  sensor_refid: wp.array(dtype=int),
+  taxel_vertadr: wp.array(dtype=int),
+  plugin: wp.array(dtype=int),
+  plugin_attr: wp.array(dtype=wp.vec3f),
+  geom_plugin_index: wp.array(dtype=int),
   # Data in:
   ncon_in: wp.array(dtype=int),
+  contact_geom_in: wp.array(dtype=wp.vec2i),
+  cvel_in: wp.array2d(dtype=vec6),
+  geom_xpos_in: wp.array2d(dtype=wp.vec3),
+  geom_xmat_in: wp.array2d(dtype=wp.mat33),
+  subtree_com_in: wp.array2d(dtype=wp.vec3),
   # Data out:
   sensordata_out: wp.array2d(dtype=float),
 ):
@@ -1741,6 +1765,74 @@ def _sensor_tactile(
   if conid > ncon_in[0]:
     return
 
+  # get sensor_id
+  ntaxel = 0
+  sensor_id = 0
+  for dim in sensor_dim:
+    ntaxel += dim
+    if taxelid < ntaxel:
+      break
+    sensor_id += 1
+
+  # get parent weld id
+  mesh_id = sensor_objid[sensor_id]
+  geom_id = sensor_refid[sensor_id]
+  parent_body = geom_bodyid[geom_id]
+  parent_weld = body_weldid[parent_body]
+
+  # contact geom
+  body1 = body_weldid[geom_bodyid[contact_geom_in[conid][0]]]
+  body2 = body_weldid[geom_bodyid[contact_geom_in[conid][1]]]
+  if body1 == parent_weld:
+    geom = contact_geom_in[conid][1]
+  elif body2 == parent_weld:
+    geom = contact_geom_in[conid][0]
+  body = geom_bodyid[geom]
+
+  # vertex local position
+  vertid = taxel_vertadr[taxelid]
+  pos = mesh_vert[vertid]
+
+  # position in global frame
+  xpos = geom_xmat_in[geom_id] @ pos
+  xpos += geom_xpos_in[geom_id]
+
+  # position in other geom frame
+  tmp = xpos - geom_xpos_in[geom]
+  lpos = wp.transpose(geom_xmat_in[geom]) @ tmp
+
+  # compute distance
+  plugin_id = geom_plugin_index[geom]
+  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id]), 0.)
+  if (depth >= 0.):
+    return
+
+  # get velocity in global
+  vel_sensor = _transform_spatial(cvel_in[parent_weld], xpos - subtree_com_in[body_rootid[parent_weld]])
+  vel_other = _transform_spatial(cvel_in[body], geom_xpos_in[geom] - subtree_com_in[body_rootid[body]])
+  vel_rel = vel_sensor - vel_other
+  normal = mesh_normal[3*mesh_id]
+  tang1 = mesh_normal[3*mesh_id+1]
+  tang2 = mesh_normal[3*mesh_id+2]
+
+  # get contact force/torque, rotate into node frame
+  normal = wp.quat_rotate(mesh_quat[mesh_id], normal)
+  tang1 = wp.quat_rotate(mesh_quat[mesh_id], tang1)
+  tang2 = wp.quat_rotate(mesh_quat[mesh_id], tang2)
+  kMaxDepth = 0.05
+  pressure = depth / (kMaxDepth - depth)
+  force = wp.div(normal, pressure)
+
+  # one row of mat^T * force
+  forceT = wp.vec3()
+  forceT[0] = wp.dot(force, normal)
+  forceT[1] = wp.abs(wp.dot(vel_rel, tang1))
+  forceT[2] = wp.abs(wp.dot(vel_rel, tang2))
+
+  # add to sensor output
+  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+0*sensor_dim[sensor_id], forceT[0])
+  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+1*sensor_dim[sensor_id], forceT[1])
+  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+2*sensor_dim[sensor_id], forceT[2])
 
 
 @event_scope
@@ -1793,9 +1885,26 @@ def sensor_acc(m: Model, d: Data):
     _sensor_tactile,
     dim=(d.nconmax, m.nsensortaxel),
     inputs=[
-      d.ncon,
+      m.body_rootid,
+      m.body_weldid,
+      m.geom_bodyid,
+      m.mesh_quat,
+      m.mesh_normal,
+      m.mesh_vert,
       m.sensor_adr,
       m.sensor_dim,
+      m.sensor_objid,
+      m.sensor_refid,
+      m.taxel_vertadr,
+      m.plugin,
+      m.plugin_attr,
+      m.geom_plugin_index,
+      d.ncon,
+      d.contact.geom,
+      d.cvel,
+      d.geom_xpos,
+      d.geom_xmat,
+      d.subtree_com,
     ],
     outputs=[
       d.sensordata,

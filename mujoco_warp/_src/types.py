@@ -885,10 +885,12 @@ class Model:
     mesh_vertadr: first vertex address                       (nmesh,)
     mesh_vertnum: number of vertices                         (nmesh,)
     mesh_vert: vertex positions for all meshes               (nmeshvert, 3)
+    mesh_normal: normals for all meshes                      (nmeshnormal, 3)
     mesh_faceadr: first face address                         (nmesh,)
     mesh_face: face indices for all meshes                   (nface, 3)
     mesh_graphadr: graph data address; -1: no graph          (nmesh,)
     mesh_graph: convex graph data                            (nmeshgraph,)
+    mesh_quat: rotation applied to asset vertices            (nmesh, 4)
     mesh_polynum: number of polygons per mesh                (nmesh,)
     mesh_polyadr: first polygon address per mesh             (nmesh,)
     mesh_polynormal: all polygon normals                     (nmeshpoly, 3)
@@ -1196,10 +1198,12 @@ class Model:
   mesh_vertadr: wp.array(dtype=int)
   mesh_vertnum: wp.array(dtype=int)
   mesh_vert: wp.array(dtype=wp.vec3)
+  mesh_normal: wp.array(dtype=wp.vec3)
   mesh_faceadr: wp.array(dtype=int)
   mesh_face: wp.array(dtype=wp.vec3i)
   mesh_graphadr: wp.array(dtype=int)
   mesh_graph: wp.array(dtype=int)
+  mesh_quat: wp.array(dtype=wp.quat)
   mesh_polynum: wp.array(dtype=int)
   mesh_polyadr: wp.array(dtype=int)
   mesh_polynormal: wp.array(dtype=wp.vec3)
@@ -1326,7 +1330,7 @@ class Model:
   block_dim: BlockDim  # warp only
   geom_pair_type_count: tuple[int, ...]  # warp only
   has_sdf_geom: bool  # warp only
-
+  taxel_vertadr: wp.array(dtype=int)  # warp only
 
 @dataclasses.dataclass
 class Contact:
