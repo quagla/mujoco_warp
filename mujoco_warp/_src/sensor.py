@@ -1729,19 +1729,20 @@ def _sensor_touch(
 
 
 @wp.func
-def _transform_spatial(res: wp.spatial_vector, vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
+def _transform_spatial(vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
   return wp.spatial_bottom(vec) - wp.cross(dif, wp.spatial_top(vec))
 
 
 @wp.kernel
 def _sensor_tactile(
   # Model:
+  nsensor: int,
   body_rootid: wp.array(dtype=int),
   body_weldid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
   mesh_quat: wp.array(dtype=wp.quat),
   mesh_normal: wp.array(dtype=wp.vec3),
-  mesh_vert: wp.array(dtype=int),
+  mesh_vert: wp.array(dtype=wp.vec3),
   sensor_adr: wp.array(dtype=int),
   sensor_dim: wp.array(dtype=int),
   sensor_objid: wp.array(dtype=int),
@@ -1753,6 +1754,7 @@ def _sensor_tactile(
   # Data in:
   ncon_in: wp.array(dtype=int),
   contact_geom_in: wp.array(dtype=wp.vec2i),
+  contact_worldid_in: wp.array(dtype=int),
   cvel_in: wp.array2d(dtype=vec6),
   geom_xpos_in: wp.array2d(dtype=wp.vec3),
   geom_xmat_in: wp.array2d(dtype=wp.mat33),
@@ -1765,10 +1767,13 @@ def _sensor_tactile(
   if conid > ncon_in[0]:
     return
 
+  worldid = contact_worldid_in[conid]
+
   # get sensor_id
-  ntaxel = 0
-  sensor_id = 0
-  for dim in sensor_dim:
+  ntaxel = int(0)
+  sensor_id = int(0)
+  for i in range(nsensor):
+    dim = sensor_dim[i]
     ntaxel += dim
     if taxelid < ntaxel:
       break
@@ -1794,12 +1799,12 @@ def _sensor_tactile(
   pos = mesh_vert[vertid]
 
   # position in global frame
-  xpos = geom_xmat_in[geom_id] @ pos
-  xpos += geom_xpos_in[geom_id]
+  xpos = geom_xmat_in[worldid, geom_id] @ pos
+  xpos += geom_xpos_in[worldid, geom_id]
 
   # position in other geom frame
-  tmp = xpos - geom_xpos_in[geom]
-  lpos = wp.transpose(geom_xmat_in[geom]) @ tmp
+  tmp = xpos - geom_xpos_in[worldid, geom]
+  lpos = wp.transpose(geom_xmat_in[worldid, geom]) @ tmp
 
   # compute distance
   plugin_id = geom_plugin_index[geom]
@@ -1808,8 +1813,8 @@ def _sensor_tactile(
     return
 
   # get velocity in global
-  vel_sensor = _transform_spatial(cvel_in[parent_weld], xpos - subtree_com_in[body_rootid[parent_weld]])
-  vel_other = _transform_spatial(cvel_in[body], geom_xpos_in[geom] - subtree_com_in[body_rootid[body]])
+  vel_sensor = _transform_spatial(cvel_in[worldid, parent_weld], xpos - subtree_com_in[worldid, body_rootid[parent_weld]])
+  vel_other = _transform_spatial(cvel_in[worldid, body], geom_xpos_in[worldid, geom] - subtree_com_in[worldid, body_rootid[body]])
   vel_rel = vel_sensor - vel_other
   normal = mesh_normal[3*mesh_id]
   tang1 = mesh_normal[3*mesh_id+1]
@@ -1830,9 +1835,9 @@ def _sensor_tactile(
   forceT[2] = wp.abs(wp.dot(vel_rel, tang2))
 
   # add to sensor output
-  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+0*sensor_dim[sensor_id], forceT[0])
-  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+1*sensor_dim[sensor_id], forceT[1])
-  wp.atomic_add(sensordata_out, sensor_adr[sensor_id]+2*sensor_dim[sensor_id], forceT[2])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+0*sensor_dim[sensor_id], forceT[0])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+1*sensor_dim[sensor_id], forceT[1])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id]+2*sensor_dim[sensor_id], forceT[2])
 
 
 @event_scope
@@ -1885,6 +1890,7 @@ def sensor_acc(m: Model, d: Data):
     _sensor_tactile,
     dim=(d.nconmax, m.nsensortaxel),
     inputs=[
+      m.nsensor,
       m.body_rootid,
       m.body_weldid,
       m.geom_bodyid,
@@ -1901,6 +1907,7 @@ def sensor_acc(m: Model, d: Data):
       m.geom_plugin_index,
       d.ncon,
       d.contact.geom,
+      d.contact.worldid,
       d.cvel,
       d.geom_xpos,
       d.geom_xmat,
