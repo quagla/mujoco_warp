@@ -1331,6 +1331,7 @@ class Model:
   geom_pair_type_count: tuple[int, ...]  # warp only
   has_sdf_geom: bool  # warp only
   taxel_vertadr: wp.array(dtype=int)  # warp only
+  taxel_sensorid: wp.array(dtype=int)  # warp only
 
 @dataclasses.dataclass
 class Contact:

@@ -1748,8 +1748,8 @@ def _sensor_tactile(
   sensor_dim: wp.array(dtype=int),
   sensor_objid: wp.array(dtype=int),
   sensor_refid: wp.array(dtype=int),
-  sensor_type: wp.array(dtype=int),
   taxel_vertadr: wp.array(dtype=int),
+  taxel_sensorid: wp.array(dtype=int),
   plugin: wp.array(dtype=int),
   plugin_attr: wp.array(dtype=wp.vec3f),
   geom_plugin_index: wp.array(dtype=int),
@@ -1772,16 +1772,7 @@ def _sensor_tactile(
   worldid = contact_worldid_in[conid]
 
   # get sensor_id
-  ntaxel = int(0)
-  sensor_id = int(0)
-  for i in range(nsensor):
-    if (sensor_type[i] != int(SensorType.TACTILE.value)):
-      continue
-    dim = sensor_dim[i] / 3
-    ntaxel += dim
-    if taxelid < ntaxel:
-      break
-    sensor_id += 1
+  sensor_id = taxel_sensorid[taxelid]
 
   # get parent weld id
   mesh_id = sensor_objid[sensor_id]
@@ -1907,8 +1898,8 @@ def sensor_acc(m: Model, d: Data):
       m.sensor_dim,
       m.sensor_objid,
       m.sensor_refid,
-      m.sensor_type,
       m.taxel_vertadr,
+      m.taxel_sensorid,
       m.plugin,
       m.plugin_attr,
       m.geom_plugin_index,
