@@ -1565,6 +1565,7 @@ def _sensor_acc(
   sensor_acc_adr: wp.array(dtype=int),
   sensor_contact_adr: wp.array(dtype=int),
   # Data in:
+  njmax_in: int,
   ncon_in: wp.array(dtype=int),
   xpos_in: wp.array2d(dtype=wp.vec3),
   xipos_in: wp.array2d(dtype=wp.vec3),
@@ -1665,6 +1666,7 @@ def _sensor_acc(
       if force or torque:
         contact_forcetorque = support.contact_force_fn(
           opt_cone,
+          njmax_in,
           ncon_in,
           contact_frame_in,
           contact_friction_in,
@@ -2044,6 +2046,7 @@ def sensor_acc(m: Model, d: Data):
       m.sensor_cutoff,
       m.sensor_acc_adr,
       m.sensor_contact_adr,
+      d.njmax,
       d.ncon,
       d.xpos,
       d.xipos,
