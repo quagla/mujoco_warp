@@ -600,6 +600,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_vertadr=wp.array(mjm.mesh_vertadr, dtype=int),
     mesh_vertnum=wp.array(mjm.mesh_vertnum, dtype=int),
     mesh_vert=wp.array(mjm.mesh_vert, dtype=wp.vec3),
+    mesh_normaladr=wp.array(mjm.mesh_normaladr, dtype=int),
     mesh_normal=wp.array(mjm.mesh_normal, dtype=wp.vec3),
     mesh_faceadr=wp.array(mjm.mesh_faceadr, dtype=int),
     mesh_face=wp.array(mjm.mesh_face, dtype=wp.vec3i),

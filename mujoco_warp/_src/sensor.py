@@ -1736,7 +1736,6 @@ def _transform_spatial(vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
 @wp.kernel
 def _sensor_tactile(
   # Model:
-  nsensor: int,
   body_rootid: wp.array(dtype=int),
   body_weldid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
@@ -1744,6 +1743,7 @@ def _sensor_tactile(
   mesh_normal: wp.array(dtype=wp.vec3),
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_vertadr: wp.array(dtype=int),
+  mesh_normaladr: wp.array(dtype=int),
   sensor_adr: wp.array(dtype=int),
   sensor_dim: wp.array(dtype=int),
   sensor_objid: wp.array(dtype=int),
@@ -1792,8 +1792,8 @@ def _sensor_tactile(
   body = geom_bodyid[geom]
 
   # vertex local position
-  vertid = taxel_vertadr[taxelid]
-  pos = mesh_vert[vertid]
+  vertid = taxel_vertadr[taxelid] - mesh_vertadr[mesh_id]
+  pos = mesh_vert[vertid + mesh_vertadr[mesh_id]]
 
   # position in global frame
   xpos = geom_xmat_in[worldid, geom_id] @ pos
@@ -1815,9 +1815,10 @@ def _sensor_tactile(
   vel_rel = vel_sensor - vel_other
 
   # get contact force/torque, rotate into node frame
-  normal = math.rot_vec_quat(mesh_normal[3*mesh_id], mesh_quat[mesh_id])
-  tang1 = math.rot_vec_quat(mesh_normal[3*mesh_id+1], mesh_quat[mesh_id])
-  tang2 = math.rot_vec_quat(mesh_normal[3*mesh_id+2], mesh_quat[mesh_id])
+  offset = mesh_normaladr[mesh_id] + 3*vertid
+  normal = math.rot_vec_quat(mesh_normal[offset], mesh_quat[mesh_id])
+  tang1 = math.rot_vec_quat(mesh_normal[offset+1], mesh_quat[mesh_id])
+  tang2 = math.rot_vec_quat(mesh_normal[offset+2], mesh_quat[mesh_id])
   kMaxDepth = 0.05
   pressure = depth / (kMaxDepth - depth)
   force = wp.mul(normal, pressure)
@@ -1829,11 +1830,10 @@ def _sensor_tactile(
   forceT[2] = wp.abs(wp.dot(vel_rel, tang2))
 
   # add to sensor output
-  dataid = vertid - mesh_vertadr[mesh_id]
   dim = sensor_dim[sensor_id] / 3
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 0*dim + dataid, forceT[0])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 1*dim + dataid, forceT[1])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 2*dim + dataid, forceT[2])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 0*dim + vertid, forceT[0])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 1*dim + vertid, forceT[1])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 2*dim + vertid, forceT[2])
 
 
 @event_scope
@@ -1886,7 +1886,6 @@ def sensor_acc(m: Model, d: Data):
     _sensor_tactile,
     dim=(d.nconmax, m.nsensortaxel),
     inputs=[
-      m.nsensor,
       m.body_rootid,
       m.body_weldid,
       m.geom_bodyid,
@@ -1894,6 +1893,7 @@ def sensor_acc(m: Model, d: Data):
       m.mesh_normal,
       m.mesh_vert,
       m.mesh_vertadr,
+      m.mesh_normaladr,
       m.sensor_adr,
       m.sensor_dim,
       m.sensor_objid,
