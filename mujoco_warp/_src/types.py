@@ -1339,6 +1339,7 @@ class Model:
   taxel_vertadr: wp.array(dtype=int)  # warp only
   taxel_sensorid: wp.array(dtype=int)  # warp only
 
+
 @dataclasses.dataclass
 class Contact:
   """Contact data.

@@ -80,12 +80,11 @@ def sphere(p: wp.vec3, size: wp.vec3) -> float:
   return wp.length(p) - size[0]
 
 
-
 @wp.func
 def box(p: wp.vec3, size: wp.vec3) -> float:
   a = wp.abs(p) - size
   if a[0] >= 0 or a[1] >= 0 or a[2] >= 0:
-    z = wp.vec3(0., 0., 0.)
+    z = wp.vec3(0.0, 0.0, 0.0)
     b = wp.max(a, z)
     return wp.norm_l2(b) + wp.min(wp.max(a), 0.0)
   b = radial_field(a, p, size)
@@ -119,16 +118,16 @@ def grad_box(p: wp.vec3, size: wp.vec3) -> wp.vec3:
   a = wp.abs(p) - size
   if wp.max(a) < 0:
     return radial_field(a, p, size)
-  z = wp.vec3(0., 0., 0.)
+  z = wp.vec3(0.0, 0.0, 0.0)
   b = wp.max(a, z)
   c = wp.norm_l2(b)
   g = wp.cw_mul(wp.div(b, c), wp.cw_div(p, wp.abs(p)))
   if a[0] <= 0:
-    g[0] = 0.
+    g[0] = 0.0
   if a[1] <= 0:
-    g[1] = 0.
+    g[1] = 0.0
   if a[2] <= 0:
-    g[2] = 0.
+    g[2] = 0.0
   return g
 
 
@@ -499,11 +498,7 @@ def _sdf_narrowphase(
 
   aabb_pos = geom_aabb[g1, 0]
   aabb_size = geom_aabb[g1, 1]
-  identity = wp.mat33(
-    1.0, 0.0, 0.0,
-    0.0, 1.0, 0.0,
-    0.0, 0.0, 1.0
-)
+  identity = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
   aabb1 = transform_aabb(aabb_pos, aabb_size, wp.vec3(0.0), identity)
   aabb_pos = geom_aabb[g2, 0]
   aabb_size = geom_aabb[g2, 1]
@@ -525,7 +520,7 @@ def _sdf_narrowphase(
     attr1 = geom1.size
     g1_plugin_id = -1
 
-  if g2_plugin!=-1 :
+  if g2_plugin != -1:
     attr2 = plugin_attr[g2_plugin]
     g2_plugin_id = plugin[g2_plugin]
   else:

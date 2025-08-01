@@ -1877,7 +1877,7 @@ def _sensor_tactile_zero(
     return
 
   for i in range(sensor_dim[sensorid]):
-    sensordata_out[worldid, sensor_adr[sensorid]+i] = 0.0
+    sensordata_out[worldid, sensor_adr[sensorid] + i] = 0.0
 
 
 @wp.func
@@ -1957,20 +1957,22 @@ def _sensor_tactile(
 
   # compute distance
   plugin_id = geom_plugin_index[geom]
-  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id]), 0.)
-  if (depth >= 0.):
+  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id]), 0.0)
+  if depth >= 0.0:
     return
 
   # get velocity in global
   vel_sensor = _transform_spatial(cvel_in[worldid, parent_weld], xpos - subtree_com_in[worldid, body_rootid[parent_weld]])
-  vel_other = _transform_spatial(cvel_in[worldid, body], geom_xpos_in[worldid, geom] - subtree_com_in[worldid, body_rootid[body]])
+  vel_other = _transform_spatial(
+    cvel_in[worldid, body], geom_xpos_in[worldid, geom] - subtree_com_in[worldid, body_rootid[body]]
+  )
   vel_rel = vel_sensor - vel_other
 
   # get contact force/torque, rotate into node frame
-  offset = mesh_normaladr[mesh_id] + 3*vertid
+  offset = mesh_normaladr[mesh_id] + 3 * vertid
   normal = math.rot_vec_quat(mesh_normal[offset], mesh_quat[mesh_id])
-  tang1 = math.rot_vec_quat(mesh_normal[offset+1], mesh_quat[mesh_id])
-  tang2 = math.rot_vec_quat(mesh_normal[offset+2], mesh_quat[mesh_id])
+  tang1 = math.rot_vec_quat(mesh_normal[offset + 1], mesh_quat[mesh_id])
+  tang2 = math.rot_vec_quat(mesh_normal[offset + 2], mesh_quat[mesh_id])
   kMaxDepth = 0.05
   pressure = depth / (kMaxDepth - depth)
   force = wp.mul(normal, pressure)
@@ -1983,9 +1985,9 @@ def _sensor_tactile(
 
   # add to sensor output
   dim = sensor_dim[sensor_id] / 3
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 0*dim + vertid, forceT[0])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 1*dim + vertid, forceT[1])
-  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 2*dim + vertid, forceT[2])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 0 * dim + vertid, forceT[0])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 1 * dim + vertid, forceT[1])
+  wp.atomic_add(sensordata_out[worldid], sensor_adr[sensor_id] + 2 * dim + vertid, forceT[2])
 
 
 @wp.kernel
@@ -2120,7 +2122,7 @@ def sensor_acc(m: Model, d: Data):
     ],
     outputs=[
       d.sensordata,
-    ]
+    ],
   )
 
   wp.launch(
