@@ -78,8 +78,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
         geom_plugin_index[i] = len(plugin_id)
         plugin_id.append(mjm.plugin[p])
         start = mjm.plugin_attradr[p]
-        # TODO: allow more than 3 attributes
-        end = mjm.plugin_attradr[p + 1] if p + 1 < mjm.nplugin else min(3, len(mjm.plugin_attr))
+        end = mjm.plugin_attradr[p + 1] if p + 1 < mjm.nplugin else len(mjm.plugin_attr)
         values = mjm.plugin_attr[start:end]
         attr_values = []
         current = []

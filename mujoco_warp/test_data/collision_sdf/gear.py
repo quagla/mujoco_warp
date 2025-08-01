@@ -18,7 +18,7 @@ def circle(rho: float, r: float) -> float:
 
 @wp.func
 def smoothUnion(a: float, b: float, k: float) -> float:
-  h = min(max(0.5 + 0.5*(b - a) / k, 0.0), 1.0)
+  h = wp.min(wp.max(0.5 + 0.5*(b - a) / k, 0.0), 1.0)
   return b * (1. - h) + a * h - k * h * (1. - h)
 
 
@@ -33,11 +33,11 @@ def smoothIntersection(a: float, b: float, k: float) -> float:
 def extrusion(p: wp.vec3, sdf_2d: float, h: float) -> float:
   w = wp.vec2()
   w[0] = sdf_2d
-  w[1] = abs(p[2]) - h
+  w[1] = wp.abs(p[2]) - h
   w_abs = wp.vec2()
-  w_abs[0] = max(w[0], 0.)
-  w_abs[1] = max(w[1], 0.)
-  return min(max(w[0], w[1]), 0.) + wp.sqrt(w_abs[0]*w_abs[0] + w_abs[1]*w_abs[1])
+  w_abs[0] = wp.max(w[0], 0.)
+  w_abs[1] = wp.max(w[1], 0.)
+  return wp.min(wp.max(w[0], w[1]), 0.) + wp.sqrt(w_abs[0]*w_abs[0] + w_abs[1]*w_abs[1])
 
 
 @wp.func
@@ -48,10 +48,10 @@ def mod(x: float, y:float) -> float:
 @wp.func
 def distance2D(p: wp.vec3, attributes: wp.vec3) -> float:
   # see https://www.shadertoy.com/view/3lG3WR
-  D = attributes[1]
-  N = attributes[2]
+  D = 2.8
+  N = 25.
   psi = 3.096e-5 * N * N -6.557e-3 * N + 0.551  # pressure angle
-  alpha = attributes[0]
+  alpha = 0.
   innerdiameter = -1.0
 
   R = D / 2.0
