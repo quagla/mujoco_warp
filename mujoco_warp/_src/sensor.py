@@ -1728,6 +1728,24 @@ def _sensor_touch(
       wp.atomic_add(sensordata_out[worldid], adr, normalforce)
 
 
+@wp.kernel
+def _sensor_tactile_zero(
+  # Model
+  sensor_adr: wp.array(dtype=int),
+  sensor_dim: wp.array(dtype=int),
+  sensor_type: wp.array(dtype=int),
+  # Data out:
+  sensordata_out: wp.array2d(dtype=float),
+):
+  worldid, sensorid = wp.tid()
+
+  if sensor_type[sensorid] != int(SensorType.TACTILE.value):
+    return
+
+  for i in range(sensor_dim[sensorid]):
+    sensordata_out[worldid, sensor_adr[sensorid]+i] = 0.0
+
+
 @wp.func
 def _transform_spatial(vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
   return wp.spatial_bottom(vec) - wp.cross(dif, wp.spatial_top(vec))
@@ -1880,6 +1898,19 @@ def sensor_acc(m: Model, d: Data):
     outputs=[
       d.sensordata,
     ],
+  )
+
+  wp.launch(
+    _sensor_tactile_zero,
+    dim=(d.nworld, m.nsensordata),
+    inputs=[
+      m.sensor_adr,
+      m.sensor_dim,
+      m.sensor_type,
+    ],
+    outputs=[
+      d.sensordata,
+    ]
   )
 
   wp.launch(
