@@ -48,6 +48,7 @@ class BlockDim:
   # ray
   ray: int = 64
   # sensor
+  contact_sort: int = 64
   energy_vel_kinetic: int = 32
   # smooth
   cholesky_factorize: int = 32
@@ -372,6 +373,7 @@ class SensorType(enum.IntEnum):
     SUBTREELINVEL: subtree linear velocity
     SUBTREEANGMOM: subtree angular momentum
     TOUCH: scalar contact normal forces summed over sensor zone
+    CONTACT: contacts which occurred during the simulation
     ACCELEROMETER: accelerometer
     FORCE: force
     TORQUE: torque
@@ -416,6 +418,7 @@ class SensorType(enum.IntEnum):
   SUBTREELINVEL = mujoco.mjtSensor.mjSENS_SUBTREELINVEL
   SUBTREEANGMOM = mujoco.mjtSensor.mjSENS_SUBTREEANGMOM
   TOUCH = mujoco.mjtSensor.mjSENS_TOUCH
+  CONTACT = mujoco.mjtSensor.mjSENS_CONTACT
   ACCELEROMETER = mujoco.mjtSensor.mjSENS_ACCELEROMETER
   FORCE = mujoco.mjtSensor.mjSENS_FORCE
   TORQUE = mujoco.mjtSensor.mjSENS_TORQUE
@@ -631,8 +634,6 @@ class Constraint:
     prev_grad: previous grad                          (nworld, nv)
     prev_Mgrad: previous Mgrad                        (nworld, nv)
     beta: polak-ribiere beta                          (nworld,)
-    beta_num: numerator of beta                       (nworld,)
-    beta_den: denominator of beta                     (nworld,)
     done: solver done                                 (nworld,)
     ls_done: linesearch done                          (nworld,)
     p0: initial point                                 (nworld, 3)
@@ -687,8 +688,6 @@ class Constraint:
   prev_grad: wp.array2d(dtype=float)
   prev_Mgrad: wp.array2d(dtype=float)
   beta: wp.array(dtype=float)
-  beta_num: wp.array(dtype=float)
-  beta_den: wp.array(dtype=float)
   done: wp.array(dtype=bool)
   # linesearch
   ls_done: wp.array(dtype=bool)
@@ -994,6 +993,7 @@ class Model:
     sensor_objid: id of sensorized object                    (nsensor,)
     sensor_reftype: type of reference frame (mjtObj)         (nsensor,)
     sensor_refid: id of reference frame; -1: global frame    (nsensor,)
+    sensor_intprm: sensor parameters                         (nsensor, mjNSENS)
     sensor_dim: number of scalar outputs                     (nsensor,)
     sensor_adr: address in sensor array                      (nsensor,)
     sensor_cutoff: cutoff for real and positive; 0: ignore   (nsensor,)
@@ -1013,6 +1013,7 @@ class Model:
     sensor_e_kinetic: evaluate energy_vel
     sensor_tendonactfrc_adr: address for tendonactfrc sensor (<=nsensor,)
     sensor_subtree_vel: evaluate subtree_vel
+    sensor_contact_adr: addresses for contact sensors
     sensor_rne_postconstraint: evaluate rne_postconstraint
     sensor_rangefinder_bodyid: bodyid for rangefinder        (nrangefinder,)
     plugin: globally registered plugin slot number           (nplugin,)
@@ -1305,6 +1306,7 @@ class Model:
   sensor_objid: wp.array(dtype=int)
   sensor_reftype: wp.array(dtype=int)
   sensor_refid: wp.array(dtype=int)
+  sensor_intprm: wp.array2d(dtype=int)
   sensor_dim: wp.array(dtype=int)
   sensor_adr: wp.array(dtype=int)
   sensor_cutoff: wp.array(dtype=float)
@@ -1321,6 +1323,7 @@ class Model:
   sensor_e_kinetic: bool  # warp only
   sensor_tendonactfrc_adr: wp.array(dtype=int)  # warp only
   sensor_subtree_vel: bool  # warp only
+  sensor_contact_adr: wp.array(dtype=int)  # warp only
   sensor_rne_postconstraint: bool  # warp only
   sensor_rangefinder_bodyid: wp.array(dtype=int)  # warp only
   plugin: wp.array(dtype=int)
@@ -1379,6 +1382,7 @@ class Data:
     njmax: maximum number of constraints per world
     solver_niter: number of solver iterations                   (nworld,)
     ncon: number of detected contacts
+    ncon_world: number of detected contacts per world           (nworld,)
     ncon_hfield: number of contacts per geom pair with hfield   (nworld, nhfieldgeompair)
     ne: number of equality constraints                          (nworld,)
     ne_connect: number of equality connect constraints          (nworld,)
@@ -1509,6 +1513,10 @@ class Data:
     sensor_rangefinder_vec: directions for rangefinder          (nworld, nrangefinder, 3)
     sensor_rangefinder_dist: distances for rangefinder          (nworld, nrangefinder)
     sensor_rangefinder_geomid: geomids for rangefinder          (nworld, nrangefinder)
+    sensor_contact_nmatch: match count for each world-sensor    (nworld, <=nsensor)
+    sensor_contact_matchid: id for matching contact             (nworld, <=nsensor, MJ_MAXCONPAIR)
+    sensor_contact_criteria: critera for reduction              (nworld, <=nsensor, MJ_MAXCONPAIR)
+    sensor_contact_direction: direction of contact              (nworld, <=nsensor, MJ_MAXCONPAIR)
     ray_bodyexclude: id of body to exclude from ray computation
     ray_dist: ray distance to nearest geom                      (nworld, 1)
     ray_geomid: id of geom that intersects with ray             (nworld, 1)
@@ -1521,6 +1529,7 @@ class Data:
   njmax: int  # warp only
   solver_niter: wp.array(dtype=int)
   ncon: wp.array(dtype=int)
+  ncon_world: wp.array(dtype=int)  # warp only
   ncon_hfield: wp.array2d(dtype=int)  # warp only
   ne: wp.array(dtype=int)
   ne_connect: wp.array(dtype=int)  # warp only
@@ -1664,6 +1673,10 @@ class Data:
   sensor_rangefinder_vec: wp.array2d(dtype=wp.vec3)  # warp only
   sensor_rangefinder_dist: wp.array2d(dtype=float)  # warp only
   sensor_rangefinder_geomid: wp.array2d(dtype=int)  # warp only
+  sensor_contact_nmatch: wp.array2d(dtype=int)  # warp only
+  sensor_contact_matchid: wp.array3d(dtype=int)  # warp only
+  sensor_contact_criteria: wp.array3d(dtype=float)  # warp only
+  sensor_contact_direction: wp.array3d(dtype=float)  # warp only
 
   # ray
   ray_bodyexclude: wp.array(dtype=int)  # warp only
