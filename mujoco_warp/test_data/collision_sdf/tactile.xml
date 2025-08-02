@@ -1,6 +1,6 @@
 <mujoco model="touchtest">
   <compiler autolimits="true"/>
-   <option sdf_initpoints="20"/>
+  <option sdf_initpoints="20"/>
 
   <extension>
     <plugin plugin="mujoco.sdf.gear">

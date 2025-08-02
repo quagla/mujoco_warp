@@ -433,13 +433,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     nwrap=mjm.nwrap,
     nsensor=mjm.nsensor,
     nsensordata=mjm.nsensordata,
-    nsensortaxel=sum(
-      [
-        mjm.mesh_vertnum[mjm.sensor_objid[i]]
-        for i in range(mjm.nsensor)
-        if mjm.sensor_type[i] == mujoco.mjtSensor.mjSENS_TACTILE
-      ]
-    ),
+    nsensortaxel=sum(mjm.mesh_vertnum[mjm.sensor_objid[mjm.sensor_type == mujoco.mjtSensor.mjSENS_TACTILE]]),
     nmeshvert=mjm.nmeshvert,
     nmeshface=mjm.nmeshface,
     nmeshgraph=mjm.nmeshgraph,

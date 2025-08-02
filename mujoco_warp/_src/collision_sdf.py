@@ -498,7 +498,7 @@ def _sdf_narrowphase(
 
   aabb_pos = geom_aabb[g1, 0]
   aabb_size = geom_aabb[g1, 1]
-  identity = wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+  identity = wp.identity(3, dtype=float)
   aabb1 = transform_aabb(aabb_pos, aabb_size, wp.vec3(0.0), identity)
   aabb_pos = geom_aabb[g2, 0]
   aabb_size = geom_aabb[g2, 1]
