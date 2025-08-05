@@ -1351,7 +1351,7 @@ def aligned_face_edge(edge: polyverts, nedge: int, face: polyverts, nface: int):
   return 0, res
 
 
-# find up to n <= 2 common integers of two  arrays, return n
+# find up to n <= 2 common integers of two arrays, return n
 @wp.func
 def intersect1(a1: wp.array(dtype=int), a2: wp.array(dtype=int), start1: int, start2: int, len1: int, len2: int):
   count = int(0)
