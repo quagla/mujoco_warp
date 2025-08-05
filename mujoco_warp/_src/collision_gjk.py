@@ -2160,4 +2160,3 @@ def ccd(
   witness1[0] = x1
   witness2[0] = x2
   return dist, 1, witness1, witness2
-

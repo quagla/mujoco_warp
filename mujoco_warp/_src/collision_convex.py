@@ -494,4 +494,3 @@ def convex_narrowphase(m: Model, d: Data):
           d.contact.worldid,
         ],
       )
-
