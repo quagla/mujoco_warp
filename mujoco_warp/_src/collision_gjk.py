@@ -1418,7 +1418,7 @@ def mesh_normals(
     if n == 0:
       return 0, normals, indices
 
-    # three vertices defined an unique face
+    # three vertices on mesh define a unique face
     normals[0] = mat @ polynormal[polyadr + faceset[0]]
     indices[0] = faceset[0]
     return 1, normals, indices
@@ -1430,7 +1430,7 @@ def mesh_normals(
     v2_adr = polymapadr[vertadr + v2]
     v2_num = polymapnum[vertadr + v2]
 
-    # up to two faces if vertices defined an edge
+    # up to two faces as two vertices define an edge
     n, edgeset = intersect1(polymap, polymap, v1_adr, v2_adr, v1_num, v2_num)
     if n == 0:
       return 0, normals, indices
