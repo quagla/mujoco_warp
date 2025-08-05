@@ -26,6 +26,7 @@ import mujoco_warp as mjwarp
 from . import solver
 from . import test_util
 from .types import ConeType
+from .types import DisableBit
 from .types import SolverType
 
 # tolerance for difference between MuJoCo and MJWarp solver calculations - mostly
@@ -67,6 +68,37 @@ class SolverTest(parameterized.TestCase):
       mjwarp_cost = d.efc.cost.numpy()[0] - d.efc.gauss.numpy()[0]
 
       _assert_eq(mjwarp_cost, mj_cost, name="cost")
+
+  @parameterized.parameters(
+    (ConeType.PYRAMIDAL, False),
+    (ConeType.ELLIPTIC, False),
+    (ConeType.PYRAMIDAL, True),
+    (ConeType.ELLIPTIC, True),
+  )
+  def test_update_gradient_CG(self, cone, sparse):
+    """Test _update_gradient function is correct for the CG solver."""
+    mjm, mjd, m, d = test_util.fixture(
+      "humanoid/humanoid.xml",
+      cone=cone,
+      solver=SolverType.CG,
+      sparse=sparse,
+      iterations=0,
+      keyframe=0,
+    )
+
+    # Disable Warmstart to make
+    m.opt.disableflags = DisableBit.WARMSTART
+
+    # Solve with 0 iterations just initializes and exit
+    mjwarp.forward(m, d)
+
+    # Calculate Mgrad with Mujoco C
+    mj_Mgrad = np.zeros(shape=(1, mjm.nv), dtype=float)
+    mj_grad = np.tile(d.efc.grad.numpy(), (1, 1))
+    mujoco.mj_solveM(mjm, mjd, mj_Mgrad, mj_grad)
+
+    efc_Mgrad = d.efc.Mgrad.numpy()[0]
+    _assert_eq(efc_Mgrad, mj_Mgrad[0], name="Mgrad")
 
   @parameterized.parameters(ConeType.PYRAMIDAL, ConeType.ELLIPTIC)
   def test_parallel_linesearch(self, cone):
