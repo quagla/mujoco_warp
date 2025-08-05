@@ -709,11 +709,7 @@ def _same_side(p0: wp.vec3, p1: wp.vec3, p2: wp.vec3, p3: wp.vec3):
   n = wp.cross(p1 - p0, p2 - p0)
   dot1 = wp.dot(n, p3 - p0)
   dot2 = wp.dot(n, -p0)
-  if dot1 > 0 and dot2 > 0:
-    return 1
-  if dot1 < 0 and dot2 < 0:
-    return 1
-  return 0
+  return (dot1 > 0 and dot2 > 0) or (dot1 < 0 and dot2 < 0)
 
 
 @wp.func
@@ -1442,8 +1438,7 @@ def mesh_normals(
   if feature_dim == 1:
     v1_adr = polymapadr[vertadr + v1]
     v1_num = polymapnum[vertadr + v1]
-    if v1_num > MAX_POLYVERT:
-      v1_num = MAX_POLYVERT
+    v1_num = wp.where(v1_num <= MAX_POLYVERT, v1_num, MAX_POLYVERT)
     for i in range(v1_num):
       index = polymap[v1_adr + i]
       normals[i] = mat @ polynormal[polyadr + index]
@@ -1484,8 +1479,7 @@ def mesh_edge_normals(
   if dim == 1:
     v1_adr = polymapadr[vertadr + v1i]
     v1_num = polymapnum[vertadr + v1i]
-    if v1_num > MAX_POLYVERT:
-      v1_num = MAX_POLYVERT
+    v1_num = wp.where(v1_num <= MAX_POLYVERT, v1_num, MAX_POLYVERT)
 
     # loop through all faces with vertex v1
     for i in range(v1_num):
@@ -1610,15 +1604,9 @@ def box_edge_normals(dim: int, mat: wp.mat33, pos: wp.vec3, size: wp.vec3, v1: w
 
   # return 3 adjacent vertices
   if dim == 1:
-    x = size[0]
-    y = size[1]
-    z = size[2]
-    if v1i & 1:
-      x = -size[0]
-    if v1i & 2:
-      y = -size[1]
-    if v1i & 4:
-      z = -size[2]
+    x = wp.where(v1i & 1, -size[0], size[0])
+    y = wp.where(v1i & 2, -size[1], size[1])
+    z = wp.where(v1i & 4, -size[2], size[2])
 
     endverts[0] = mat @ wp.vec3(-x, y, z) + pos
     normals[0] = wp.normalize(endverts[0] - v1)
@@ -1696,8 +1684,7 @@ def mesh_face(
   adr = polyvertadr[polyadr + idx]
   j = int(0)
   nvert = polyvertnum[polyadr + idx]
-  if nvert > MAX_POLYVERT:
-    nvert = MAX_POLYVERT
+  nvert = wp.where(nvert <= MAX_POLYVERT, nvert, MAX_POLYVERT)
   for i in range(nvert - 1, -1, -1):
     v = vert[vertadr + polyvert[adr + i]]
     res[j] = mat @ v + pos
@@ -1770,10 +1757,7 @@ def polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, n
     for i in range(npolygon):
       # get edge PQ of the polygon
       P = polygon[i]
-      if i < npolygon - 1:
-        Q = polygon[i + 1]
-      else:
-        Q = polygon[0]
+      Q = wp.where(i < npolygon - 1, polygon[i + 1], polygon[0])
 
       # determine if P and Q are in the halfspace of the clipping edge
       inside1 = halfspace(face1[e], pn[e], P)
