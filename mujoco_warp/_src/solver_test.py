@@ -86,9 +86,6 @@ class SolverTest(parameterized.TestCase):
       keyframe=0,
     )
 
-    # Disable Warmstart to make
-    m.opt.disableflags = DisableBit.WARMSTART
-
     # Solve with 0 iterations just initializes and exit
     mjwarp.forward(m, d)
 
