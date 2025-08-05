@@ -987,7 +987,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       gauss=wp.zeros((nworld,), dtype=float),
       cost=wp.zeros((nworld,), dtype=float),
       prev_cost=wp.zeros((nworld,), dtype=float),
-      active=wp.zeros((nworld, njmax), dtype=bool),
+      state=wp.zeros((nworld, njmax), dtype=int),
       gtol=wp.zeros((nworld,), dtype=float),
       mv=wp.zeros((nworld, mjm.nv), dtype=float),
       jv=wp.zeros((nworld, njmax), dtype=float),
@@ -1013,12 +1013,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       mid=wp.zeros((nworld,), dtype=wp.vec3),
       mid_alpha=wp.zeros((nworld,), dtype=float),
       cost_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=float),
-      # elliptic cone
-      u=wp.zeros((nconmax,), dtype=types.vec6),
-      uu=wp.zeros((nconmax,), dtype=float),
-      uv=wp.zeros((nconmax,), dtype=float),
-      vv=wp.zeros((nconmax,), dtype=float),
-      condim=wp.zeros((nworld, njmax), dtype=int),
     ),
     # RK4
     qpos_t0=wp.zeros((nworld, mjm.nq), dtype=float),
@@ -1372,7 +1366,7 @@ def put_data(
       gauss=wp.empty(shape=(nworld,), dtype=float),
       cost=wp.empty(shape=(nworld,), dtype=float),
       prev_cost=wp.empty(shape=(nworld,), dtype=float),
-      active=wp.empty(shape=(nworld, njmax), dtype=bool),
+      state=wp.empty(shape=(nworld, njmax), dtype=int),
       gtol=wp.empty(shape=(nworld,), dtype=float),
       mv=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       jv=wp.empty(shape=(nworld, njmax), dtype=float),
@@ -1397,12 +1391,6 @@ def put_data(
       mid=wp.empty(shape=(nworld,), dtype=wp.vec3),
       mid_alpha=wp.empty(shape=(nworld,), dtype=float),
       cost_candidate=wp.empty(shape=(nworld, mjm.opt.ls_iterations), dtype=float),
-      # TODO(team): skip allocation if not elliptic
-      u=wp.empty((nconmax,), dtype=types.vec6),
-      uu=wp.empty((nconmax,), dtype=float),
-      uv=wp.empty((nconmax,), dtype=float),
-      vv=wp.empty((nconmax,), dtype=float),
-      condim=wp.empty((nworld, njmax), dtype=int),
     ),
     # TODO(team): skip allocation if integrator != RK4
     qpos_t0=wp.empty((nworld, mjm.nq), dtype=float),

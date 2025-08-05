@@ -128,10 +128,10 @@ class SolverTest(parameterized.TestCase):
   @parameterized.parameters(
     (ConeType.PYRAMIDAL, SolverType.CG, 5, 5, False, False),
     (ConeType.ELLIPTIC, SolverType.CG, 5, 5, False, False),
-    (ConeType.PYRAMIDAL, SolverType.NEWTON, 2, 4, False, False),
-    (ConeType.ELLIPTIC, SolverType.NEWTON, 2, 5, False, False),
-    (ConeType.PYRAMIDAL, SolverType.NEWTON, 2, 4, True, True),
-    (ConeType.ELLIPTIC, SolverType.NEWTON, 3, 16, True, True),
+    (ConeType.PYRAMIDAL, SolverType.NEWTON, 5, 10, False, False),
+    (ConeType.ELLIPTIC, SolverType.NEWTON, 5, 10, False, False),
+    (ConeType.PYRAMIDAL, SolverType.NEWTON, 5, 64, True, True),
+    (ConeType.ELLIPTIC, SolverType.NEWTON, 5, 64, True, True),
   )
   def test_solve(self, cone, solver_, iterations, ls_iterations, sparse, ls_parallel):
     """Tests solve."""
