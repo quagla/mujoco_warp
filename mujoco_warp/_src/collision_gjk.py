@@ -1251,7 +1251,7 @@ def _epa(tolerance2: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom
       if pt.face_index[i] == -2:
         continue
 
-      if wp.dot(pt.face_pr[i], pt.vert[wi]) - pt.face_norm2[i] > MJ_MINVAL:
+      if wp.dot(pt.face_pr[i], pt.vert[wi]) - pt.face_norm2[i] > 1e-8:
         pt.nmap = _delete_face(pt, i)
         pt.nhorizon = _add_edge(pt, pt.face[i][0], pt.face[i][1])
         pt.nhorizon = _add_edge(pt, pt.face[i][1], pt.face[i][2])
@@ -2126,6 +2126,9 @@ def ccd(
     return result.dist, 1, witness1, witness2
 
   dist, x1, x2, idx = _epa(tolerance * tolerance, epa_iterations, pt, geom1, geom2, geomtype1, geomtype2)
+  if idx == -1:
+    return FLOAT_MAX, 0, witness1, witness2
+  
   if (
     multiccd
     and (geomtype1 == int(GeomType.BOX.value) or geomtype1 == int(GeomType.MESH.value))

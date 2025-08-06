@@ -315,7 +315,21 @@ class GJKTest(absltest.TestCase):
     dist, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(-0.01, dist)
 
+  def test_cylinder_cylinder_contact(self):
+    """Test penetration between two cylinder."""
 
+    _, _, m, d = test_util.fixture(
+      xml=f"""
+      <mujoco>
+        <worldbody>
+          <geom pos="0 0 0" type="cylinder" size="1 .5"/>
+          <geom pos="1.999 0 0" type="cylinder" size="1 .5"/>
+        </worldbody>
+      </mujoco>
+    """)
+  
+    dist, _, _ = _geom_dist(m, d, 0, 1, 35)
+    self.assertAlmostEqual(-0.01, dist)
 if __name__ == "__main__":
   wp.init()
   absltest.main()
