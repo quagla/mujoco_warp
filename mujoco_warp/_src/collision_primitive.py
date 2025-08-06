@@ -2640,7 +2640,6 @@ _PRIMITIVE_COLLISIONS = {
   (GeomType.SPHERE.value, GeomType.BOX.value): sphere_box,
   (GeomType.CAPSULE.value, GeomType.CAPSULE.value): capsule_capsule,
   (GeomType.CAPSULE.value, GeomType.BOX.value): capsule_box,
-  (GeomType.BOX.value, GeomType.BOX.value): box_box,
 }
 
 
