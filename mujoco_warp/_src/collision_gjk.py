@@ -1849,8 +1849,8 @@ def multicontact(
     )
 
   # determine if any two face normals match
-  edgecon1 = 0
-  edgecon2 = 0
+  is_edge_contact_geom1 = 0
+  is_edge_contact_geom2 = 0
   nres, res = aligned_faces(n1, nnorms1, n2, nnorms2)
   if not nres:
     # check if edge-face collision
@@ -1881,7 +1881,7 @@ def multicontact(
       nres, res = aligned_face_edge(n1, nnorms1, n2, nnorms2)
       if not nres:
         return 1, witness1, witness2
-      edgecon1 = 1
+      is_edge_contact_geom1 = 1
 
     # check if face-edge collision
     elif nface2 < 3:
@@ -1911,7 +1911,7 @@ def multicontact(
       nres, res = aligned_face_edge(n2, nnorms2, n1, nnorms1)
       if not nres:
         return 1, witness1, witness2
-      edgecon2 = 1
+      is_edge_contact_geom2 = 1
     else:
       # no multi-contact
       return 1, witness1, witness2
@@ -1920,12 +1920,12 @@ def multicontact(
   j = res[1]
 
   # recover geom1 matching edge or face
-  if edgecon1:
+  if is_edge_contact_geom1:
     face1[0] = pt.vert1[face[0]]
     face1[1] = endverts[i]
     nface1 = 2
   else:
-    ind = wp.where(edgecon2, idx1[j], idx1[i])
+    ind = wp.where(is_edge_contact_geom2, idx1[j], idx1[i])
     if geomtype1 == int(GeomType.BOX.value):
       nface1, face1 = box_face(geom1.rot, geom1.pos, geom1.size, ind)
     elif geomtype1 == int(GeomType.MESH.value):
@@ -1934,7 +1934,7 @@ def multicontact(
       )
 
   # recover geom2 matching edge or face
-  if edgecon2:
+  if is_edge_contact_geom2:
     face2[0] = pt.vert2[face[0]]
     face2[1] = endverts[i]
     nface2 = 2
@@ -1952,12 +1952,12 @@ def multicontact(
   approx_dir = wp.vec3()
 
   # face1 is an edge; clip face1 against face2
-  if edgecon1:
+  if is_edge_contact_geom1:
     approx_dir = wp.norm_l2(dir) * n2[j]
     return polygon_clip(face2, nface2, face1, nface1, n2[j], approx_dir)
 
   # face2 is an edge; clip face2 against face1
-  if edgecon2:
+  if is_edge_contact_geom2:
     approx_dir = -wp.norm_l2(dir) * n1[j]
     return polygon_clip(face1, nface1, face2, nface2, n1[j], approx_dir)
 
