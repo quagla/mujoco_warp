@@ -121,13 +121,9 @@ def _support(geom: Geom, geomtype: int, dir: wp.vec3):
     tmp = wp.sign(local_dir)
     res = wp.cw_mul(tmp, geom.size)
     sp.point = geom.rot @ res + geom.pos
-    vertex_index = 0
-    if tmp[0] > 0:
-      vertex_index += 1
-    if tmp[1] > 0:
-      vertex_index += 2
-    if tmp[2] > 0:
-      vertex_index += 4
+    sp.vertex_index = wp.where(tmp[0] > 0, 1, 0)
+    sp.vertex_index += wp.where(tmp[1] > 0, 2, 0)
+    sp.vertex_index += wp.where(tmp[2] > 0, 4, 0)
   elif geomtype == int(GeomType.CAPSULE.value):
     res = local_dir * geom.size[0]
     # add cylinder contribution
@@ -1307,17 +1303,14 @@ def feature_dim(face: wp.vec3i, vert_index: wp.array(dtype=int), vert: wp.array(
   feature_vert[2] = vert[face[2]]
 
   if v1i != v2i:
-    if v3i == v1i or v3i == v2i:
-      return 2, feature_index, feature_vert
-    else:
-      return 3, feature_index, feature_vert
+    dim = wp.where(v3i == v1i or v3i == v2i, 2, 3)
+    return dim, feature_index, feature_vert
 
   feature_index[1] = v3i
   feature_vert[1] = vert[face[2]]
 
-  if v1i != v3i:
-    return 2, feature_index, feature_vert
-  return 1, feature_index, feature_vert
+  dim = wp.where(v1i != v3i, 2, 1)
+  return dim, feature_index, feature_vert
 
 
 # find two normals that are facing each other within a tolerance, return 1 if found
@@ -1537,18 +1530,18 @@ def box_normals(feature_dim: int, feature_index: wp.vec3i, mat: wp.mat33, dir: w
 
   if feature_dim == 3:
     c = 0
-    x = int((v1 & 1) and (v2 & 1) and (v3 & 1)) - int(not (v1 & 1) and not (v2 & 1) and not (v3 & 1))
-    y = int((v1 & 2) and (v2 & 2) and (v3 & 2)) - int(not (v1 & 2) and not (v2 & 2) and not (v3 & 2))
-    z = int((v1 & 4) and (v2 & 4) and (v3 & 4)) - int(not (v1 & 4) and not (v2 & 4) and not (v3 & 4))
-    normals[0] = mat @ wp.vec3(float(x), float(y), float(z))
+    x = float((v1 & 1) and (v2 & 1) and (v3 & 1)) - float(not (v1 & 1) and not (v2 & 1) and not (v3 & 1))
+    y = float((v1 & 2) and (v2 & 2) and (v3 & 2)) - float(not (v1 & 2) and not (v2 & 2) and not (v3 & 2))
+    z = float((v1 & 4) and (v2 & 4) and (v3 & 4)) - float(not (v1 & 4) and not (v2 & 4) and not (v3 & 4))
+    normals[0] = mat @ wp.vec3(x, y, z)
     sgn = x + y + z
-    if x:
+    if x != 0.0:
       indices[c] = 0
       c += 1
-    if y:
+    if y != 0.0:
       indices[c] = 2
       c += 1
-    if z:
+    if z != 0.0:
       indices[c] = 4
       c += 1
     if sgn == -1.0:
@@ -1558,35 +1551,35 @@ def box_normals(feature_dim: int, feature_index: wp.vec3i, mat: wp.mat33, dir: w
     return box_normals2(mat, dir)
   if feature_dim == 2:
     c = 0
-    x = int((v1 & 1) and (v2 & 1)) - int(not (v1 & 1) and not (v2 & 1))
-    y = int((v1 & 2) and (v2 & 2)) - int(not (v1 & 2) and not (v2 & 2))
-    z = int((v1 & 4) and (v2 & 4)) - int(not (v1 & 4) and not (v2 & 4))
-    if x:
+    x = float((v1 & 1) and (v2 & 1)) - float(not (v1 & 1) and not (v2 & 1))
+    y = float((v1 & 2) and (v2 & 2)) - float(not (v1 & 2) and not (v2 & 2))
+    z = float((v1 & 4) and (v2 & 4)) - float(not (v1 & 4) and not (v2 & 4))
+    if x != 0.0:
       normals[c] = mat @ wp.vec3(float(x), 0.0, 0.0)
-      indices[c] = int(x <= 0)
+      indices[c] = wp.where(x > 0.0, 0, 1)
       c += 1
-    if y:
-      normals[c] = mat @ wp.vec3(0.0, float(y), 0.0)
-      indices[c] = int(y <= 0) + 2
+    if y != 0.0:
+      normals[c] = mat @ wp.vec3(0.0, y, 0.0)
+      indices[c] = wp.where(y > 0.0, 2, 3)
       c += 1
-    if z:
-      normals[c] = mat @ wp.vec3(0.0, 0.0, float(z))
-      indices[c] = int(z <= 0) + 4
+    if z != 0.0:
+      normals[c] = mat @ wp.vec3(0.0, 0.0, z)
+      indices[c] = wp.where(z > 0.0, 4, 5)
       c += 1
     if c == 2:
       return 2, normals, indices
     return box_normals2(mat, dir)
 
   if feature_dim == 1:
-    x = wp.where(v1 & 1, -1, 1)
-    y = wp.where(v1 & 2, -1, 1)
-    z = wp.where(v1 & 4, -1, 1)
-    normals[0] = mat @ wp.vec3(float(x), 0.0, 0.0)
-    normals[1] = mat @ wp.vec3(0.0, float(y), 0.0)
-    normals[2] = mat @ wp.vec3(0.0, 0.0, float(z))
-    indices[0] = int(x <= 0) + 0
-    indices[1] = int(y <= 0) + 2
-    indices[2] = int(z <= 0) + 4
+    x = wp.where(v1 & 1, 1.0, -1.0)
+    y = wp.where(v1 & 2, 1.0, -1.0)
+    z = wp.where(v1 & 4, 1.0, -1.0)
+    normals[0] = mat @ wp.vec3(x, 0.0, 0.0)
+    normals[1] = mat @ wp.vec3(0.0, y, 0.0)
+    normals[2] = mat @ wp.vec3(0.0, 0.0, z)
+    indices[0] = wp.where(x > 0.0, 0, 1)
+    indices[1] = wp.where(y > 0.0, 2, 3)
+    indices[2] = wp.where(z > 0.0, 4, 5)
     return 3, normals, indices
   return 0, normals, indices
 
@@ -1600,13 +1593,13 @@ def box_edge_normals(dim: int, mat: wp.mat33, pos: wp.vec3, size: wp.vec3, v1: w
   if dim == 2:
     endverts[0] = v2
     normals[0] = wp.normalize(v2 - v1)
-    return 1, endverts, normals
+    return 1, normals, endverts
 
   # return 3 adjacent vertices
   if dim == 1:
-    x = wp.where(v1i & 1, -size[0], size[0])
-    y = wp.where(v1i & 2, -size[1], size[1])
-    z = wp.where(v1i & 4, -size[2], size[2])
+    x = wp.where(v1i & 1, size[0], -size[0])
+    y = wp.where(v1i & 2, size[1], -size[1])
+    z = wp.where(v1i & 4, size[2], -size[2])
 
     endverts[0] = mat @ wp.vec3(-x, y, z) + pos
     normals[0] = wp.normalize(endverts[0] - v1)
@@ -1856,8 +1849,8 @@ def multicontact(
     )
 
   # determine if any two face normals match
-  edgecon1 = 0
-  edgecon2 = 0
+  is_edge_contact_geom1 = 0
+  is_edge_contact_geom2 = 0
   nres, res = aligned_faces(n1, nnorms1, n2, nnorms2)
   if not nres:
     # check if edge-face collision
@@ -1888,7 +1881,7 @@ def multicontact(
       nres, res = aligned_face_edge(n1, nnorms1, n2, nnorms2)
       if not nres:
         return 1, witness1, witness2
-      edgecon1 = 1
+      is_edge_contact_geom1 = 1
 
     # check if face-edge collision
     elif nface2 < 3:
@@ -1918,7 +1911,7 @@ def multicontact(
       nres, res = aligned_face_edge(n2, nnorms2, n1, nnorms1)
       if not nres:
         return 1, witness1, witness2
-      edgecon2 = 1
+      is_edge_contact_geom2 = 1
     else:
       # no multi-contact
       return 1, witness1, witness2
@@ -1927,12 +1920,12 @@ def multicontact(
   j = res[1]
 
   # recover geom1 matching edge or face
-  if edgecon1:
+  if is_edge_contact_geom1:
     face1[0] = pt.vert1[face[0]]
     face1[1] = endverts[i]
     nface1 = 2
   else:
-    ind = wp.where(edgecon2, idx1[j], idx1[i])
+    ind = wp.where(is_edge_contact_geom2, idx1[j], idx1[i])
     if geomtype1 == int(GeomType.BOX.value):
       nface1, face1 = box_face(geom1.rot, geom1.pos, geom1.size, ind)
     elif geomtype1 == int(GeomType.MESH.value):
@@ -1941,7 +1934,7 @@ def multicontact(
       )
 
   # recover geom2 matching edge or face
-  if edgecon2:
+  if is_edge_contact_geom2:
     face2[0] = pt.vert2[face[0]]
     face2[1] = endverts[i]
     nface2 = 2
@@ -1959,12 +1952,12 @@ def multicontact(
   approx_dir = wp.vec3()
 
   # face1 is an edge; clip face1 against face2
-  if edgecon1:
+  if is_edge_contact_geom1:
     approx_dir = wp.norm_l2(dir) * n2[j]
     return polygon_clip(face2, nface2, face1, nface1, n2[j], approx_dir)
 
   # face2 is an edge; clip face2 against face1
-  if edgecon2:
+  if is_edge_contact_geom2:
     approx_dir = -wp.norm_l2(dir) * n1[j]
     return polygon_clip(face1, nface1, face2, nface2, n1[j], approx_dir)
 
