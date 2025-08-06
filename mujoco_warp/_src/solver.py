@@ -1658,23 +1658,21 @@ def update_gradient_JTDAJ(
 
   sum_h = float(0.0)
   efc_D = efc_D_in[worldid, 0]
+  # TODO(team): sparse efc_J
   efc_Ji = efc_J_in[worldid, 0, dofi]
   efc_Jj = efc_J_in[worldid, 0, dofj]
   efc_state = efc_state_in[worldid, 0]
   for efcid in range(nefc - 1):
-    if efc_D == 0.0 or efc_state != int(types.ConstraintState.QUADRATIC.value):
-      continue
-
-    # TODO(team): sparse efc_J
-    sum_h += efc_Ji * efc_Jj * efc_D
+    if efc_state == int(types.ConstraintState.QUADRATIC.value) and efc_D != 0.0:
+      sum_h += efc_Ji * efc_Jj * efc_D
 
     jj = efcid + 1
     efc_D = efc_D_in[worldid, jj]
     efc_Ji = efc_J_in[worldid, jj, dofi]
     efc_Jj = efc_J_in[worldid, jj, dofj]
-    efc_state = efc_state_in[worldid, efcid]
+    efc_state = efc_state_in[worldid, jj]
 
-  if efc_state != int(types.ConstraintState.QUADRATIC.value):
+  if efc_state == int(types.ConstraintState.QUADRATIC.value) and efc_D != 0.0:
     sum_h += efc_Ji * efc_Jj * efc_D
   efc_h_out[worldid, dofi, dofj] += sum_h
 
