@@ -105,7 +105,7 @@ def _eval(
       quad = wp.vec3(f * (-0.5 * rf + start), f * dir, 0.0)
 
     wp.atomic_add(out, worldid, _eval_pt(quad, alpha))
-  # limit and contact
+  # elliptic friction cone contact
   elif efc_type_in[worldid, efcid] == int(types.ConstraintType.CONTACT_ELLIPTIC.value):
     # extract contact info
     conid = efc_id_in[worldid, efcid]
@@ -1338,7 +1338,7 @@ def update_constraint_efc(
       efc_state_out[worldid, efcid] = int(types.ConstraintState.QUADRATIC.value)
       wp.atomic_add(efc_cost_out, worldid, 0.5 * efc_D * Jaref * Jaref)
   elif efc_type_in[worldid, efcid] != int(types.ConstraintType.CONTACT_ELLIPTIC.value):
-    # limit, contact
+    # limit, frictionless contact, pyramidal friction cone contact
     if Jaref >= 0.0:
       efc_force_out[worldid, efcid] = 0.0
       efc_state_out[worldid, efcid] = int(types.ConstraintState.SATISFIED.value)
@@ -1346,7 +1346,7 @@ def update_constraint_efc(
       efc_force_out[worldid, efcid] = -efc_D * Jaref
       efc_state_out[worldid, efcid] = int(types.ConstraintState.QUADRATIC.value)
       wp.atomic_add(efc_cost_out, worldid, 0.5 * efc_D * Jaref * Jaref)
-  else:
+  else:  # elliptic friction cone contact
     conid = efc_id_in[worldid, efcid]
 
     if conid >= ncon_in[0]:
