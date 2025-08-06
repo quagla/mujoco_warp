@@ -1693,6 +1693,8 @@ def update_gradient_JTCJ(
   # Data in:
   nconmax_in: int,
   ncon_in: wp.array(dtype=int),
+  contact_dist_in: wp.array(dtype=float),
+  contact_includemargin_in: wp.array(dtype=float),
   contact_friction_in: wp.array(dtype=types.vec5),
   contact_dim_in: wp.array(dtype=int),
   contact_efc_address_in: wp.array2d(dtype=int),
@@ -1726,6 +1728,10 @@ def update_gradient_JTCJ(
     condim = contact_dim_in[conid]
 
     if condim == 1:
+      continue
+
+    # check contact status
+    if contact_dist_in[conid] - contact_includemargin_in[conid] >= 0.0:
       continue
 
     efcid0 = contact_efc_address_in[conid, 0]
@@ -1956,6 +1962,8 @@ def _update_gradient(m: types.Model, d: types.Data):
           m.dof_tri_col,
           d.nconmax,
           d.ncon,
+          d.contact.dist,
+          d.contact.includemargin,
           d.contact.friction,
           d.contact.dim,
           d.contact.efc_address,
