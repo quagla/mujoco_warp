@@ -1296,6 +1296,7 @@ def update_constraint_efc(
   efc_D_in: wp.array2d(dtype=float),
   efc_frictionloss_in: wp.array2d(dtype=float),
   efc_Jaref_in: wp.array2d(dtype=float),
+  efc_done_in: wp.array(dtype=bool),
   # Data out:
   efc_force_out: wp.array2d(dtype=float),
   efc_cost_out: wp.array(dtype=float),
@@ -1304,6 +1305,9 @@ def update_constraint_efc(
   worldid, efcid = wp.tid()
 
   if efcid >= nefc_in[worldid]:
+    return
+
+  if efc_done_in[worldid]:
     return
 
   efc_D = efc_D_in[worldid, efcid]
@@ -1501,6 +1505,7 @@ def _update_constraint(m: types.Model, d: types.Data):
       d.efc.D,
       d.efc.frictionloss,
       d.efc.Jaref,
+      d.efc.done,
     ],
     outputs=[d.efc.force, d.efc.cost, d.efc.state],
   )
