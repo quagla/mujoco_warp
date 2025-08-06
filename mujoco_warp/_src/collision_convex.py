@@ -60,6 +60,7 @@ _CONVEX_COLLISION_PAIRS = [
   (GeomType.CYLINDER.value, GeomType.CYLINDER.value),
   (GeomType.CYLINDER.value, GeomType.BOX.value),
   (GeomType.CYLINDER.value, GeomType.MESH.value),
+  (GeomType.BOX.value, GeomType.BOX.value),
   (GeomType.BOX.value, GeomType.MESH.value),
   (GeomType.MESH.value, GeomType.MESH.value),
 ]
@@ -322,7 +323,7 @@ def ccd_kernel_builder(
         x1 = x1 / 6.0
 
       dist, count, witness1, witness2 = ccd(
-        False,
+        True,
         1e-6,
         0.0,
         gjk_iterations,
