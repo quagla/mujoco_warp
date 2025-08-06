@@ -756,6 +756,7 @@ def linesearch_parallel_fused(
   ne = ne_in[worldid]
   nf = nf_in[worldid]
 
+  # TODO(team): _eval with option to only compute cost
   for efcid in range(nefc_in[worldid]):
     # equality
     if efcid < ne:
