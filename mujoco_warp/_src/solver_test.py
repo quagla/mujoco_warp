@@ -26,7 +26,6 @@ import mujoco_warp as mjwarp
 from . import solver
 from . import test_util
 from .types import ConeType
-from .types import DisableBit
 from .types import SolverType
 
 # tolerance for difference between MuJoCo and MJWarp solver calculations - mostly
