@@ -1048,6 +1048,8 @@ def linesearch_prepare_quad(
     for j in range(1, dim):
       # complete vector quadratic (for bottom zone)
       efcidj = contact_efc_address_in[conid, j]
+      if efcidj < 0:
+        return
       jvj = efc_jv_in[worldid, efcidj]
       jarefj = efc_Jaref_in[worldid, efcidj]
       dj = efc_D_in[worldid, efcidj]
@@ -1357,12 +1359,17 @@ def update_constraint_efc(
     mu = friction[0] / wp.sqrt(opt_impratio[worldid])
 
     efcid0 = contact_efc_address_in[conid, 0]
+    if efcid0 < 0:
+      return
+
     N = efc_Jaref_in[worldid, efcid0] * mu
 
     ufrictionj = float(0.0)
     TT = float(0.0)
     for j in range(1, dim):
       efcidj = contact_efc_address_in[conid, j]
+      if efcidj < 0:
+        return
       frictionj = friction[j - 1]
       uj = efc_Jaref_in[worldid, efcidj] * frictionj
       TT += uj * uj
