@@ -232,7 +232,7 @@ def linesearch_iterative_init_p0(
 ):
   worldid, efcid = wp.tid()
 
-  if efcid > nefc_in[worldid]:
+  if efcid >= nefc_in[worldid]:
     return
 
   _eval(
