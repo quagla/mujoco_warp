@@ -126,8 +126,8 @@ class SolverTest(parameterized.TestCase):
     self.assertLessEqual(abs(alpha_iterative - alpha_parallel_50), abs(alpha_iterative - alpha_parallel_10))
 
   @parameterized.parameters(
-    (ConeType.PYRAMIDAL, SolverType.CG, 5, 5, False, False),
-    (ConeType.ELLIPTIC, SolverType.CG, 5, 5, False, False),
+    (ConeType.PYRAMIDAL, SolverType.CG, 10, 5, False, False),
+    (ConeType.ELLIPTIC, SolverType.CG, 10, 5, False, False),
     (ConeType.PYRAMIDAL, SolverType.NEWTON, 5, 10, False, False),
     (ConeType.ELLIPTIC, SolverType.NEWTON, 5, 10, False, False),
     (ConeType.PYRAMIDAL, SolverType.NEWTON, 5, 64, True, True),
