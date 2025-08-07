@@ -87,7 +87,7 @@ class SolverTest(parameterized.TestCase):
     )
 
     # Solve with 0 iterations just initializes and exit
-    mjwarp.forward(m, d)
+    mjwarp.solve(m, d)
 
     # Calculate Mgrad with Mujoco C
     mj_Mgrad = np.zeros(shape=(1, mjm.nv), dtype=float)
