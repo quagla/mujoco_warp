@@ -1251,7 +1251,7 @@ def _epa(tolerance2: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom
       if pt.face_index[i] == -2:
         continue
 
-      if wp.dot(pt.face_pr[i], pt.vert[wi]) - pt.face_norm2[i] > 1e-8:
+      if wp.dot(pt.face_pr[i], pt.vert[wi]) - pt.face_norm2[i] > 1e-10:
         pt.nmap = _delete_face(pt, i)
         pt.nhorizon = _add_edge(pt, pt.face[i][0], pt.face[i][1])
         pt.nhorizon = _add_edge(pt, pt.face[i][1], pt.face[i][2])

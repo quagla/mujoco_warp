@@ -26,7 +26,7 @@ from .types import Data
 from .types import GeomType
 from .types import Model
 
-MAX_ITERATIONS = 10
+MAX_ITERATIONS = 20
 
 
 def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
@@ -133,12 +133,12 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
   vert2 = wp.array(shape=(iterations,), dtype=wp.vec3)
   vert_index1 = wp.array(shape=(iterations,), dtype=int)
   vert_index2 = wp.array(shape=(iterations,), dtype=int)
-  face = wp.array(shape=(2 * iterations,), dtype=wp.vec3i)
-  face_pr = wp.array(shape=(2 * iterations,), dtype=wp.vec3)
-  face_norm2 = wp.array(shape=(2 * iterations,), dtype=float)
-  face_index = wp.array(shape=(2 * iterations,), dtype=int)
-  face_map = wp.array(shape=(2 * iterations,), dtype=int)
-  horizon = wp.array(shape=(2 * iterations,), dtype=int)
+  face = wp.array(shape=(6 * iterations,), dtype=wp.vec3i)
+  face_pr = wp.array(shape=(6 * iterations,), dtype=wp.vec3)
+  face_norm2 = wp.array(shape=(6 * iterations,), dtype=float)
+  face_index = wp.array(shape=(6 * iterations,), dtype=int)
+  face_map = wp.array(shape=(6 * iterations,), dtype=int)
+  horizon = wp.array(shape=(6 * iterations,), dtype=int)
   dist_out = wp.array(shape=(1,), dtype=float)
   pos_out = wp.array(shape=(2,), dtype=wp.vec3)
   wp.launch(
@@ -178,7 +178,6 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
 
 class GJKTest(absltest.TestCase):
   """Tests for GJK/EPA."""
-
   def test_spheres_distance(self):
     """Test distance between two spheres."""
 
@@ -328,8 +327,8 @@ class GJKTest(absltest.TestCase):
       </mujoco>
     """)
   
-    dist, _, _ = _geom_dist(m, d, 0, 1, 35)
-    self.assertAlmostEqual(-0.01, dist)
+    dist, _, _ = _geom_dist(m, d, 0, 1, 50)
+    self.assertAlmostEqual(-0.001, dist)
 if __name__ == "__main__":
   wp.init()
   absltest.main()
