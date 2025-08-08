@@ -802,9 +802,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
   )
 
-  #print(mjm.geom_dataid, mjm.mesh_octadr,  m.geom_plugin_index)
-  #exit()
-  mujoco_octree_to_warp_volume(mjm, m)
   return m
 
 def mujoco_octree_to_warp_volume(mjm, m):
@@ -840,12 +837,14 @@ def mujoco_octree_to_warp_volume(mjm, m):
 
           
           volume = wp.Volume.load_from_numpy(sdf_values)
+          del sdf_values
          
           volumes[mesh_id] = volume
     
   volume_ids = [volume.id if volume!=0 else 0 for volume in volumes]
   m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
   m.volumes =tuple(volumes)
+  return volumes
 
 
 def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: int = -1) -> types.Data:
