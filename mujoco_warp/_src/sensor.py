@@ -2114,7 +2114,7 @@ def sensor_acc(m: Model, d: Data):
 
   wp.launch(
     _sensor_tactile_zero,
-    dim=(d.nworld, m.nsensordata),
+    dim=(d.nworld, m.nsensor),
     inputs=[
       m.sensor_type,
       m.sensor_dim,
