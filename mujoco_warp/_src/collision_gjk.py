@@ -2150,8 +2150,8 @@ def ccd(
   
   if (
     multiccd
-    and (geomtype1 == int(GeomType.BOX.value) or geomtype1 == int(GeomType.MESH.value))
-    and (geomtype2 == int(GeomType.BOX.value) or geomtype2 == int(GeomType.MESH.value))
+    and (geomtype1 == int(GeomType.BOX.value) or (geomtype1 == int(GeomType.MESH.value) and geom1.mesh_polyadr > -1))
+    and (geomtype2 == int(GeomType.BOX.value) or (geomtype2 == int(GeomType.MESH.value) and geom2.mesh_polyadr > -1))
   ):
     num, w1, w2 = multicontact(pt, pt.face[idx], x1, x2, geom1, geom2, geomtype1, geomtype2)
     if num > 0:

@@ -71,6 +71,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
     geom1.rot = geom_xmat_in[0, gid1]
     geom1.size = geom_size[0, gid1]
     geom1.graphadr = -1
+    geom1.mesh_polyadr = -1
 
     if geom_dataid[gid1] >= 0 and geom_type[gid1] == MESHGEOM:
       dataid = geom_dataid[gid1]
@@ -85,6 +86,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
     geom2.rot = geom_xmat_in[0, gid2]
     geom2.size = geom_size[0, gid2]
     geom2.graphadr = -1
+    geom2.mesh_polyadr = -1
 
     if geom_dataid[gid2] >= 0 and geom_type[gid2] == MESHGEOM:
       dataid = geom_dataid[gid2]
@@ -317,7 +319,7 @@ class GJKTest(absltest.TestCase):
     )
     dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(-0.01, dist)
-
+ 
   def test_cylinder_cylinder_contact(self):
     """Test penetration between two cylinder."""
 
@@ -347,6 +349,21 @@ class GJKTest(absltest.TestCase):
     </mujoco>""")
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertEqual(ncon, 2)
+
+  def test_box_box_ccd(self):
+    """Test box box."""
+
+    _, _, m, d = test_util.fixture(
+       xml=f"""
+       <mujoco>
+         <worldbody>
+           <geom name="geom1" type="box" pos="0 0 1.9" size="1 1 1"/>
+           <geom name="geom2" type="box" pos="0 0 0" size="10 10 1"/>
+         </worldbody>
+       </mujoco>
+       """)
+    _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    self.assertEqual(ncon, 1)
 
 
 if __name__ == "__main__":
