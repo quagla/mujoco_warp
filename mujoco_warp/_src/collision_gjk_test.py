@@ -59,6 +59,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
     horizon: wp.array(dtype=int),
     # Out:
     dist_out: wp.array(dtype=float),
+    ncon_out: wp.array(dtype=int),
     pos_out: wp.array(dtype=wp.vec3),
   ):
     MESHGEOM = int(GeomType.MESH.value)
@@ -96,7 +97,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
 
     (
       dist,
-      count,
+      ncon,
       x1,
       x2,
     ) = ccd(
@@ -125,6 +126,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
     )
 
     dist_out[0] = dist
+    ncon_out[0] = ncon
     pos_out[0] = x1[0]
     pos_out[1] = x2[0]
 
@@ -140,6 +142,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
   face_map = wp.array(shape=(6 * iterations,), dtype=int)
   horizon = wp.array(shape=(6 * iterations,), dtype=int)
   dist_out = wp.array(shape=(1,), dtype=float)
+  ncon_out = wp.array(shape=(1,), dtype=int)
   pos_out = wp.array(shape=(2,), dtype=wp.vec3)
   wp.launch(
     _gjk_kernel,
@@ -170,10 +173,11 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
     ],
     outputs=[
       dist_out,
+      ncon_out,
       pos_out,
     ],
   )
-  return dist_out.numpy()[0], pos_out.numpy()[0], pos_out.numpy()[1]
+  return dist_out.numpy()[0], ncon_out.numpy()[0], pos_out.numpy()[0], pos_out.numpy()[1]
 
 
 class GJKTest(absltest.TestCase):
@@ -192,7 +196,7 @@ class GJKTest(absltest.TestCase):
        """
     )
 
-    dist, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertEqual(1.0, dist)
 
   def test_spheres_touching(self):
@@ -209,7 +213,7 @@ class GJKTest(absltest.TestCase):
        """
     )
 
-    dist, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertEqual(0.0, dist)
 
   def test_box_mesh_distance(self):
@@ -237,7 +241,7 @@ class GJKTest(absltest.TestCase):
        """
     )
 
-    dist, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(0.1, dist)
 
   def test_sphere_sphere_contact(self):
@@ -254,7 +258,7 @@ class GJKTest(absltest.TestCase):
       """
     )
 
-    dist, _, _ = _geom_dist(m, d, 0, 1, 0)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, 0)
     self.assertAlmostEqual(-2, dist)
 
   def test_box_box_contact(self):
@@ -270,7 +274,7 @@ class GJKTest(absltest.TestCase):
       </mujoco>
       """
     )
-    dist, x1, x2 = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    dist, _, x1, x2 = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(-1, dist)
     normal = wp.normalize(x1 - x2)
     self.assertAlmostEqual(normal[0], 1)
@@ -311,7 +315,7 @@ class GJKTest(absltest.TestCase):
     </mujoco>
     """
     )
-    dist, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(-0.01, dist)
 
   def test_cylinder_cylinder_contact(self):
@@ -327,8 +331,31 @@ class GJKTest(absltest.TestCase):
       </mujoco>
     """)
   
-    dist, _, _ = _geom_dist(m, d, 0, 1, 50)
+    dist, _, _, _ = _geom_dist(m, d, 0, 1, 50)
     self.assertAlmostEqual(-0.001, dist)
+
+  def test_box_edge(self):
+    """Test box edge."""
+
+    _, _, m, d = test_util.fixture(
+       xml=f"""
+    <mujoco>
+      <worldbody>
+        <geom type="box" name="box1" size="5 5 .1" pos="0 0 0"/>
+        <body pos="0 0 2">
+          <freejoint/>
+          <geom type="box" name="box2" size="1 1 1"/>
+        </body>
+        <body pos="0 0 4.4" euler="0 90 40">
+          <freejoint/>
+          <geom type="box" name="box3" size="1 1 1"/>
+        </body>
+      </worldbody>
+    </mujoco>""")
+    _, ncon, _, _ = _geom_dist(m, d, 1, 2, MAX_ITERATIONS)
+    self.assertEqual(ncon, 1)
+
+
 if __name__ == "__main__":
   wp.init()
   absltest.main()

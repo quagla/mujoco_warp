@@ -94,6 +94,12 @@ class SupportPoint:
 
 
 @wp.func
+def discrete_geoms(g1: int, g2: int):
+  return ((g1 == int(GeomType.MESH.value) or g1 == int(GeomType.BOX.value) or g1 == int(GeomType.HFIELD.value)) and
+         (g2 == int(GeomType.MESH.value) or g2 == int(GeomType.BOX.value) or g2 == int(GeomType.HFIELD.value)))
+
+
+@wp.func
 def _support_margin(geom: Geom, geomtype: int, dir: wp.vec3):
   sp = SupportPoint()
   sp.cached_index = -1
@@ -590,6 +596,7 @@ def _gjk(
   use_margin: bool,
 ):
   """Find distance within a tolerance between two geoms."""
+  is_discrete = discrete_geoms(geomtype1, geomtype2)
   cutoff2 = cutoff * cutoff
   simplex = mat43()
   simplex1 = mat43()
@@ -598,7 +605,7 @@ def _gjk(
   simplex_index2 = wp.vec4i()
   n = int(0)
   coordinates = wp.vec4()  # barycentric coordinates
-  epsilon = 0.5 * tolerance * tolerance
+  epsilon = wp.where(is_discrete, 0., 0.5 * tolerance * tolerance)
 
   # set initial guess
   x_k = x1_0 - x2_0
@@ -1193,12 +1200,14 @@ def _polytope4(
 
 
 @wp.func
-def _epa(tolerance2: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom2: Geom, geomtype1: int, geomtype2: int):
+def _epa(tolerance: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom2: Geom, geomtype1: int, geomtype2: int):
   """Recover penetration data from two geoms in contact given an initial polytope."""
+  is_discrete = discrete_geoms(geomtype1, geomtype2)
   upper = FLOAT_MAX
   upper2 = FLOAT_MAX
   idx = int(-1)
   pidx = int(-1)
+  epsilon = wp.where(is_discrete, 1e-15, tolerance * tolerance)
 
   for k in range(epa_iterations):
     pidx = int(idx)
@@ -1235,8 +1244,18 @@ def _epa(tolerance2: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom
       upper = upper_k
       upper2 = upper * upper
 
-    if upper - lower < tolerance2:
+    if upper - lower < epsilon:
       break
+
+    # check if vertex wi is a repeated support point
+    if is_discrete:
+      found_repeated = bool(False)
+      for i in range(pt.nvert - 1):
+        if pt.vert_index1[i] == pt.vert_index1[wi] and pt.vert_index2[i] == pt.vert_index2[wi]:
+          found_repeated = True
+          break
+      if found_repeated:
+        break
 
     pt.nmap = _delete_face(pt, idx)
     pt.nhorizon = _add_edge(pt, pt.face[idx][0], pt.face[idx][1])
@@ -2125,7 +2144,7 @@ def ccd(
     witness2[0] = result.x2
     return result.dist, 1, witness1, witness2
 
-  dist, x1, x2, idx = _epa(tolerance * tolerance, epa_iterations, pt, geom1, geom2, geomtype1, geomtype2)
+  dist, x1, x2, idx = _epa(tolerance, epa_iterations, pt, geom1, geom2, geomtype1, geomtype2)
   if idx == -1:
     return FLOAT_MAX, 0, witness1, witness2
   
