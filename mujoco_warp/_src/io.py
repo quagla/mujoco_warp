@@ -610,7 +610,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
     volume_ids=wp.array(),
     volumes = tuple(),
-    oct_aabb = wp.array2d(),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -802,12 +801,14 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     geom_pair_type_count=tuple(geom_type_pair_count),
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
   )
+
+  #print(mjm.geom_dataid, mjm.mesh_octadr,  m.geom_plugin_index)
+  #exit()
   mujoco_octree_to_warp_volume(mjm, m)
   return m
 
 def mujoco_octree_to_warp_volume(mjm, m):
   volumes = [0] * len(mjm.mesh_octadr)
-  oct_aabbs = [None]* len(mjm.mesh_octadr)
   for mesh_id in mjm.geom_dataid:
       if mesh_id != -1:
         octree_id = mjm.mesh_octadr[mesh_id]
@@ -838,25 +839,13 @@ def mujoco_octree_to_warp_volume(mjm, m):
                       sdf_values[i, j, k] = sdf_val
 
           
-          volume = wp.Volume.load_from_numpy(sdf_values)        
+          volume = wp.Volume.load_from_numpy(sdf_values)
+         
           volumes[mesh_id] = volume
-          oct_aabbs[mesh_id] = [center, half_size]
     
   volume_ids = [volume.id if volume!=0 else 0 for volume in volumes]
   m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
-  
-  processed_aabbs = []
-  for aabb in oct_aabbs:
-      if aabb is not None:
-          processed_aabbs.append(aabb)
-      else:
-          zero_center = np.zeros(3, dtype=np.float32)
-          zero_half_size = np.zeros(3, dtype=np.float32) 
-          processed_aabbs.append([zero_center, zero_half_size])
-  
-  aabb_array = np.array(processed_aabbs, dtype=np.float32)
-  m.oct_aabb = wp.array2d(data=aabb_array, dtype=wp.vec3)
-  m.volumes = tuple(volumes)
+  m.volumes =tuple(volumes)
 
 
 def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: int = -1) -> types.Data:
