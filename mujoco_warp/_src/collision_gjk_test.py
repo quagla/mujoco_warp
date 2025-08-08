@@ -101,7 +101,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int):
       x1,
       x2,
     ) = ccd(
-      False,
+      True,
       1e-6,
       1.0e30,
       iterations,
@@ -341,19 +341,12 @@ class GJKTest(absltest.TestCase):
        xml=f"""
     <mujoco>
       <worldbody>
-        <geom type="box" name="box1" size="5 5 .1" pos="0 0 0"/>
-        <body pos="0 0 2">
-          <freejoint/>
-          <geom type="box" name="box2" size="1 1 1"/>
-        </body>
-        <body pos="0 0 4.4" euler="0 90 40">
-          <freejoint/>
-          <geom type="box" name="box3" size="1 1 1"/>
-        </body>
+        <geom pos="0 0 2" type="box" name="box2" size="1 1 1"/>
+        <geom pos="0 0 4.4" euler="0 90 40" type="box" name="box3" size="1 1 1"/>
       </worldbody>
     </mujoco>""")
-    _, ncon, _, _ = _geom_dist(m, d, 1, 2, MAX_ITERATIONS)
-    self.assertEqual(ncon, 1)
+    _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
+    self.assertEqual(ncon, 2)
 
 
 if __name__ == "__main__":
