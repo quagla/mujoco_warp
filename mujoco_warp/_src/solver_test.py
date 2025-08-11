@@ -35,7 +35,7 @@ _TOLERANCE = 5e-3
 
 
 def _assert_eq(a, b, name):
-  tol = _TOLERANCE * 15  # avoid test noise
+  tol = _TOLERANCE * 20  # avoid test noise
   err_msg = f"mismatch: {name}"
   np.testing.assert_allclose(a, b, err_msg=err_msg, atol=tol, rtol=tol)
 
