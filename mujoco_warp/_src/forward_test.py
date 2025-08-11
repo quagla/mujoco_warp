@@ -287,34 +287,41 @@ class ForwardTest(parameterized.TestCase):
     step1_field = [
       "xpos",
       "xquat",
-      # TODO(team): "xmat"
+      "xmat",
       "xipos",
-      # TODO(team): "ximat"
+      "ximat",
       "xanchor",
       "xaxis",
       "geom_xpos",
-      # TODO(team): "geom_xmat"
-      # TODO(team): "site_xmat"
-      # TODO(team): "site_xmat"
+      "geom_xmat",
+      "site_xmat",
       "subtree_com",
       "cinert",
       "cdof",
       "cam_xpos",
-      # TODO(team): "cam_xmat",
+      "cam_xmat",
       "light_xpos",
       "light_xdir",
       "ten_length",
-      # TODO(team): "ten_J"
+      "ten_J",
       "ten_wrapadr",
       "ten_wrapnum",
       "wrap_obj",
       "wrap_xpos",
-      # TODO(team): "qM"
-      # TODO(team): "qLD"
+      "qM",
+      "qLD",
       "nefc",
-      # TODO(team): efc
+      "efc_type",
+      "efc_id",
+      "efc_J",
+      "efc_pos",
+      "efc_margin",
+      "efc_D",
+      "efc_vel",
+      "efc_aref",
+      "efc_frictionloss",
       "actuator_length",
-      # TODO(team): "actuator_moment"
+      "actuator_moment",
       "actuator_velocity",
       "ten_velocity",
       "cvel",
@@ -332,8 +339,13 @@ class ForwardTest(parameterized.TestCase):
     if m.nflexedge:
       step1_field += ["flexedge_length", "flexedge_velocity"]
 
+    def _getattr(arr):
+      if (len(arr) >= 4) & (arr[:4] == "efc_"):
+        return getattr(d.efc, arr[4:]), True
+      return getattr(d, arr), False
+
     for arr in step1_field:
-      attr = getattr(d, arr)
+      attr, _ = _getattr(arr)
       if attr.dtype == float:
         attr.fill_(wp.nan)
       elif attr.dtype == int:
@@ -345,7 +357,46 @@ class ForwardTest(parameterized.TestCase):
     mjwarp.step1(m, d)
 
     for arr in step1_field:
-      _assert_eq(getattr(d, arr).numpy()[0], getattr(mjd, arr), arr)
+      d_arr, is_nefc = _getattr(arr)
+      d_arr = d_arr.numpy()[0]
+      mjd_arr = getattr(mjd, arr)
+      if arr in ["xmat", "ximat", "geom_xmat", "site_xmat", "cam_xmat"]:
+        mjd_arr = mjd_arr.reshape(-1)
+        d_arr = d_arr.reshape(-1)
+      elif arr == "qM":
+        qM = np.zeros((mjm.nv, mjm.nv))
+        mujoco.mj_fullM(mjm, qM, mjd.qM)
+        mjd_arr = qM
+      elif arr == "actuator_moment":
+        actuator_moment = np.zeros((mjm.nu, mjm.nv))
+        mujoco.mju_sparse2dense(actuator_moment, mjd.actuator_moment, mjd.moment_rownnz, mjd.moment_rowadr, mjd.moment_colind)
+        mjd_arr = actuator_moment
+      elif arr == "ten_J" and mjm.ntendon:
+        ten_J = np.zeros((mjm.ntendon, mjm.nv))
+        mujoco.mju_sparse2dense(ten_J, mjd.ten_J, mjd.ten_J_rownnz, mjd.ten_J_rowadr, mjd.ten_J_colind)
+        mjd_arr = ten_J
+      elif arr == "efc_J":
+        if mjd.efc_J.shape[0] != mjd.nefc * mjm.nv:
+          efc_J = np.zeros((mjd.nefc, mjm.nv))
+          mujoco.mju_sparse2dense(efc_J, mjd.efc_J, mjd.efc_J_rownnz, mjd.efc_J_rowadr, mjd.efc_J_colind)
+          mjd_arr = efc_J
+        else:
+          mjd_arr = mjd_arr.reshape((mjd.nefc, mjm.nv))
+      elif arr == "qLD":
+        vec = np.ones((1, mjm.nv))
+        res = np.zeros((1, mjm.nv))
+        mujoco.mj_solveM(mjm, mjd, res, vec)
+
+        vec_wp = wp.array(vec, dtype=float)
+        res_wp = wp.zeros((1, mjm.nv), dtype=float)
+        mjwarp.solve_m(m, d, res_wp, vec_wp)
+
+        d_arr = res_wp.numpy()[0]
+        mjd_arr = res[0]
+      if is_nefc:
+        d_arr = d_arr[: d.nefc.numpy()[0]]
+
+      _assert_eq(d_arr, mjd_arr, arr)
 
     # TODO(team): sensor_pos
     # TODO(team): sensor_vel
@@ -367,7 +418,14 @@ class ForwardTest(parameterized.TestCase):
       "qacc",
       "qvel",
       "qpos",
+      "efc_force",
+      "qfrc_constraint",
     ]
+
+    def _getattr(arr):
+      if (len(arr) >= 4) & (arr[:4] == "efc_"):
+        return getattr(d.efc, arr[4:]), True
+      return getattr(d, arr), False
 
     mujoco.mj_step1(mjm, mjd)
 
@@ -385,7 +443,7 @@ class ForwardTest(parameterized.TestCase):
     for arr in step2_field:
       if arr in ["qpos", "qvel"]:
         continue
-      attr = getattr(d, arr)
+      attr, _ = _getattr(arr)
       if attr.dtype == float:
         attr.fill_(wp.nan)
       elif attr.dtype == int:
@@ -397,7 +455,11 @@ class ForwardTest(parameterized.TestCase):
     mjwarp.step2(m, d)
 
     for arr in step2_field:
-      _assert_eq(getattr(d, arr).numpy()[0], getattr(mjd, arr), arr)
+      d_arr, is_efc = _getattr(arr)
+      d_arr = d_arr.numpy()[0]
+      if is_efc:
+        d_arr = d_arr[: d.nefc.numpy()[0]]
+      _assert_eq(d_arr, getattr(mjd, arr), arr)
 
 
 if __name__ == "__main__":
