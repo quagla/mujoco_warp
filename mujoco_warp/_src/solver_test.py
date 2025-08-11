@@ -82,9 +82,9 @@ class SolverTest(parameterized.TestCase):
     mjwarp.step(m, d)
 
     # Calculate target values
-    def calc_jv(njmax, efc_J, efc_search):
-      jv = np.zeros(njmax)
-      for i in range(njmax):
+    def calc_jv(nefc, efc_J, efc_search):
+      jv = np.zeros(nefc)
+      for i in range(nefc):
         jv[i] += np.sum(efc_J[i, :] * efc_search[:])
       return jv
 
@@ -95,9 +95,9 @@ class SolverTest(parameterized.TestCase):
       quad_gauss[2] = 0.5 * np.sum(efc_search[:] * efc_mv[:])
       return quad_gauss
 
-    def calc_quad(njmax, efc_jaref, efc_jv, efc_D):
-      quad = np.zeros((njmax, 3))
-      for i in range(njmax):
+    def calc_quad(nefc, efc_jaref, efc_jv, efc_D):
+      quad = np.zeros((nefc, 3))
+      for i in range(nefc):
         quad[i, 0] = 0.5 * efc_jaref[i] * efc_jaref[i] * efc_D[i]
         quad[i, 1] = efc_jv[i] * efc_jaref[i] * efc_D[i]
         quad[i, 2] = 0.5 * efc_jv[i] * efc_jv[i] * efc_D[i]
@@ -110,22 +110,27 @@ class SolverTest(parameterized.TestCase):
     efc_Jaref_np = d.efc.Jaref.numpy()[0]
     efc_D_np = d.efc.D.numpy()[0]
     qfrc_smooth_np = d.qfrc_smooth.numpy()
+    nefc = d.nefc.numpy()[0]
 
     target_mv = np.zeros(mjm.nv)
     mujoco.mj_mulM(mjm, mjd, target_mv, efc_search_np)
-    target_jv = calc_jv(d.njmax, efc_J_np, efc_search_np)
+    target_jv = calc_jv(nefc, efc_J_np, efc_search_np)
     target_quad_gauss = calc_quad_gauss(efc_gauss_np, efc_search_np, efc_Ma_np, qfrc_smooth_np, target_mv)
-    target_quad = calc_quad(d.njmax, efc_Jaref_np, target_jv, efc_D_np)
+    target_quad = calc_quad(nefc, efc_Jaref_np, target_jv, efc_D_np)
 
     # launch linesearch with 0 iteration just doing the initialization step
     d.efc.jv.zero_()
     d.efc.quad.zero_()
     solver._linesearch(m, d)
 
-    _assert_eq(target_mv, d.efc.mv.numpy()[0], name="efc.mv")
-    _assert_eq(target_jv, d.efc.jv.numpy()[0], name="efc.jv")
-    _assert_eq(target_quad_gauss, d.efc.quad_gauss.numpy()[0], name="efc.quad_gauss")
-    _assert_eq(target_quad, d.efc.quad.numpy()[0], name="efc.quad")
+    efc_mv = d.efc.mv.numpy()[0]
+    efc_jv = d.efc.jv.numpy()[0]
+    efc_quad_gauss = d.efc.quad_gauss.numpy()[0]
+    efc_quad = d.efc.quad.numpy()[0]
+    _assert_eq(target_mv, efc_mv, name="efc.mv")
+    _assert_eq(target_jv, efc_jv[:nefc], name="efc.jv")
+    _assert_eq(target_quad_gauss, efc_quad_gauss, name="efc.quad_gauss")
+    _assert_eq(target_quad, efc_quad[:nefc], name="efc.quad")
 
   @parameterized.parameters(
     (ConeType.PYRAMIDAL, False),
