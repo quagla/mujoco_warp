@@ -122,12 +122,6 @@ class SolverTest(parameterized.TestCase):
     d.efc.quad.zero_()
     solver._linesearch(m, d)
 
-    efc_quad = d.efc.quad.numpy()[0]
-    for i in range(d.njmax):
-        print(i)
-        print(target_quad[i])
-        print(efc_quad[i])
-
     _assert_eq(target_mv, d.efc.mv.numpy()[0], name="efc.mv")
     _assert_eq(target_jv, d.efc.jv.numpy()[0], name="efc.jv")
     _assert_eq(target_quad_gauss, d.efc.quad_gauss.numpy()[0], name="efc.quad_gauss")
