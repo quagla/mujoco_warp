@@ -363,7 +363,7 @@ class GJKTest(absltest.TestCase):
        </mujoco>
        """)
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
-    self.assertEqual(ncon, 1)
+    self.assertEqual(ncon, 4)
 
 
 if __name__ == "__main__":

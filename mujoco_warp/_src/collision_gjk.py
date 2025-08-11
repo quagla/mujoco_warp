@@ -1787,7 +1787,7 @@ def polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, n
 
       # add new vertex to clipped polygon where PQ intersects the clipping edge
       t, res = plane_intersect(pn[e], pd[e], P, Q)
-      if t < 0.0 or t > 1.0:
+      if t >= 0.0 and t <= 1.0:
         clipped[nclipped] = res
         nclipped += 1
 
