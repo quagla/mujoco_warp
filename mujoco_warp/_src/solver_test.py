@@ -126,7 +126,7 @@ class SolverTest(parameterized.TestCase):
     for i in range(d.njmax):
         print(i)
         print(target_quad[i])
-        print(efc_quad)
+        print(efc_quad[i])
 
     _assert_eq(target_mv, d.efc.mv.numpy()[0], name="efc.mv")
     _assert_eq(target_jv, d.efc.jv.numpy()[0], name="efc.jv")
