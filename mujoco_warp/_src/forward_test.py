@@ -281,6 +281,7 @@ class ForwardTest(parameterized.TestCase):
 
   @parameterized.parameters(("humanoid/humanoid.xml", True), ("humanoid/humanoid.xml", False))
   def test_step1(self, xml, energy):
+    # TODO(team): test more mjcfs
     mjm, mjd, m, d = test_util.fixture(xml, kick=True, energy=energy)
 
     # some of the fields updated by step1
