@@ -254,12 +254,6 @@ class JointType(enum.IntEnum):
   SLIDE = mujoco.mjtJoint.mjJNT_SLIDE
   HINGE = mujoco.mjtJoint.mjJNT_HINGE
 
-  def dof_width(self) -> int:
-    return {0: 6, 1: 3, 2: 1, 3: 1}[self.value]
-
-  def qpos_width(self) -> int:
-    return {0: 7, 1: 4, 2: 1, 3: 1}[self.value]
-
 
 class ConeType(enum.IntEnum):
   """Type of friction cone.
