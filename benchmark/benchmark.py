@@ -15,6 +15,7 @@
 
 import mujoco_warp
 
+
 class AlohaPot(mujoco_warp.BenchmarkSuite):
   """Aloha robot with a pasta pot on the workbench."""
 
