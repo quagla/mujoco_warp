@@ -60,7 +60,6 @@ _CONVEX_COLLISION_PAIRS = [
   (GeomType.CYLINDER.value, GeomType.CYLINDER.value),
   (GeomType.CYLINDER.value, GeomType.BOX.value),
   (GeomType.CYLINDER.value, GeomType.MESH.value),
-  (GeomType.BOX.value, GeomType.BOX.value),
   (GeomType.BOX.value, GeomType.MESH.value),
   (GeomType.MESH.value, GeomType.MESH.value),
 ]
