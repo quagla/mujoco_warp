@@ -323,7 +323,7 @@ def ccd_kernel_builder(
         x1 = x1 / 6.0
 
       dist, count, witness1, witness2 = ccd(
-        True,
+        False,
         1e-6,
         0.0,
         gjk_iterations,
