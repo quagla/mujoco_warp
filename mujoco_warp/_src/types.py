@@ -491,6 +491,7 @@ class EqType(enum.IntEnum):
     CONNECT: connect two bodies at a point (ball joint)
     JOINT: couple the values of two scalar joints with cubic
     WELD: fix relative position and orientation of two bodies
+    TENDON: couple the lengths of two tendons with cubic
   """
 
   CONNECT = mujoco.mjtEq.mjEQ_CONNECT
