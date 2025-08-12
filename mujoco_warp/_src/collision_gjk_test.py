@@ -220,6 +220,7 @@ def _geom_dist(m: Model, d: Data, gid1: int, gid2: int, iterations: int, multicc
 
 class GJKTest(absltest.TestCase):
   """Tests for GJK/EPA."""
+
   def test_spheres_distance(self):
     """Test distance between two spheres."""
 
@@ -355,7 +356,7 @@ class GJKTest(absltest.TestCase):
     )
     dist, _, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS)
     self.assertAlmostEqual(-0.01, dist)
- 
+
   def test_cylinder_cylinder_contact(self):
     """Test penetration between two cylinder."""
 
@@ -367,8 +368,9 @@ class GJKTest(absltest.TestCase):
           <geom pos="1.999 0 0" type="cylinder" size="1 .5"/>
         </worldbody>
       </mujoco>
-    """)
-  
+    """
+    )
+
     dist, _, _, _ = _geom_dist(m, d, 0, 1, 50)
     self.assertAlmostEqual(-0.001, dist)
 
@@ -376,13 +378,14 @@ class GJKTest(absltest.TestCase):
     """Test box edge."""
 
     _, _, m, d = test_util.fixture(
-       xml=f"""
+      xml=f"""
     <mujoco>
       <worldbody>
         <geom pos="0 0 2" type="box" name="box2" size="1 1 1"/>
         <geom pos="0 0 4.4" euler="0 90 40" type="box" name="box3" size="1 1 1"/>
       </worldbody>
-    </mujoco>""")
+    </mujoco>"""
+    )
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
     self.assertEqual(ncon, 2)
 
@@ -390,14 +393,15 @@ class GJKTest(absltest.TestCase):
     """Test box box."""
 
     _, _, m, d = test_util.fixture(
-       xml=f"""
+      xml=f"""
        <mujoco>
          <worldbody>
            <geom name="geom1" type="box" pos="0 0 1.9" size="1 1 1"/>
            <geom name="geom2" type="box" pos="0 0 0" size="10 10 1"/>
          </worldbody>
        </mujoco>
-       """)
+       """
+    )
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
     self.assertEqual(ncon, 4)
 
@@ -405,7 +409,7 @@ class GJKTest(absltest.TestCase):
     """Test mesh-mesh multiccd."""
 
     _, _, m, d = test_util.fixture(
-       xml=f"""
+      xml=f"""
        <mujoco>
          <asset>
            <mesh name="smallbox"
@@ -416,7 +420,8 @@ class GJKTest(absltest.TestCase):
           <geom pos="0 1 3.99" euler="0 0 40" type="mesh" name="box2" mesh="smallbox"/>
          </worldbody>
        </mujoco>
-       """)
+       """
+    )
 
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
     self.assertEqual(ncon, 5)
@@ -425,14 +430,15 @@ class GJKTest(absltest.TestCase):
     """Test box-box multiccd 2."""
 
     _, _, m, d = test_util.fixture(
-       xml=f"""
+      xml=f"""
        <mujoco>
          <worldbody>
            <geom size="1 1 1" pos="0 0 2" type="box"/>
           <geom size="1 1 1" pos="0 1 3.99" euler="0 0 40" type="box"/>
          </worldbody>
        </mujoco>
-       """)
+       """
+    )
 
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
     self.assertEqual(ncon, 5)

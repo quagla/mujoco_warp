@@ -354,7 +354,7 @@ def ccd_kernel_builder(
         points[i] = 0.5 * (witness1[i] + witness2[i])
       normal = witness1[0] - witness2[0]
       frame = make_frame(normal)
-  
+
     for i in range(count):
       # limit maximum number of contacts with height field
       if _max_contacts_height_field(ngeom, geom_type, geompair2hfgeompair, g1, g2, worldid, ncon_hfield_out):

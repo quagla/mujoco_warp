@@ -95,8 +95,9 @@ class SupportPoint:
 
 @wp.func
 def discrete_geoms(g1: int, g2: int):
-  return ((g1 == int(GeomType.MESH.value) or g1 == int(GeomType.BOX.value) or g1 == int(GeomType.HFIELD.value)) and
-         (g2 == int(GeomType.MESH.value) or g2 == int(GeomType.BOX.value) or g2 == int(GeomType.HFIELD.value)))
+  return (g1 == int(GeomType.MESH.value) or g1 == int(GeomType.BOX.value) or g1 == int(GeomType.HFIELD.value)) and (
+    g2 == int(GeomType.MESH.value) or g2 == int(GeomType.BOX.value) or g2 == int(GeomType.HFIELD.value)
+  )
 
 
 @wp.func
@@ -605,7 +606,7 @@ def _gjk(
   simplex_index2 = wp.vec4i()
   n = int(0)
   coordinates = wp.vec4()  # barycentric coordinates
-  epsilon = wp.where(is_discrete, 0., 0.5 * tolerance * tolerance)
+  epsilon = wp.where(is_discrete, 0.0, 0.5 * tolerance * tolerance)
 
   # set initial guess
   x_k = x1_0 - x2_0
@@ -2144,7 +2145,7 @@ def ccd(
   dist, x1, x2, idx = _epa(tolerance, epa_iterations, pt, geom1, geom2, geomtype1, geomtype2)
   if idx == -1:
     return FLOAT_MAX, 0, witness1, witness2
-  
+
   if (
     multiccd
     and (geomtype1 == int(GeomType.BOX.value) or (geomtype1 == int(GeomType.MESH.value) and geom1.mesh_polyadr > -1))
