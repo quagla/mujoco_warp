@@ -41,7 +41,7 @@ polyindices = wp.types.vector(MAX_POLYVERT, dtype=int)
 mat43 = wp.types.matrix(shape=(4, 3), dtype=float)
 mat63 = wp.types.matrix(shape=(6, 3), dtype=float)
 
-MULTI_CONTACT_COUNT = 4
+MULTI_CONTACT_COUNT = 8
 mat3c = wp.types.matrix(shape=(MULTI_CONTACT_COUNT, 3), dtype=float)
 
 
@@ -1713,7 +1713,7 @@ def plane_normal(v1: wp.vec3, v2: wp.vec3, n: wp.vec3):
 
 @wp.func
 def halfspace(a: wp.vec3, n: wp.vec3, p: wp.vec3):
-  return wp.dot(p - a, n) > -MJ_MINVAL
+  return wp.dot(p - a, n) > -1e-10
 
 
 @wp.func
@@ -1744,7 +1744,7 @@ def polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, n
   # compute plane normal and distance to plane for each vertex
   pn = polyverts()
   pd = polyvec()
-  for i in range(nface1):
+  for i in range(nface1 - 1):
     pdi, pni = plane_normal(face1[i], face1[i + 1], n)
     pd[i] = pdi
     pn[i] = pni
@@ -1753,13 +1753,10 @@ def polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, n
   pn[nface1 - 1] = pni
 
   # reserve 2 * max_sides as max sides for a clipped polygon
-  polygon1 = polyclip()
-  polygon2 = polyclip()
+  polygon = polyclip()
+  clipped = polyclip()
   npolygon = nface2
   nclipped = int(0)
-
-  polygon = polygon1
-  clipped = polygon2
 
   for i in range(nface2):
     polygon[i] = face2[i]
@@ -1809,8 +1806,8 @@ def polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, n
   # no pruning needed
   for i in range(npolygon):
     witness2[i] = polygon[i]
-    witness1[i] = witness2[i] + dir
-  return npolygon, witness2, witness1
+    witness1[i] = witness2[i] - dir
+  return npolygon, witness1, witness2
 
 
 # recover multiple contacts from EPA polytope

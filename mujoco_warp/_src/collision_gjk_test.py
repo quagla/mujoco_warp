@@ -421,6 +421,22 @@ class GJKTest(absltest.TestCase):
     _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
     self.assertEqual(ncon, 5)
 
+  def test_box_box_ccd2(self):
+    """Test box-box multiccd 2."""
+
+    _, _, m, d = test_util.fixture(
+       xml=f"""
+       <mujoco>
+         <worldbody>
+           <geom size="1 1 1" pos="0 0 2" type="box"/>
+          <geom size="1 1 1" pos="0 1 3.99" euler="0 0 40" type="box"/>
+         </worldbody>
+       </mujoco>
+       """)
+
+    _, ncon, _, _ = _geom_dist(m, d, 0, 1, MAX_ITERATIONS, multiccd=True)
+    self.assertEqual(ncon, 5)
+
 
 if __name__ == "__main__":
   wp.init()
