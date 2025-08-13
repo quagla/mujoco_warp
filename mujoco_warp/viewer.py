@@ -97,8 +97,6 @@ def _main(argv: Sequence[str]) -> None:
     print("Engine: MuJoCo Warp")
     mjm_hash = pickle.dumps(mjm)
     m = mjwarp.put_model(mjm)
-    from mujoco_warp._src.io import mujoco_octree_to_warp_volume
-    v = mujoco_octree_to_warp_volume(mjm, m)
     m.opt.ls_parallel = _LS_PARALLEL.value
     if _BROADPHASE.value is not None:
       m.opt.broadphase = _BROADPHASE.value
@@ -153,7 +151,6 @@ def _main(argv: Sequence[str]) -> None:
       elapsed = time.time() - start
       if elapsed < mjm.opt.timestep:
         time.sleep(mjm.opt.timestep - elapsed)
-      print("volume:", v[0].id)
 
 
 def main():
