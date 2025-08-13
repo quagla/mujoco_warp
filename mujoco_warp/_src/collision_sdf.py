@@ -127,46 +127,84 @@ def user_sdf_grad(p: wp.vec3, attr: wp.vec3, sdf_type: int) -> wp.vec3:
 
 @wp.func
 def sample_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> float:
+    vmin = volume_data.vmin
+    vmax = volume_data.vmax
     resolution = 64
-    r = xyz - volume_data.center
-    q = wp.vec3(wp.abs(r[0]) - volume_data.half_size[0], wp.abs(r[1]) - volume_data.half_size[1], wp.abs(r[2]) - volume_data.half_size[2])
-    if q[0] > 0.0 or q[1] > 0.0 or q[2] > 0.0:
+    center = (vmax + vmin) / 2.0
+    half_size = (vmax - vmin) / 2.0
+    
+    r = xyz - center
+    q = wp.vec3(wp.abs(r[0]) - half_size[0], wp.abs(r[1]) - half_size[1], wp.abs(r[2]) - half_size[2])
+    
+    if q[0] <= 0.0 and q[1] <= 0.0 and q[2] <= 0.0:
+      range_vec = vmax - vmin
+      normalized_x = (xyz[0] - vmin[0]) / range_vec[0]
+      normalized_y = (xyz[1] - vmin[1]) / range_vec[1] 
+      normalized_z = (xyz[2] - vmin[2]) / range_vec[2]
+      res_f = float(resolution - 1)
+      uvw = wp.vec3(normalized_x * res_f, normalized_y * res_f, normalized_z * res_f)
+      sdf = wp.volume_sample_f(volume_data.volume_id, uvw, wp.Volume.LINEAR)
+      return sdf
+
+    else:
+        point = wp.vec3(xyz[0], xyz[1], xyz[2])
         dist_sqr = 0.0
-        if q[0] > 0.0:
+        eps = 1e-4
+        
+        if q[0] >= 0.0:
             dist_sqr += q[0] * q[0]
-        if q[1] > 0.0:
+            if r[0] > 0.0:
+                point = wp.vec3(point[0] - (q[0] + eps), point[1], point[2])
+            else:
+                point = wp.vec3(point[0] + (q[0] + eps), point[1], point[2])
+        
+        if q[1] >= 0.0:
             dist_sqr += q[1] * q[1]
-        if q[2] > 0.0:
+            if r[1] > 0.0:
+                point = wp.vec3(point[0], point[1] - (q[1] + eps), point[2])
+            else:
+                point = wp.vec3(point[0], point[1] + (q[1] + eps), point[2])
+        
+        if q[2] >= 0.0:
             dist_sqr += q[2] * q[2]
+            if r[2] > 0.0:
+                point = wp.vec3(point[0], point[1], point[2] - (q[2] + eps))
+            else:
+                point = wp.vec3(point[0], point[1], point[2] + (q[2] + eps))
+        
         dist0 = wp.sqrt(dist_sqr)
-        return dist0
-    range_vec = volume_data.vmax - volume_data.vmin
-    normalized_x = (xyz[0] - volume_data.vmin[0]) / range_vec[0]
-    normalized_y = (xyz[1] - volume_data.vmin[1]) / range_vec[1] 
-    normalized_z = (xyz[2] - volume_data.vmin[2]) / range_vec[2]
-    res_f = float(resolution - 1)
-    uvw = wp.vec3(normalized_x * res_f, normalized_y * res_f, normalized_z * res_f)
-    sdf = wp.volume_sample_f(volume_data.volume_id, uvw, wp.Volume.LINEAR)
-    return sdf
+        
+        range_vec = vmax - vmin
+        normalized_x = (point[0] - vmin[0]) / range_vec[0]
+        normalized_y = (point[1] - vmin[1]) / range_vec[1] 
+        normalized_z = (point[2] - vmin[2]) / range_vec[2]
+        res_f = float(resolution - 1)
+        uvw = wp.vec3(normalized_x * res_f, normalized_y * res_f, normalized_z * res_f)
+        sdf = wp.volume_sample_f(volume_data.volume_id, uvw, wp.Volume.LINEAR)
+        return dist0 + sdf
 
 @wp.func
 def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
+    vmin = volume_data.vmin
+    vmax = volume_data.vmax
     resolution = 64
-    r = xyz - volume_data.center
-    q = wp.vec3(wp.abs(r[0]) - volume_data.half_size[0], wp.abs(r[1]) - volume_data.half_size[1], wp.abs(r[2]) - volume_data.half_size[2])
+    center = (vmax + vmin) / 2.0
+    half_size = (vmax - vmin) / 2.0
+    r = xyz - center
+    q = wp.vec3(wp.abs(r[0]) - half_size[0], wp.abs(r[1]) - half_size[1], wp.abs(r[2]) - half_size[2])
     if q[0] > 0.0 or q[1] > 0.0 or q[2] > 0.0:
-        h = 1e-6
+        h = 1e-4
         dx = wp.vec3(h, 0.0, 0.0)
         dy = wp.vec3(0.0, h, 0.0)
         dz = wp.vec3(0.0, 0.0, h)
-        grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / ( h)
-        grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / (h)
-        grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / (h)
+        grad_x = (sample_volume_sdf_world(xyz + dx, volume_data ) - sample_volume_sdf_world(xyz, volume_data)) / h
+        grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / h
+        grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / h
         return wp.vec3(grad_x, grad_y, grad_z)
-    range_vec = volume_data.vmax - volume_data.vmin
-    normalized_x = (xyz[0] - volume_data.vmin[0]) / range_vec[0]
-    normalized_y = (xyz[1] - volume_data.vmin[1]) / range_vec[1] 
-    normalized_z = (xyz[2] - volume_data.vmin[2]) / range_vec[2]
+    range_vec = vmax - vmin
+    normalized_x = (xyz[0] - vmin[0]) / range_vec[0]
+    normalized_y = (xyz[1] - vmin[1]) / range_vec[1] 
+    normalized_z = (xyz[2] - vmin[2]) / range_vec[2]
     res_f = float(resolution - 1)
     uvw = wp.vec3(normalized_x * res_f, normalized_y * res_f, normalized_z * res_f)
     gradient = wp.vec3() 
@@ -177,6 +215,7 @@ def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.ve
         gradient[2] * float(resolution - 1) / range_vec[2]
     )
     return world_gradient
+
 
 @wp.func
 def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData) -> float:
