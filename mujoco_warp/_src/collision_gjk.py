@@ -1312,8 +1312,8 @@ def _epa(tolerance: float, epa_iterations: int, pt: Polytope, geom1: Geom, geom2
 
 @wp.func
 def _area4(a: wp.vec3, b: wp.vec3, c: wp.vec3, d: wp.vec3):
- """Computes area of a quadrilateral embedded in 3D space."""
- return 0.5 * wp.norm_l2(wp.cross(a - d, d - b) + wp.cross(b - c, c - a))
+  """Computes area of a quadrilateral embedded in 3D space."""
+  return 0.5 * wp.norm_l2(wp.cross(a - d, d - b) + wp.cross(b - c, c - a))
 
 
 @wp.func
@@ -1344,7 +1344,7 @@ def _polygon_quad(polygon: polyclip, npolygon: int):
           break
         m = m_next
         c = _next(npolygon, c)
-        res = wp.vec4i(a, b ,c, d)
+        res = wp.vec4i(a, b, c, d)
       while True:
         m_next = _area4(polygon[a], polygon[_next(npolygon, b)], polygon[c], polygon[d])
         if m_next <= m:
@@ -1355,10 +1355,11 @@ def _polygon_quad(polygon: polyclip, npolygon: int):
     if b == a:
       b = _next(npolygon, b)
       if c == b:
-       c = _next(npolygon, c)
-       if d == c:
-         d == _next(npolygon, d)
+        c = _next(npolygon, c)
+        if d == c:
+          d == _next(npolygon, d)
   return res
+
 
 # return number (1, 2 or 3) of dimensions of a simplex; reorder vertices if necessary
 @wp.func
@@ -1854,7 +1855,7 @@ def _polygon_clip(face1: polyverts, nface1: int, face2: polyverts, nface2: int, 
 
   if npolygon < 1:
     return 0, witness1, witness2
-  
+
   if npolygon > 4:
     quad = _polygon_quad(polygon, npolygon)
     for i in range(4):
