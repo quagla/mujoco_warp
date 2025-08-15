@@ -142,9 +142,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   # calculate some fields that cannot be easily computed inline
   nlsp = mjm.opt.ls_iterations  # TODO(team): how to set nlsp?
 
-  # unfortunately we must create Data in order to get some model fields like M_rownnz
-  mjd = mujoco.MjData(mjm)
-
   # dof lower triangle row and column indices (used in solver)
   dof_tri_row, dof_tri_col = np.tril_indices(mjm.nv)
 
@@ -182,11 +179,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   for k in range(mjm.nv):
     # skip diagonal rows
-    if mjd.M_rownnz[k] == 1:
+    if mjm.M_rownnz[k] == 1:
       continue
     dof_depth[k] = dof_depth[mjm.dof_parentid[k]] + 1
     i = mjm.dof_parentid[k]
-    diag_k = mjd.M_rowadr[k] + mjd.M_rownnz[k] - 1
+    diag_k = mjm.M_rowadr[k] + mjm.M_rownnz[k] - 1
     Madr_ki = diag_k - 1
     while i > -1:
       qLD_updates.setdefault(dof_depth[i], []).append((i, k, Madr_ki))
@@ -487,10 +484,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     qM_mulm_j=wp.array(qM_mulm_j, dtype=int),
     qM_madr_ij=wp.array(qM_madr_ij, dtype=int),
     qLD_updates=qLD_updates,
-    M_rownnz=wp.array(mjd.M_rownnz, dtype=int),
-    M_rowadr=wp.array(mjd.M_rowadr, dtype=int),
-    M_colind=wp.array(mjd.M_colind, dtype=int),
-    mapM2M=wp.array(mjd.mapM2M, dtype=int),
+    M_rownnz=wp.array(mjm.M_rownnz, dtype=int),
+    M_rowadr=wp.array(mjm.M_rowadr, dtype=int),
+    M_colind=wp.array(mjm.M_colind, dtype=int),
+    mapM2M=wp.array(mjm.mapM2M, dtype=int),
     qM_tiles=qM_tiles,
     body_tree=body_tree,
     body_parentid=wp.array(mjm.body_parentid, dtype=int),
@@ -874,11 +871,11 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
   if nworld < 1 or nworld > MAX_WORLDS:
     raise ValueError(f"nworld must be >= 1 and <= {MAX_WORLDS}")
 
-  if nconmax < 1:
-    raise ValueError("nconmax must be >= 1")
+  if nconmax < 0:
+    raise ValueError("nconmax must be >= 0")
 
-  if njmax < 1:
-    raise ValueError("njmax must be >= 1")
+  if njmax < 0:
+    raise ValueError("njmax must be >= 0")
 
   condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
   condim_max = np.max(condim) if len(condim) > 0 else 0
@@ -1155,11 +1152,11 @@ def put_data(
   if nworld < 1 or nworld > MAX_WORLDS:
     raise ValueError(f"nworld must be >= 1 and <= {MAX_WORLDS}")
 
-  if nconmax < 1:
-    raise ValueError("nconmax must be >= 1")
+  if nconmax < 0:
+    raise ValueError("nconmax must be >= 0")
 
-  if njmax < 1:
-    raise ValueError("njmax must be >= 1")
+  if njmax < 0:
+    raise ValueError("njmax must be >= 0")
 
   if nworld * mjd.ncon > nconmax:
     raise ValueError(f"nconmax overflow (nconmax must be >= {nworld * mjd.ncon})")
