@@ -907,7 +907,7 @@ class Model:
     mesh_polymap: vertex to polygon map                      (nmeshpolymap,)
     volume_ids: wp.array(dtype=wp.uint64)                    (nvolume,)
     volumes: wp.array(dtype=wp.uint64)                       (nvolume,)
-    oct_aabb:wp.array2d(dtype=wp.uint64)                      (nvolume,)
+    oct_aabb: wp.array2d(dtype=wp.uint64)                    (nvolume,)
     eq_type: constraint type (EqType)                        (neq,)
     eq_obj1id: id of object 1                                (neq,)
     eq_obj2id: id of object 2                                (neq,)

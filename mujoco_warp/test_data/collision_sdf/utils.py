@@ -107,7 +107,5 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
 
   mjwarp._src.collision_sdf.user_sdf = user_sdf
   mjwarp._src.collision_sdf.user_sdf_grad = user_sdf_grad
-  mjwarp._src.collision_sdf.user_sdf = user_sdf
-  mjwarp._src.collision_sdf.user_sdf_grad = user_sdf_grad
 
   return sdf_types

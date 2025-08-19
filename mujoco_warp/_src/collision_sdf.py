@@ -254,9 +254,10 @@ def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.ve
     dx = wp.vec3(h, 0.0, 0.0)
     dy = wp.vec3(0.0, h, 0.0)
     dz = wp.vec3(0.0, 0.0, h)
-    grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / h
-    grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / h
-    grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - sample_volume_sdf_world(xyz, volume_data)) / h
+    f = sample_volume_sdf_world(xyz, volume_data)
+    grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - f) / h
+    grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - f) / h
+    grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - f) / h
     return wp.vec3(grad_x, grad_y, grad_z)
   range_vec = vmax - vmin
   normalized_x = (xyz[0] - vmin[0]) / range_vec[0]
@@ -278,8 +279,6 @@ def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.ve
 def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData) -> float:
   if type == int(GeomType.PLANE.value):
     return p[2]
-  elif type == int(GeomType.PLANE.value):
-    return p[2]
   elif type == int(GeomType.SPHERE.value):
     return sphere(p, attr)
   elif type == int(GeomType.BOX.value):
@@ -298,9 +297,6 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
 @wp.func
 def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData) -> wp.vec3:
   if type == int(GeomType.PLANE.value):
-    grad = wp.vec3(0.0, 0.0, 1.0)
-    return grad
-  elif type == int(GeomType.PLANE.value):
     grad = wp.vec3(0.0, 0.0, 1.0)
     return grad
   elif type == int(GeomType.SPHERE.value):
