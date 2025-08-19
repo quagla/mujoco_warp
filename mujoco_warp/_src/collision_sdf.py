@@ -634,10 +634,6 @@ def _sdf_narrowphase(
   rot2 = geom2.rot
   pos1 = geom1.pos
   rot1 = geom1.rot
-  pos2 = geom2.pos
-  rot2 = geom2.rot
-  pos1 = geom1.pos
-  rot1 = geom1.rot
 
   if type1 == int(GeomType.SDF.value) and g1_plugin != -1:
     attr1 = plugin_attr[g1_plugin]
