@@ -29,6 +29,7 @@ from .nut import nut_sdf_grad
 from .torus import torus
 from .torus import torus_sdf_grad
 
+
 class SDFType(enum.Enum):
   """Enum for SDF types."""
 
@@ -75,7 +76,6 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
       sdf_types[SDFType.BOLT.value] = int(m.plugin[i])
     elif name == "tg":
       sdf_types[SDFType.TORUS.value] = int(m.plugin[i])
-
 
     elif name == "gg":
       sdf_types[SDFType.GEAR.value] = int(m.plugin[i])

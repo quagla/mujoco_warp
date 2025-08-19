@@ -96,7 +96,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   plugin_id = np.array(plugin_id)
   plugin_attr = np.array(plugin_attr)
-  
+
   if mjm.nflex > 1:
     raise NotImplementedError("Only one flex is unsupported.")
 
@@ -632,8 +632,8 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_polymapnum=wp.array(mjm.mesh_polymapnum, dtype=int),
     mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
     volume_ids=wp.array(),
-    volumes = tuple(),
-    oct_aabb = wp.array2d(),
+    volumes=tuple(),
+    oct_aabb=wp.array2d(),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -849,55 +849,55 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   mujoco_octree_to_warp_volume(mjm, m)
   return m
 
+
 def mujoco_octree_to_warp_volume(mjm, m):
   volumes = [0] * len(mjm.mesh_octadr)
-  oct_aabbs = [None]* len(mjm.mesh_octadr)
+  oct_aabbs = [None] * len(mjm.mesh_octadr)
   for mesh_id in mjm.geom_dataid:
-      if mesh_id != -1:
-        octree_id = mjm.mesh_octadr[mesh_id]
-        if octree_id != -1:
-          octadr = octree_id
-          resolution = 64
-          oct_child = mjm.oct_child[8*octadr:].reshape(-1, 8)
-          oct_aabb = mjm.oct_aabb[6*octadr:].reshape(-1, 6)
-          oct_coeff = mjm.oct_coeff[8*octadr:].reshape(-1, 8)
-          
-          root_aabb = oct_aabb[0]
-          center = root_aabb[:3]
-          half_size = root_aabb[3:]
-          vmin = center - half_size
-          vmax = center + half_size
-          
-          x = np.linspace(vmin[0], vmax[0], resolution)
-          y = np.linspace(vmin[1], vmax[1], resolution) 
-          z = np.linspace(vmin[2], vmax[2], resolution)
-          
-          sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
-          
-          for i, px in enumerate(x):
-              for j, py in enumerate(y):
-                  for k, pz in enumerate(z):
-                      point = np.array([px, py, pz])
-                      sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
-                      sdf_values[i, j, k] = sdf_val
+    if mesh_id != -1:
+      octree_id = mjm.mesh_octadr[mesh_id]
+      if octree_id != -1:
+        octadr = octree_id
+        resolution = 64
+        oct_child = mjm.oct_child[8 * octadr :].reshape(-1, 8)
+        oct_aabb = mjm.oct_aabb[6 * octadr :].reshape(-1, 6)
+        oct_coeff = mjm.oct_coeff[8 * octadr :].reshape(-1, 8)
 
-          
-          volume = wp.Volume.load_from_numpy(sdf_values)        
-          volumes[mesh_id] = volume
-          oct_aabbs[mesh_id] = [center, half_size]
-    
-  volume_ids = [volume.id if volume!=0 else 0 for volume in volumes]
+        root_aabb = oct_aabb[0]
+        center = root_aabb[:3]
+        half_size = root_aabb[3:]
+        vmin = center - half_size
+        vmax = center + half_size
+
+        x = np.linspace(vmin[0], vmax[0], resolution)
+        y = np.linspace(vmin[1], vmax[1], resolution)
+        z = np.linspace(vmin[2], vmax[2], resolution)
+
+        sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
+
+        for i, px in enumerate(x):
+          for j, py in enumerate(y):
+            for k, pz in enumerate(z):
+              point = np.array([px, py, pz])
+              sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
+              sdf_values[i, j, k] = sdf_val
+
+        volume = wp.Volume.load_from_numpy(sdf_values)
+        volumes[mesh_id] = volume
+        oct_aabbs[mesh_id] = [center, half_size]
+
+  volume_ids = [volume.id if volume != 0 else 0 for volume in volumes]
   m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
-  
+
   processed_aabbs = []
   for aabb in oct_aabbs:
-      if aabb is not None:
-          processed_aabbs.append(aabb)
-      else:
-          zero_center = np.zeros(3, dtype=np.float32)
-          zero_half_size = np.zeros(3, dtype=np.float32) 
-          processed_aabbs.append([zero_center, zero_half_size])
-  
+    if aabb is not None:
+      processed_aabbs.append(aabb)
+    else:
+      zero_center = np.zeros(3, dtype=np.float32)
+      zero_half_size = np.zeros(3, dtype=np.float32)
+      processed_aabbs.append([zero_center, zero_half_size])
+
   aabb_array = np.array(processed_aabbs, dtype=np.float32)
   m.oct_aabb = wp.array2d(data=aabb_array, dtype=wp.vec3)
   m.volumes = tuple(volumes)
@@ -1709,45 +1709,51 @@ def get_data_into(
   result.sensordata[:] = d.sensordata.numpy()
 
 
-
 def sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff):
-    eps = 1e-6
-    node = 0
-    
-    while True:
-        aabb = oct_aabb[node]
-        center = aabb[:3]
-        half_size = aabb[3:]
-        vmin = center - half_size
-        vmax = center + half_size
-        
-        if (point[0] + eps < vmin[0] or point[0] - eps > vmax[0] or
-            point[1] + eps < vmin[1] or point[1] - eps > vmax[1] or  
-            point[2] + eps < vmin[2] or point[2] - eps > vmax[2]):
-            return 1.0
-        
-        coord = (point - vmin) / (vmax - vmin)
-        
-        children = oct_child[node]
-        if np.all(children == -1):
-            sdf = 0.0
-            coeffs = oct_coeff[node]
-            
-            for j in range(8):
-                w = ((coord[0] if (j & 1) else (1 - coord[0])) *
-                     (coord[1] if (j & 2) else (1 - coord[1])) *
-                     (coord[2] if (j & 4) else (1 - coord[2])))
-                sdf += w * coeffs[j]
-            
-            return sdf
-        
-        x_child = 0 if coord[0] >= 0.5 else 1
-        y_child = 0 if coord[1] >= 0.5 else 1
-        z_child = 0 if coord[2] >= 0.5 else 1
-        child_idx = 4*z_child + 2*y_child + x_child
+  eps = 1e-6
+  node = 0
 
-        next_node = children[child_idx]
-        if next_node == -1:
-            return 1.0
+  while True:
+    aabb = oct_aabb[node]
+    center = aabb[:3]
+    half_size = aabb[3:]
+    vmin = center - half_size
+    vmax = center + half_size
 
-        node = next_node 
+    if (
+      point[0] + eps < vmin[0]
+      or point[0] - eps > vmax[0]
+      or point[1] + eps < vmin[1]
+      or point[1] - eps > vmax[1]
+      or point[2] + eps < vmin[2]
+      or point[2] - eps > vmax[2]
+    ):
+      return 1.0
+
+    coord = (point - vmin) / (vmax - vmin)
+
+    children = oct_child[node]
+    if np.all(children == -1):
+      sdf = 0.0
+      coeffs = oct_coeff[node]
+
+      for j in range(8):
+        w = (
+          (coord[0] if (j & 1) else (1 - coord[0]))
+          * (coord[1] if (j & 2) else (1 - coord[1]))
+          * (coord[2] if (j & 4) else (1 - coord[2]))
+        )
+        sdf += w * coeffs[j]
+
+      return sdf
+
+    x_child = 0 if coord[0] >= 0.5 else 1
+    y_child = 0 if coord[1] >= 0.5 else 1
+    z_child = 0 if coord[2] >= 0.5 else 1
+    child_idx = 4 * z_child + 2 * y_child + x_child
+
+    next_node = children[child_idx]
+    if next_node == -1:
+      return 1.0
+
+    node = next_node
