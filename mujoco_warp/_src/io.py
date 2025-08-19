@@ -854,7 +854,7 @@ def mujoco_octree_to_warp_volume(mjm, m):
   volumes = [0] * len(mjm.mesh_octadr)
   oct_aabbs = [None] * len(mjm.mesh_octadr)
   for mesh_id in mjm.geom_dataid:
-    if mesh_id != -1:
+    if mesh_id != -1 and mesh_id < len(mjm.mesh_octadr):
       octree_id = mjm.mesh_octadr[mesh_id]
       if octree_id != -1:
         octadr = octree_id

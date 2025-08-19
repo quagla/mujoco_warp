@@ -223,11 +223,6 @@ def sample_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> float:
 
 @wp.func
 def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
-  center = volume_data.center
-  half_size = volume_data.half_size
-  r = xyz - center
-  q = wp.vec3(wp.abs(r[0]) - half_size[0], wp.abs(r[1]) - half_size[1], wp.abs(r[2]) - half_size[2])
-
   h = 1e-4
   dx = wp.vec3(h, 0.0, 0.0)
   dy = wp.vec3(0.0, h, 0.0)
