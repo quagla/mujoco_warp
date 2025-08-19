@@ -35,7 +35,7 @@ def sample_sdf_kernel(
   # In:
   points: wp.array(dtype=wp.vec3),
   volume_data: VolumeData,
-  # Data out:
+  # Out:
   results_out: wp.array(dtype=float),
 ):
   """Kernel to sample SDF values at given points using Warp volume."""
