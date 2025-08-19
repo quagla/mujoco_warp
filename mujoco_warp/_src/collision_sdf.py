@@ -223,15 +223,26 @@ def sample_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> float:
 
 @wp.func
 def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
-  h = 1e-4
-  dx = wp.vec3(h, 0.0, 0.0)
-  dy = wp.vec3(0.0, h, 0.0)
-  dz = wp.vec3(0.0, 0.0, h)
-  f = sample_volume_sdf_world(xyz, volume_data)
-  grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - f) / h
-  grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - f) / h
-  grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - f) / h
-  return wp.vec3(grad_x, grad_y, grad_z)
+  center = volume_data.center
+  half_size = volume_data.half_size
+  r = xyz - center
+  q = wp.vec3(wp.abs(r[0]) - half_size[0], wp.abs(r[1]) - half_size[1], wp.abs(r[2]) - half_size[2])
+
+  if q[0] > 0.0 or q[1] > 0.0 or q[2] > 0.0:
+    h = 1e-4
+    dx = wp.vec3(h, 0.0, 0.0)
+    dy = wp.vec3(0.0, h, 0.0)
+    dz = wp.vec3(0.0, 0.0, h)
+    f = sample_volume_sdf_world(xyz, volume_data)
+    grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - f) / h
+    grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - f) / h
+    grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - f) / h
+    return wp.vec3(grad_x, grad_y, grad_z)
+
+  uvw = wp.volume_world_to_index(volume_data.volume_id, xyz)
+  gradient = wp.vec3()
+  wp.volume_sample_grad_f(volume_data.volume_id, uvw, wp.Volume.LINEAR, gradient)
+  return gradient
 
 
 @wp.func
@@ -254,7 +265,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
 
 
 @wp.func
-def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData) -> wp.vec3:
+def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData = VolumeData()) -> wp.vec3:
   if type == int(GeomType.PLANE.value):
     grad = wp.vec3(0.0, 0.0, 1.0)
     return grad
