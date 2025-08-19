@@ -11,12 +11,11 @@ authors = [
 ]
 description = "MuJoCo Warp (MJWarp)"
 readme = {file = "README.md", content-type = "text/markdown"}
-license = {text = "Apache License 2.0"}
+license = "Apache-2.0"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -77,12 +76,12 @@ force-single-line = true
 single-line-exclusions = ["typing"]
 
 [tool.ruff.lint.pycodestyle]
-max-doc-length = 92
+max-doc-length = 100
 max-line-length = 128
 
 [tool.ruff.format]
 docstring-code-format = true
-docstring-code-line-length = 88
+docstring-code-line-length = 100
 
 [tool.setuptools]
 package-data = { "mujoco_warp" = ["test_data/**"] }

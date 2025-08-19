@@ -15,6 +15,8 @@
 
 """Tests for sensor functions."""
 
+import itertools
+
 import mujoco
 import numpy as np
 import warp as wp
@@ -326,6 +328,7 @@ class SensorTest(parameterized.TestCase):
           </keyframe>
         </mujoco>
       """,
+        keyframe=keyframe,
       )
 
       d.sensordata.zero_()
@@ -404,6 +407,63 @@ class SensorTest(parameterized.TestCase):
     mjwarp.energy_vel(m, d)
 
     _assert_eq(d.energy.numpy()[0][1], mjd.energy[1], "kinetic energy")
+
+  @parameterized.parameters(
+    'type="sphere" size=".1"',
+    'type="capsule" size=".1 .1" euler="0 89 89"',
+    'type="box" size=".1 .11 .12" euler=".02 .05 .1"',
+  )
+  def test_contact_sensor(self, geom):
+    """Test contact sensor."""
+    # create contact sensors
+    contact_sensor = ""
+
+    # data combinations
+    datas = ["found", "force dist normal", "torque pos tangent", "found force torque dist pos normal tangent"]
+
+    for geoms in [
+      'geom1="plane" geom2="geom"',
+      'geom1="geom" geom2="plane"',
+      'geom1="sphere" geom2="plane"',
+      'geom1="geom" geom2="sphere"',
+    ]:
+      for num in [1, 3, 5]:
+        for reduce in ["mindist", "maxforce"]:
+          for data in datas:
+            contact_sensor += f'<contact {geoms} num="{num}" reduce="{reduce}" data="{data}"/>'
+
+    _MJCF = f"""
+    <mujoco>
+      <compiler angle="degree"/>
+      <option cone="pyramidal"/>
+      <worldbody>
+        <geom name="plane" type="plane" size="10 10 .001"/>
+        <body>
+          <geom name="geom" {geom}/>
+          <joint type="slide" axis="0 0 1"/>
+        </body>
+        <body>
+          <geom name="sphere" type="sphere" size=".1"/>
+          <joint type="slide" axis="0 0 1"/>
+        </body>
+      </worldbody>
+      <keyframe>
+        <key qpos=".09 1"/>
+      </keyframe>
+      <sensor>
+        {contact_sensor}
+      </sensor>
+    </mujoco>
+    """
+
+    _, mjd, m, d = test_util.fixture(xml=_MJCF, keyframe=0)
+
+    d.sensordata.zero_()
+    mjwarp.forward(m, d)
+
+    sensordata = d.sensordata.numpy()[0]
+    _assert_eq(sensordata, mjd.sensordata, "sensordata")
+    self.assertTrue(sensordata.any())  # check that sensordata is not empty
 
 
 if __name__ == "__main__":

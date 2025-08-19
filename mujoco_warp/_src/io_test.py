@@ -23,10 +23,20 @@ import mujoco
 import numpy as np
 import warp as wp
 from absl.testing import absltest
+from absl.testing import parameterized
 
 import mujoco_warp as mjwarp
 
 from . import test_util
+from .io import MAX_WORLDS
+
+_IO_TEST_MODELS = (
+  "pendula.xml",
+  "collision_sdf/tactile.xml",
+  "flex/cloth.xml",
+  "actuation/tendon_force_limit.xml",
+  "hfield/hfield.xml",
+)
 
 
 def _dims_match(test_obj, d1: Any, d2: Any, prefix: str = ""):
@@ -41,8 +51,8 @@ def _dims_match(test_obj, d1: Any, d2: Any, prefix: str = ""):
 
     if isinstance(f1.type, wp.types.array) or isinstance(f2.type, wp.types.array):
       s1, s2 = a1.shape, a2.shape
-      test_obj.assertEqual(len(s1), len(s2), full_name + f" dims mismatch. Got {s1} and {s2}.")
-      test_obj.assertSequenceAlmostEqual(s1, s2, full_name + f" dims mismatch. Got {s1} and {s2}.")
+      test_obj.assertEqual(len(s1), len(s2), f"{full_name} dims mismatch. Got {s1} and {s2}.")
+      test_obj.assertEqual(s1, s2, f"{full_name} dims mismatch. Got {s1} and {s2}.")
 
 
 def _get_np_scalar_type(val: Any) -> Optional[Union[bool, int, float]]:
@@ -173,7 +183,7 @@ def _leading_dims_scale_w_nworld(test_obj, d1: Any, d2: Any, nworld1: int, nworl
       test_obj.assertEqual(s1, nworld1, full_name + f" has leading dim {s1} with nworld={nworld1}. {msg}")
 
 
-class IOTest(absltest.TestCase):
+class IOTest(parameterized.TestCase):
   def test_make_put_data(self):
     """Tests that make_data and put_data are producing the same shapes for all arrays."""
     mjm, _, _, d = test_util.fixture("pendula.xml")
@@ -295,11 +305,11 @@ class IOTest(absltest.TestCase):
     m1 = mjwarp.put_model(mjm)
 
     self.assertTrue(hasattr(m1.geom_pos, "_is_batched"))
-    self.assertEqual(m1.geom_pos.shape[0], 1)
+    self.assertEqual(m1.geom_pos.shape[0], MAX_WORLDS)
     self.assertEqual(m1.geom_pos.strides[0], 0)
     self.assertLen(m1.geom_pos.strides, m1.geom_pos.ndim)
     self.assertTrue(hasattr(m1.opt.gravity, "_is_batched"))
-    self.assertEqual(m1.opt.gravity.shape[0], 1)
+    self.assertEqual(m1.opt.gravity.shape[0], MAX_WORLDS)
     self.assertEqual(m1.opt.gravity.strides[0], 0)
     self.assertLen(m1.opt.gravity.strides, m1.opt.gravity.ndim)
     self.assertFalse(hasattr(m1.body_parentid, "_is_batched"))
@@ -307,18 +317,20 @@ class IOTest(absltest.TestCase):
     self.assertGreater(m1.body_parentid.strides[0], 0)
     self.assertLen(m1.body_parentid.strides, m1.body_parentid.ndim)
 
-  def test_put_data_nworld_array(self):
+  @parameterized.parameters(*_IO_TEST_MODELS)
+  def test_put_data_nworld_array(self, xml):
     """Tests that put_data arrays that scale with nworld have leading dim nworld."""
-    mjm, mjd, _, _ = test_util.fixture("pendula.xml")
-    d1 = mjwarp.put_data(mjm, mjd, nworld=1, nconmax=1_000, njmax=1_000)
-    dn = mjwarp.put_data(mjm, mjd, nworld=133, nconmax=1_000, njmax=1_000)
+    mjm, mjd, _, _ = test_util.fixture(xml)
+    d1 = mjwarp.put_data(mjm, mjd, nworld=1, nconmax=3_000, njmax=3_000)
+    dn = mjwarp.put_data(mjm, mjd, nworld=133, nconmax=3_000, njmax=3_000)
     _leading_dims_scale_w_nworld(self, d1, dn, 1, 133)
 
-  def test_make_data_nworld_array(self):
+  @parameterized.parameters(*_IO_TEST_MODELS)
+  def test_make_data_nworld_array(self, xml):
     """Tests that make_data arrays that scale with nworld have leading dim nworld."""
-    mjm, *_ = test_util.fixture("pendula.xml")
-    d1 = mjwarp.make_data(mjm, nworld=1, nconmax=1_000, njmax=1_000)
-    dn = mjwarp.make_data(mjm, nworld=133, nconmax=1_000, njmax=1_000)
+    mjm, *_ = test_util.fixture(xml)
+    d1 = mjwarp.make_data(mjm, nworld=1, nconmax=3_000, njmax=3_000)
+    dn = mjwarp.make_data(mjm, nworld=133, nconmax=3_000, njmax=3_000)
     _leading_dims_scale_w_nworld(self, d1, dn, 1, 133)
 
   def test_public_api_jax_compat(self):
@@ -326,9 +338,10 @@ class IOTest(absltest.TestCase):
     _check_annotation_compat(mjwarp.Model.__annotations__, "Model.")
     _check_annotation_compat(mjwarp.Data.__annotations__, "Data.")
 
-  def test_types_match_annotations(self):
+  @parameterized.parameters(*_IO_TEST_MODELS)
+  def test_types_match_annotations(self, xml):
     """Tests that the types of dataclass fields match the annotations."""
-    mjm, _, m, d = test_util.fixture("pendula.xml")
+    mjm, _, m, d = test_util.fixture(xml)
 
     _check_type_matches_annotation(self, m, "Model.")
     _check_type_matches_annotation(self, d, "Data.")
@@ -336,17 +349,45 @@ class IOTest(absltest.TestCase):
     d = mjwarp.make_data(mjm, nworld=2)
     _check_type_matches_annotation(self, d, "Data.")
 
-  def test_make_put_data_dims_match(self):
+  @parameterized.parameters(*_IO_TEST_MODELS)
+  def test_make_put_data_dims_match(self, xml):
     """Tests that make_data and put_data have matching dimensions."""
-    mjm, mjd, _, _ = test_util.fixture("pendula.xml")
-    dm2 = mjwarp.make_data(mjm, nworld=2, nconmax=13, njmax=42)
-    dm3 = mjwarp.make_data(mjm, nworld=3, nconmax=13, njmax=42)
+    mjm, mjd, _, _ = test_util.fixture(xml)
+    dm2 = mjwarp.make_data(mjm, nworld=2, nconmax=3_000, njmax=4_200)
+    dm3 = mjwarp.make_data(mjm, nworld=3, nconmax=3_000, njmax=4_200)
 
-    dp2 = mjwarp.put_data(mjm, mjd, nworld=2, nconmax=13, njmax=42)
-    dp3 = mjwarp.put_data(mjm, mjd, nworld=3, nconmax=13, njmax=42)
+    dp2 = mjwarp.put_data(mjm, mjd, nworld=2, nconmax=3_000, njmax=4_200)
+    dp3 = mjwarp.put_data(mjm, mjd, nworld=3, nconmax=3_000, njmax=4_200)
 
     _dims_match(self, dm2, dp2)
     _dims_match(self, dm3, dp3)
+
+  @parameterized.parameters(
+    '<contact geom1="plane"/>',
+    '<contact geom2="plane"/>',
+    '<contact site="site"/>',
+    '<contact reduce="netforce"/>',
+    '<contact geom1="plane" geom2="sphere"/>',
+  )
+  def test_contact_sensor(self, contact_sensor):
+    mjm = mujoco.MjModel.from_xml_string(f"""
+      <mujoco>
+        <worldbody>
+          <site name="site"/>
+          <geom name="plane" type="plane" size="10 10 .001"/>
+          <body name="body">
+            <geom name="sphere" size=".1"/>
+            <joint type="slide" axis="0 0 1"/>
+          </body>
+        </worldbody>
+        <sensor>
+          {contact_sensor}
+        </sensor>
+      </mujoco>
+    """)
+
+    with self.assertRaises(NotImplementedError):
+      mjwarp.put_model(mjm)
 
 
 if __name__ == "__main__":

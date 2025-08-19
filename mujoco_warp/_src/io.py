@@ -27,6 +27,9 @@ from . import types
 # number of max iterations to run GJK/EPA
 MJ_CCD_ITERATIONS = 12
 
+# max number of worlds supported
+MAX_WORLDS = 2**24
+
 
 def _hfield_geom_pair(mjm: mujoco.MjModel) -> Tuple[int, np.array]:
   geom1, geom2 = np.triu_indices(mjm.ngeom, k=1)
@@ -115,6 +118,20 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   if mjm.opt.noslip_iterations > 0:
     raise NotImplementedError(f"noslip solver not implemented.")
 
+  # contact sensor
+  is_contact_sensor = mjm.sensor_type == types.SensorType.CONTACT
+  if is_contact_sensor.any():
+    # matching
+    if (
+      (mjm.sensor_objtype[is_contact_sensor] != types.ObjType.GEOM)
+      | (mjm.sensor_reftype[is_contact_sensor] != types.ObjType.GEOM)
+    ).any():
+      raise NotImplementedError("Contact sensor: only geom1-geom2 matching is implemented.")
+
+    # reduction
+    if (~((mjm.sensor_intprm[is_contact_sensor, 1] == 1) | (mjm.sensor_intprm[is_contact_sensor, 1] == 2))).any():
+      raise NotImplementedError(f"Contact sensor: only mindist and maxforce reduction are implemented.")
+
   # TODO(team): remove after _update_gradient for Newton uses tile operations for islands
   nv_max = 60
   if mjm.nv > nv_max and mjm.opt.jacobian == mujoco.mjtJacobian.mjJAC_DENSE:
@@ -124,9 +141,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   # calculate some fields that cannot be easily computed inline
   nlsp = mjm.opt.ls_iterations  # TODO(team): how to set nlsp?
-
-  # unfortunately we must create Data in order to get some model fields like M_rownnz
-  mjd = mujoco.MjData(mjm)
 
   # dof lower triangle row and column indices (used in solver)
   dof_tri_row, dof_tri_col = np.tril_indices(mjm.nv)
@@ -165,11 +179,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   for k in range(mjm.nv):
     # skip diagonal rows
-    if mjd.M_rownnz[k] == 1:
+    if mjm.M_rownnz[k] == 1:
       continue
     dof_depth[k] = dof_depth[mjm.dof_parentid[k]] + 1
     i = mjm.dof_parentid[k]
-    diag_k = mjd.M_rowadr[k] + mjd.M_rownnz[k] - 1
+    diag_k = mjm.M_rowadr[k] + mjm.M_rownnz[k] - 1
     Madr_ki = diag_k - 1
     while i > -1:
       qLD_updates.setdefault(dof_depth[i], []).append((i, k, Madr_ki))
@@ -366,10 +380,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     array._is_batched = True
     if not expand_dim:
       array.strides = (0,) + array.strides[1:]
+      array.shape = (MAX_WORLDS,) + array.shape[1:]
       return array
     array.strides = (0,) + array.strides
     array.ndim += 1
-    array.shape = (1,) + array.shape
+    array.shape = (MAX_WORLDS,) + array.shape
     return array
 
   # rangefinder
@@ -377,6 +392,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   sensor_rangefinder_adr = np.nonzero(is_rangefinder)[0]
   rangefinder_sensor_adr = np.full(mjm.nsensor, -1)
   rangefinder_sensor_adr[sensor_rangefinder_adr] = np.arange(len(sensor_rangefinder_adr))
+
+  # contact sensor
+  sensor_adr_to_contact_adr = np.clip(np.cumsum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT) - 1, a_min=0, a_max=None)
 
   # TODO(team): improve heuristic for selecting broadphase routine
   if mjm.ngeom > 1000:
@@ -415,6 +433,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     nwrap=mjm.nwrap,
     nsensor=mjm.nsensor,
     nsensordata=mjm.nsensordata,
+    nsensortaxel=sum(mjm.mesh_vertnum[mjm.sensor_objid[mjm.sensor_type == mujoco.mjtSensor.mjSENS_TACTILE]]),
     nmeshvert=mjm.nmeshvert,
     nmeshface=mjm.nmeshface,
     nmeshgraph=mjm.nmeshgraph,
@@ -443,6 +462,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       impratio=create_nmodel_batched_array(np.array(mjm.opt.impratio), dtype=float, expand_dim=False),
       is_sparse=bool(is_sparse),
       ls_parallel=False,
+      ls_parallel_min_step=1.0e-6,  # TODO(team): determine good default setting
       gjk_iterations=MJ_CCD_ITERATIONS,
       epa_iterations=MJ_CCD_ITERATIONS,
       broadphase=int(broadphase),
@@ -465,10 +485,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     qM_mulm_j=wp.array(qM_mulm_j, dtype=int),
     qM_madr_ij=wp.array(qM_madr_ij, dtype=int),
     qLD_updates=qLD_updates,
-    M_rownnz=wp.array(mjd.M_rownnz, dtype=int),
-    M_rowadr=wp.array(mjd.M_rowadr, dtype=int),
-    M_colind=wp.array(mjd.M_colind, dtype=int),
-    mapM2M=wp.array(mjd.mapM2M, dtype=int),
+    M_rownnz=wp.array(mjm.M_rownnz, dtype=int),
+    M_rowadr=wp.array(mjm.M_rowadr, dtype=int),
+    M_colind=wp.array(mjm.M_colind, dtype=int),
+    mapM2M=wp.array(mjm.mapM2M, dtype=int),
     qM_tiles=qM_tiles,
     body_tree=body_tree,
     body_parentid=wp.array(mjm.body_parentid, dtype=int),
@@ -590,15 +610,18 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     flex_elemedge=wp.array(mjm.flex_elemedge, dtype=int),
     flexedge_length0=wp.array(mjm.flexedge_length0, dtype=float),
     flex_stiffness=wp.array(mjm.flex_stiffness.flatten(), dtype=float),
-    flex_bending=wp.array(mjm.flex_bending, dtype=wp.mat44f),
+    flex_bending=wp.array(mjm.flex_bending.flatten(), dtype=float),
     flex_damping=wp.array(mjm.flex_damping, dtype=float),
     mesh_vertadr=wp.array(mjm.mesh_vertadr, dtype=int),
     mesh_vertnum=wp.array(mjm.mesh_vertnum, dtype=int),
     mesh_vert=wp.array(mjm.mesh_vert, dtype=wp.vec3),
+    mesh_normaladr=wp.array(mjm.mesh_normaladr, dtype=int),
+    mesh_normal=wp.array(mjm.mesh_normal, dtype=wp.vec3),
     mesh_faceadr=wp.array(mjm.mesh_faceadr, dtype=int),
     mesh_face=wp.array(mjm.mesh_face, dtype=wp.vec3i),
     mesh_graphadr=wp.array(mjm.mesh_graphadr, dtype=int),
     mesh_graph=wp.array(mjm.mesh_graph, dtype=int),
+    mesh_quat=wp.array(mjm.mesh_quat, dtype=wp.quat),
     mesh_polynum=wp.array(mjm.mesh_polynum, dtype=int),
     mesh_polyadr=wp.array(mjm.mesh_polyadr, dtype=int),
     mesh_polynormal=wp.array(mjm.mesh_polynormal, dtype=wp.vec3),
@@ -712,6 +735,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     sensor_objid=wp.array(mjm.sensor_objid, dtype=int),
     sensor_reftype=wp.array(mjm.sensor_reftype, dtype=int),
     sensor_refid=wp.array(mjm.sensor_refid, dtype=int),
+    sensor_intprm=wp.array(mjm.sensor_intprm, dtype=int),
     sensor_dim=wp.array(mjm.sensor_dim, dtype=int),
     sensor_adr=wp.array(mjm.sensor_adr, dtype=int),
     sensor_cutoff=wp.array(mjm.sensor_cutoff, dtype=float),
@@ -779,6 +803,8 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       mjm.sensor_type,
       [mujoco.mjtSensor.mjSENS_SUBTREELINVEL, mujoco.mjtSensor.mjSENS_SUBTREEANGMOM],
     ).any(),
+    sensor_contact_adr=wp.array(np.nonzero(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)[0], dtype=int),
+    sensor_adr_to_contact_adr=wp.array(sensor_adr_to_contact_adr, dtype=int),
     sensor_rne_postconstraint=np.isin(
       mjm.sensor_type,
       [
@@ -801,6 +827,24 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     block_dim=types.BlockDim(),
     geom_pair_type_count=tuple(geom_type_pair_count),
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
+    taxel_vertadr=wp.array(
+      [
+        j + mjm.mesh_vertadr[mjm.sensor_objid[i]]
+        for i in range(mjm.nsensor)
+        if mjm.sensor_type[i] == mujoco.mjtSensor.mjSENS_TACTILE
+        for j in range(mjm.mesh_vertnum[mjm.sensor_objid[i]])
+      ],
+      dtype=int,
+    ),
+    taxel_sensorid=wp.array(
+      [
+        i
+        for i in range(mjm.nsensor)
+        if mjm.sensor_type[i] == mujoco.mjtSensor.mjSENS_TACTILE
+        for j in range(mjm.mesh_vertnum[mjm.sensor_objid[i]])
+      ],
+      dtype=int,
+    ),
   )
   mujoco_octree_to_warp_volume(mjm, m)
   return m
@@ -867,28 +911,44 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     mjm (mujoco.MjModel): The model containing kinematic and dynamic information (host).
     nworld (int, optional): Number of worlds. Defaults to 1.
     nconmax (int, optional): Maximum number of contacts for all worlds. Defaults to -1.
-    njmax (int, optional): Maximum number of constraints for all worlds. Defaults to -1.
+    njmax (int, optional): Maximum number of constraints per world. Defaults to -1.
 
   Returns:
     Data: The data object containing the current state and output arrays (device).
   """
+
   # TODO(team): move to Model?
   if nconmax == -1:
     # TODO(team): heuristic for nconmax
     nconmax = nworld * 20
   if njmax == -1:
     # TODO(team): heuristic for njmax
-    njmax = nworld * 20 * 6
+    njmax = 20 * 6
+
+  if nworld < 1 or nworld > MAX_WORLDS:
+    raise ValueError(f"nworld must be >= 1 and <= {MAX_WORLDS}")
+
+  if nconmax < 0:
+    raise ValueError("nconmax must be >= 0")
+
+  if njmax < 0:
+    raise ValueError("njmax must be >= 0")
+
   condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
   condim_max = np.max(condim) if len(condim) > 0 else 0
 
   if mujoco.mj_isSparse(mjm):
     qM = wp.zeros((nworld, 1, mjm.nM), dtype=float)
-    qLD = wp.zeros((nworld, 1, mjm.nM), dtype=float)
+    qLD = wp.zeros((nworld, 1, mjm.nC), dtype=float)
+    qM_integration = wp.zeros((nworld, 1, mjm.nM), dtype=float)
+    qLD_integration = wp.zeros((nworld, 1, mjm.nM), dtype=float)
   else:
     qM = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
     qLD = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
+    qM_integration = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
+    qLD_integration = wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float)
 
+  nsensorcontact = np.sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)
   nrangefinder = sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_RANGEFINDER)
 
   return types.Data(
@@ -897,15 +957,16 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     njmax=njmax,
     solver_niter=wp.zeros(nworld, dtype=int),
     ncon=wp.zeros(1, dtype=int),
+    ncon_world=wp.zeros(nworld, dtype=int),
     ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
-    ne=wp.zeros(1, dtype=int),
-    ne_connect=wp.zeros(1, dtype=int),  # warp only
-    ne_weld=wp.zeros(1, dtype=int),  # warp only
-    ne_jnt=wp.zeros(1, dtype=int),  # warp only
-    ne_ten=wp.zeros(1, dtype=int),  # warp only
-    nf=wp.zeros(1, dtype=int),
-    nl=wp.zeros(1, dtype=int),
-    nefc=wp.zeros(1, dtype=int),
+    ne=wp.zeros(nworld, dtype=int),
+    ne_connect=wp.zeros(nworld, dtype=int),  # warp only
+    ne_weld=wp.zeros(nworld, dtype=int),  # warp only
+    ne_jnt=wp.zeros(nworld, dtype=int),  # warp only
+    ne_ten=wp.zeros(nworld, dtype=int),  # warp only
+    nf=wp.zeros(nworld, dtype=int),
+    nl=wp.zeros(nworld, dtype=int),
+    nefc=wp.zeros(nworld, dtype=int),
     nsolving=wp.zeros(1, dtype=int),  # warp only
     time=wp.zeros(nworld, dtype=float),
     energy=wp.zeros(nworld, dtype=wp.vec2),
@@ -988,18 +1049,17 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       worldid=wp.zeros((nconmax,), dtype=int),
     ),
     efc=types.Constraint(
-      worldid=wp.zeros((njmax,), dtype=int),
-      type=wp.zeros((njmax,), dtype=int),
-      id=wp.zeros((njmax,), dtype=int),
-      J=wp.zeros((njmax, mjm.nv), dtype=float),
-      pos=wp.zeros((njmax,), dtype=float),
-      margin=wp.zeros((njmax,), dtype=float),
-      D=wp.zeros((njmax,), dtype=float),
-      vel=wp.zeros((njmax,), dtype=float),
-      aref=wp.zeros((njmax,), dtype=float),
-      frictionloss=wp.zeros((njmax,), dtype=float),
-      force=wp.zeros((njmax,), dtype=float),
-      Jaref=wp.zeros((njmax,), dtype=float),
+      type=wp.zeros((nworld, njmax), dtype=int),
+      id=wp.zeros((nworld, njmax), dtype=int),
+      J=wp.zeros((nworld, njmax, mjm.nv), dtype=float),
+      pos=wp.zeros((nworld, njmax), dtype=float),
+      margin=wp.zeros((nworld, njmax), dtype=float),
+      D=wp.zeros((nworld, njmax), dtype=float),
+      vel=wp.zeros((nworld, njmax), dtype=float),
+      aref=wp.zeros((nworld, njmax), dtype=float),
+      frictionloss=wp.zeros((nworld, njmax), dtype=float),
+      force=wp.zeros((nworld, njmax), dtype=float),
+      Jaref=wp.zeros((nworld, njmax), dtype=float),
       Ma=wp.zeros((nworld, mjm.nv), dtype=float),
       grad=wp.zeros((nworld, mjm.nv), dtype=float),
       cholesky_L_tmp=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
@@ -1011,19 +1071,17 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       gauss=wp.zeros((nworld,), dtype=float),
       cost=wp.zeros((nworld,), dtype=float),
       prev_cost=wp.zeros((nworld,), dtype=float),
-      active=wp.zeros((njmax,), dtype=bool),
+      state=wp.zeros((nworld, njmax), dtype=int),
       gtol=wp.zeros((nworld,), dtype=float),
       mv=wp.zeros((nworld, mjm.nv), dtype=float),
-      jv=wp.zeros((njmax,), dtype=float),
-      quad=wp.zeros((njmax,), dtype=wp.vec3f),
+      jv=wp.zeros((nworld, njmax), dtype=float),
+      quad=wp.zeros((nworld, njmax), dtype=wp.vec3f),
       quad_gauss=wp.zeros((nworld,), dtype=wp.vec3f),
       h=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
       alpha=wp.zeros((nworld,), dtype=float),
       prev_grad=wp.zeros((nworld, mjm.nv), dtype=float),
       prev_Mgrad=wp.zeros((nworld, mjm.nv), dtype=float),
       beta=wp.zeros((nworld,), dtype=float),
-      beta_num=wp.zeros((nworld,), dtype=float),
-      beta_den=wp.zeros((nworld,), dtype=float),
       done=wp.zeros((nworld,), dtype=bool),
       # linesearch
       ls_done=wp.zeros((nworld,), dtype=bool),
@@ -1039,13 +1097,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       mid=wp.zeros((nworld,), dtype=wp.vec3),
       mid_alpha=wp.zeros((nworld,), dtype=float),
       cost_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=float),
-      quad_total_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=wp.vec3f),
-      # elliptic cone
-      u=wp.zeros((nconmax,), dtype=types.vec6),
-      uu=wp.zeros((nconmax,), dtype=float),
-      uv=wp.zeros((nconmax,), dtype=float),
-      vv=wp.zeros((nconmax,), dtype=float),
-      condim=wp.zeros((njmax,), dtype=int),
     ),
     # RK4
     qpos_t0=wp.zeros((nworld, mjm.nq), dtype=float),
@@ -1058,8 +1109,8 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     qfrc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     qacc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     act_vel_integration=wp.zeros((nworld, mjm.nu), dtype=float),
-    qM_integration=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
-    qLD_integration=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
+    qM_integration=qM_integration,
+    qLD_integration=qLD_integration,
     qLDiagInv_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     # sweep-and-prune broadphase
     sap_projection_lower=wp.zeros((nworld, mjm.ngeom, 2), dtype=float),
@@ -1109,6 +1160,10 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
+    sensor_contact_nmatch=wp.zeros((nworld, nsensorcontact), dtype=int),
+    sensor_contact_matchid=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=int),
+    sensor_contact_criteria=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
+    sensor_contact_direction=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),
@@ -1136,7 +1191,7 @@ def put_data(
     mjd (mujoco.MjData): The data object containing current state and output arrays (host).
     nworld (int, optional): The number of worlds. Defaults to 1.
     nconmax (int, optional): The maximum number of contacts for all worlds. Defaults to -1.
-    njmax (int, optional): The maximum number of constraints for all worlds. Defaults to -1.
+    njmax (int, optional): The maximum number of constraints per world. Defaults to -1.
 
   Returns:
     Data: The data object containing the current state and output arrays (device).
@@ -1147,24 +1202,24 @@ def put_data(
 
   nworld = nworld or 1
   # TODO(team): better heuristic for nconmax
-  nconmax = nconmax or max(512, mjd.ncon * nworld)
+  nconmax = nconmax or max(512, 4 * mjd.ncon * nworld)
   # TODO(team): better heuristic for njmax
-  njmax = njmax or max(512, mjd.nefc * nworld)
+  njmax = njmax or max(5, 4 * mjd.nefc)
 
-  if nworld < 1:
-    raise ValueError("nworld must be >= 1")
+  if nworld < 1 or nworld > MAX_WORLDS:
+    raise ValueError(f"nworld must be >= 1 and <= {MAX_WORLDS}")
 
-  if nconmax < 1:
-    raise ValueError("nconmax must be >= 1")
+  if nconmax < 0:
+    raise ValueError("nconmax must be >= 0")
 
-  if njmax < 1:
-    raise ValueError("njmax must be >= 1")
+  if njmax < 0:
+    raise ValueError("njmax must be >= 0")
 
   if nworld * mjd.ncon > nconmax:
     raise ValueError(f"nconmax overflow (nconmax must be >= {nworld * mjd.ncon})")
 
-  if nworld * mjd.nefc > njmax:
-    raise ValueError(f"njmax overflow (njmax must be >= {nworld * mjd.nefc})")
+  if mjd.nefc > njmax:
+    raise ValueError(f"njmax overflow (njmax must be >= {mjd.nefc})")
 
   # calculate some fields that cannot be easily computed inline:
   if mujoco.mj_isSparse(mjm):
@@ -1221,8 +1276,36 @@ def put_data(
         contact_efc_address[i * mjd.ncon + j, k] = mjd.nefc * i + efc_address + k
 
   contact_worldid = np.pad(np.repeat(np.arange(nworld), mjd.ncon), (0, nconmax - nworld * mjd.ncon))
-  efc_worldid = np.pad(np.repeat(np.arange(nworld), mjd.nefc), (0, njmax - nworld * mjd.nefc))
 
+  ne_connect = int(3 * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_CONNECT) & mjd.eq_active))
+  ne_weld = int(6 * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_WELD) & mjd.eq_active))
+  ne_jnt = int(np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_JOINT) & mjd.eq_active))
+  ne_ten = int(np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_TENDON) & mjd.eq_active))
+
+  efc_type_fill = np.zeros((nworld, njmax))
+  efc_id_fill = np.zeros((nworld, njmax))
+  efc_J_fill = np.zeros((nworld, njmax, mjm.nv))
+  efc_D_fill = np.zeros((nworld, njmax))
+  efc_vel_fill = np.zeros((nworld, njmax))
+  efc_pos_fill = np.zeros((nworld, njmax))
+  efc_aref_fill = np.zeros((nworld, njmax))
+  efc_frictionloss_fill = np.zeros((nworld, njmax))
+  efc_force_fill = np.zeros((nworld, njmax))
+  efc_margin_fill = np.zeros((nworld, njmax))
+
+  nefc = mjd.nefc
+  efc_type_fill[:, :nefc] = np.tile(mjd.efc_type, (nworld, 1))
+  efc_id_fill[:, :nefc] = np.tile(mjd.efc_id, (nworld, 1))
+  efc_J_fill[:, :nefc, :] = np.tile(efc_J, (nworld, 1, 1))
+  efc_D_fill[:, :nefc] = np.tile(mjd.efc_D, (nworld, 1))
+  efc_vel_fill[:, :nefc] = np.tile(mjd.efc_vel, (nworld, 1))
+  efc_pos_fill[:, :nefc] = np.tile(mjd.efc_pos, (nworld, 1))
+  efc_aref_fill[:, :nefc] = np.tile(mjd.efc_aref, (nworld, 1))
+  efc_frictionloss_fill[:, :nefc] = np.tile(mjd.efc_frictionloss, (nworld, 1))
+  efc_force_fill[:, :nefc] = np.tile(mjd.efc_force, (nworld, 1))
+  efc_margin_fill[:, :nefc] = np.tile(mjd.efc_margin, (nworld, 1))
+
+  nsensorcontact = np.sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)
   nrangefinder = sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_RANGEFINDER)
 
   # some helper functions to simplify the data field definitions below
@@ -1256,15 +1339,16 @@ def put_data(
     njmax=njmax,
     solver_niter=tile(mjd.solver_niter[0]),
     ncon=arr([mjd.ncon * nworld]),
+    ncon_world=wp.zeros(nworld, dtype=int),
     ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
-    ne=arr([mjd.ne * nworld]),
-    ne_connect=arr([3 * nworld * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_CONNECT) & mjd.eq_active, dtype=int)]),
-    ne_weld=arr([6 * nworld * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_WELD) & mjd.eq_active, dtype=int)]),
-    ne_jnt=arr([nworld * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_JOINT) & mjd.eq_active, dtype=int)]),
-    ne_ten=arr([nworld * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_TENDON) & mjd.eq_active, dtype=int)]),
-    nf=arr([mjd.nf * nworld]),
-    nl=arr([mjd.nl * nworld]),
-    nefc=arr([mjd.nefc * nworld]),
+    ne=wp.full(shape=(nworld), value=mjd.ne),
+    ne_connect=wp.full(shape=(nworld), value=ne_connect),
+    ne_weld=wp.full(shape=(nworld), value=ne_weld),
+    ne_jnt=wp.full(shape=(nworld), value=ne_jnt),
+    ne_ten=wp.full(shape=(nworld), value=ne_ten),
+    nf=wp.full(shape=(nworld), value=mjd.nf),
+    nl=wp.full(shape=(nworld), value=mjd.nl),
+    nefc=wp.full(shape=(nworld), value=mjd.nefc),
     nsolving=arr([nworld]),
     time=arr(mjd.time * np.ones(nworld)),
     energy=tile(mjd.energy, dtype=wp.vec2),
@@ -1344,18 +1428,17 @@ def put_data(
       worldid=arr(contact_worldid),
     ),
     efc=types.Constraint(
-      worldid=arr(efc_worldid),
-      type=padtile(mjd.efc_type, njmax),
-      id=padtile(mjd.efc_id, njmax),
-      J=padtile(efc_J, njmax),
-      pos=padtile(mjd.efc_pos, njmax),
-      margin=padtile(mjd.efc_margin, njmax),
-      D=padtile(mjd.efc_D, njmax),
-      vel=padtile(mjd.efc_vel, njmax),
-      aref=padtile(mjd.efc_aref, njmax),
-      frictionloss=padtile(mjd.efc_frictionloss, njmax),
-      force=padtile(mjd.efc_force, njmax),
-      Jaref=wp.empty(shape=(njmax,), dtype=float),
+      type=wp.array2d(efc_type_fill, dtype=int),
+      id=wp.array2d(efc_id_fill, dtype=int),
+      J=wp.array3d(efc_J_fill, dtype=float),
+      pos=wp.array2d(efc_pos_fill, dtype=float),
+      margin=wp.array2d(efc_margin_fill, dtype=float),
+      D=wp.array2d(efc_D_fill, dtype=float),
+      vel=wp.array2d(efc_vel_fill, dtype=float),
+      aref=wp.array2d(efc_aref_fill, dtype=float),
+      frictionloss=wp.array2d(efc_frictionloss_fill, dtype=float),
+      force=wp.array2d(efc_force_fill, dtype=float),
+      Jaref=wp.empty(shape=(nworld, njmax), dtype=float),
       Ma=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       grad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       cholesky_L_tmp=wp.empty(shape=(nworld, mjm.nv, mjm.nv), dtype=float),
@@ -1367,19 +1450,17 @@ def put_data(
       gauss=wp.empty(shape=(nworld,), dtype=float),
       cost=wp.empty(shape=(nworld,), dtype=float),
       prev_cost=wp.empty(shape=(nworld,), dtype=float),
-      active=wp.empty(shape=(njmax,), dtype=bool),
+      state=wp.empty(shape=(nworld, njmax), dtype=int),
       gtol=wp.empty(shape=(nworld,), dtype=float),
       mv=wp.empty(shape=(nworld, mjm.nv), dtype=float),
-      jv=wp.empty(shape=(njmax,), dtype=float),
-      quad=wp.empty(shape=(njmax,), dtype=wp.vec3f),
+      jv=wp.empty(shape=(nworld, njmax), dtype=float),
+      quad=wp.empty(shape=(nworld, njmax), dtype=wp.vec3f),
       quad_gauss=wp.empty(shape=(nworld,), dtype=wp.vec3f),
       h=wp.empty(shape=(nworld, mjm.nv, mjm.nv), dtype=float),
       alpha=wp.empty(shape=(nworld,), dtype=float),
       prev_grad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       prev_Mgrad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       beta=wp.empty(shape=(nworld,), dtype=float),
-      beta_num=wp.empty(shape=(nworld,), dtype=float),
-      beta_den=wp.empty(shape=(nworld,), dtype=float),
       done=wp.empty(shape=(nworld,), dtype=bool),
       ls_done=wp.zeros(shape=(nworld,), dtype=bool),
       p0=wp.empty(shape=(nworld,), dtype=wp.vec3),
@@ -1394,13 +1475,6 @@ def put_data(
       mid=wp.empty(shape=(nworld,), dtype=wp.vec3),
       mid_alpha=wp.empty(shape=(nworld,), dtype=float),
       cost_candidate=wp.empty(shape=(nworld, mjm.opt.ls_iterations), dtype=float),
-      quad_total_candidate=wp.empty(shape=(nworld, mjm.opt.ls_iterations), dtype=wp.vec3f),
-      # TODO(team): skip allocation if not elliptic
-      u=wp.empty((nconmax,), dtype=types.vec6),
-      uu=wp.empty((nconmax,), dtype=float),
-      uv=wp.empty((nconmax,), dtype=float),
-      vv=wp.empty((nconmax,), dtype=float),
-      condim=wp.empty((njmax,), dtype=int),
     ),
     # TODO(team): skip allocation if integrator != RK4
     qpos_t0=wp.empty((nworld, mjm.nq), dtype=float),
@@ -1462,6 +1536,10 @@ def put_data(
     sensor_rangefinder_vec=wp.zeros((nworld, nrangefinder), dtype=wp.vec3),
     sensor_rangefinder_dist=wp.zeros((nworld, nrangefinder), dtype=float),
     sensor_rangefinder_geomid=wp.zeros((nworld, nrangefinder), dtype=int),
+    sensor_contact_nmatch=wp.zeros((nworld, nsensorcontact), dtype=int),
+    sensor_contact_matchid=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=int),
+    sensor_contact_criteria=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
+    sensor_contact_direction=wp.zeros((nworld, nsensorcontact, types.MJ_MAXCONPAIR), dtype=float),
     # ray
     ray_bodyexclude=wp.zeros(1, dtype=int),
     ray_dist=wp.zeros((nworld, 1), dtype=float),

@@ -15,6 +15,8 @@
 
 """Utilities for testing."""
 
+import importlib
+import os
 import time
 from typing import Callable, Optional, Tuple
 
@@ -23,6 +25,7 @@ import numpy as np
 import warp as wp
 from etils import epath
 
+from . import forward
 from . import io
 from . import warp_util
 from .types import ConeType
@@ -193,7 +196,7 @@ def benchmark(
   event_trace: bool = False,
   measure_alloc: bool = False,
   measure_solver_niter: bool = False,
-) -> Tuple[float, float, dict, list, list, list]:
+) -> Tuple[float, float, dict, list, list, list, int]:
   """Benchmark a function of Model and Data.
 
   Args:
@@ -214,22 +217,20 @@ def benchmark(
     list: Number of contacts.
     list: Number of constraints.
     list: Number of solver iterations.
+    int: Number of converged worlds.
   """
-  jit_beg = time.perf_counter()
-
-  fn(m, d)
-
-  jit_end = time.perf_counter()
-  jit_duration = jit_end - jit_beg
-  wp.synchronize()
 
   trace = {}
   ncon, nefc, solver_niter = [], [], []
 
   with warp_util.EventTracer(enabled=event_trace) as tracer:
     # capture the whole function as a CUDA graph
+    jit_beg = time.perf_counter()
     with wp.ScopedCapture() as capture:
       fn(m, d)
+    jit_end = time.perf_counter()
+    jit_duration = jit_end - jit_beg
+
     graph = capture.graph
 
     time_vec = np.zeros(nstep)
@@ -242,26 +243,111 @@ def benchmark(
             m.actuator_ctrllimited, m.actuator_ctrlrange, i, 0.01
           ],
           outputs=[d.ctrl])  # fmt: skip
+        wp.synchronize()
 
         run_beg = time.perf_counter()
         wp.capture_launch(graph)
         wp.synchronize()
+        run_end = time.perf_counter()
 
-      run_end = time.perf_counter()
       time_vec[i] = run_end - run_beg
       if trace:
         trace = _sum(trace, tracer.trace())
       else:
         trace = tracer.trace()
-      if measure_alloc or measure_solver_niter:
-        wp.synchronize()
       if measure_alloc:
-        ncon.append(d.ncon.numpy()[0])
-        nefc.append(d.nefc.numpy()[0])
+        ncon.append(np.max([d.ncon.numpy()[0], d.ncollision.numpy()[0]]))
+        nefc.append(np.max(d.nefc.numpy()))
       if measure_solver_niter:
         solver_niter.append(d.solver_niter.numpy())
 
-    wp.synchronize()
+    nsuccess = np.sum(~np.any(np.isnan(d.qpos.numpy()), axis=1))
     run_duration = np.sum(time_vec)
 
-  return jit_duration, run_duration, trace, ncon, nefc, solver_niter
+  return jit_duration, run_duration, trace, ncon, nefc, solver_niter, nsuccess
+
+
+class BenchmarkSuite:
+  """Base suite for all model benchmarks."""
+
+  path = ""
+  batch_size = -1
+  nconmax = -1
+  njmax = -1
+  param_names = ("function",)
+  params = (
+    "jit_duration",
+    "solver_niter_mean",
+    "solver_niter_p95",
+    "device_memory_allocated",
+    "step",
+    "step.forward",
+    "step.forward.fwd_position",
+    "step.forward.fwd_position.kinematics",
+    "step.forward.fwd_position.com_pos",
+    "step.forward.fwd_position.camlight",
+    "step.forward.fwd_position.crb",
+    "step.forward.fwd_position.tendon_armature",
+    "step.forward.fwd_position.collision",
+    "step.forward.fwd_position.make_constraint",
+    "step.forward.fwd_position.transmission",
+    "step.forward.sensor_pos",
+    "step.forward.fwd_velocity",
+    "step.forward.fwd_velocity.com_vel",
+    "step.forward.fwd_velocity.passive",
+    "step.forward.fwd_velocity.rne",
+    "step.forward.fwd_velocity.tendon_bias",
+    "step.forward.sensor_vel",
+    "step.forward.fwd_actuation",
+    "step.forward.fwd_acceleration",
+    "step.forward.fwd_acceleration.xfrc_accumulate",
+    "step.forward.sensor_acc",
+    "step.forward.solve",
+  )
+  number = 1
+  rounds = 1
+  sample_time = 0
+  repeat = 1
+
+  def setup_cache(self):
+    module = importlib.import_module(self.__module__)
+    path = os.path.join(os.path.realpath(os.path.dirname(module.__file__)), self.path)
+    mjm = mujoco.MjModel.from_xml_path(path)
+    mjd = mujoco.MjData(mjm)
+    if mjm.nkey > 0:
+      mujoco.mj_resetDataKeyframe(mjm, mjd, 0)
+
+    # TODO(team): mj_forward call shouldn't be necessary, but it is
+    mujoco.mj_forward(mjm, mjd)
+
+    wp.init()
+    if os.environ.get("ASV_CACHE_KERNELS", "false").lower() == "false":
+      wp.clear_kernel_cache()
+
+    free_before = wp.get_device().free_memory
+    m = io.put_model(mjm)
+    d = io.put_data(mjm, mjd, self.batch_size, self.nconmax, self.njmax)
+    free_after = wp.get_device().free_memory
+
+    jit_duration, _, trace, _, _, solver_niter, _ = benchmark(forward.step, m, d, 1000, True, False, True)
+    metrics = {
+      "jit_duration": jit_duration,
+      "solver_niter_mean": np.mean(solver_niter),
+      "solver_niter_p95": np.quantile(solver_niter, 0.95),
+      "device_memory_allocated": free_before - free_after,
+    }
+
+    def tree_flatten(d, parent_k=""):
+      ret = {}
+      steps = self.batch_size * 1000
+      for k, v in d.items():
+        k = parent_k + "." + k if parent_k else k
+        ret = ret | {k: 1e6 * v[0][0] / steps} | tree_flatten(v[1], k)
+      return ret
+
+    metrics = metrics | tree_flatten(trace)
+
+    return metrics
+
+  def track_metric(self, metrics, fn):
+    return metrics[fn]

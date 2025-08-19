@@ -242,7 +242,7 @@ def _flex_edges(
   j = body_dofadr[flex_vertbodyid[vbase + v[1]]]
   vel1 = wp.vec3(qvel_in[worldid, i], qvel_in[worldid, i + 1], qvel_in[worldid, i + 2])
   vel2 = wp.vec3(qvel_in[worldid, j], qvel_in[worldid, j + 1], qvel_in[worldid, j + 2])
-  flexedge_velocity_out[worldid, edgeid] = wp.dot(vel2 - vel1, vec) / vecnorm
+  flexedge_velocity_out[worldid, edgeid] = math.safe_div(wp.dot(vel2 - vel1, vec), vecnorm)
 
 
 @wp.kernel
@@ -374,11 +374,16 @@ def _subtree_com_acc(
 def _subtree_div(
   # Model:
   subtree_mass: wp.array2d(dtype=float),
+  # Data in:
+  subtree_com_in: wp.array2d(dtype=wp.vec3),
   # Data out:
   subtree_com_out: wp.array2d(dtype=wp.vec3),
 ):
   worldid, bodyid = wp.tid()
-  subtree_com_out[worldid, bodyid] /= subtree_mass[worldid, bodyid]
+  com = subtree_com_in[worldid, bodyid]
+  mass = subtree_mass[worldid, bodyid]
+  if mass != 0.0:
+    subtree_com_out[worldid, bodyid] = com / mass
 
 
 @wp.kernel
@@ -492,7 +497,7 @@ def com_pos(m: Model, d: Data):
       outputs=[d.subtree_com],
     )
 
-  wp.launch(_subtree_div, dim=(d.nworld, m.nbody), inputs=[m.subtree_mass], outputs=[d.subtree_com])
+  wp.launch(_subtree_div, dim=(d.nworld, m.nbody), inputs=[m.subtree_mass, d.subtree_com], outputs=[d.subtree_com])
   wp.launch(
     _cinert,
     dim=(d.nworld, m.nbody),
@@ -1152,16 +1157,15 @@ def _cfrc_ext_equality(
   xpos_in: wp.array2d(dtype=wp.vec3),
   xmat_in: wp.array2d(dtype=wp.mat33),
   subtree_com_in: wp.array2d(dtype=wp.vec3),
-  efc_worldid_in: wp.array(dtype=int),
-  efc_id_in: wp.array(dtype=int),
-  efc_force_in: wp.array(dtype=float),
+  efc_id_in: wp.array2d(dtype=int),
+  efc_force_in: wp.array2d(dtype=float),
   # Data out:
   cfrc_ext_out: wp.array2d(dtype=wp.spatial_vector),
 ):
-  eqid = wp.tid()
+  worldid, eqid = wp.tid()
 
-  ne_connect = ne_connect_in[0]
-  ne_weld = ne_weld_in[0]
+  ne_connect = ne_connect_in[worldid]
+  ne_weld = ne_weld_in[worldid]
   num_connect = ne_connect // 3
 
   if eqid >= num_connect + ne_weld // 6:
@@ -1173,16 +1177,15 @@ def _cfrc_ext_equality(
     cfrc_torque = wp.vec3(0.0, 0.0, 0.0)  # no torque from connect
   else:
     efcid = 6 * eqid - ne_connect
-    cfrc_torque = wp.vec3(efc_force_in[efcid + 3], efc_force_in[efcid + 4], efc_force_in[efcid + 5])
+    cfrc_torque = wp.vec3(efc_force_in[worldid, efcid + 3], efc_force_in[worldid, efcid + 4], efc_force_in[worldid, efcid + 5])
 
   cfrc_force = wp.vec3(
-    efc_force_in[efcid + 0],
-    efc_force_in[efcid + 1],
-    efc_force_in[efcid + 2],
+    efc_force_in[worldid, efcid + 0],
+    efc_force_in[worldid, efcid + 1],
+    efc_force_in[worldid, efcid + 2],
   )
 
-  worldid = efc_worldid_in[efcid]
-  id = efc_id_in[efcid]
+  id = efc_id_in[worldid, efcid]
   eq_data_ = eq_data[worldid, id]
   body_semantic = eq_objtype[id] == wp.static(ObjType.BODY.value)
 
@@ -1254,6 +1257,7 @@ def _cfrc_ext_contact(
   body_rootid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
   # Data in:
+  njmax_in: int,
   ncon_in: wp.array(dtype=int),
   subtree_com_in: wp.array2d(dtype=wp.vec3),
   contact_pos_in: wp.array(dtype=wp.vec3),
@@ -1263,7 +1267,7 @@ def _cfrc_ext_contact(
   contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_efc_address_in: wp.array2d(dtype=int),
   contact_worldid_in: wp.array(dtype=int),
-  efc_force_in: wp.array(dtype=float),
+  efc_force_in: wp.array2d(dtype=float),
   # Data out:
   cfrc_ext_out: wp.array2d(dtype=wp.spatial_vector),
 ):
@@ -1279,20 +1283,23 @@ def _cfrc_ext_contact(
   if id1 == 0 and id2 == 0:
     return
 
+  worldid = contact_worldid_in[contactid]
+
   # contact force in world frame
   force = support.contact_force_fn(
     opt_cone,
+    njmax_in,
     ncon_in,
     contact_frame_in,
     contact_friction_in,
     contact_dim_in,
     contact_efc_address_in,
     efc_force_in,
+    worldid,
     contactid,
     to_world_frame=True,
   )
 
-  worldid = contact_worldid_in[contactid]
   pos = contact_pos_in[contactid]
 
   # contact force on bodies
@@ -1323,7 +1330,7 @@ def rne_postconstraint(m: Model, d: Data):
 
   wp.launch(
     _cfrc_ext_equality,
-    dim=(d.nworld * m.neq,),
+    dim=(d.nworld, m.neq),
     inputs=[
       m.body_rootid,
       m.site_bodyid,
@@ -1337,7 +1344,6 @@ def rne_postconstraint(m: Model, d: Data):
       d.xpos,
       d.xmat,
       d.subtree_com,
-      d.efc.worldid,
       d.efc.id,
       d.efc.force,
     ],
@@ -1352,6 +1358,7 @@ def rne_postconstraint(m: Model, d: Data):
       m.opt.cone,
       m.body_rootid,
       m.geom_bodyid,
+      d.njmax,
       d.ncon,
       d.subtree_com,
       d.contact.pos,
@@ -1544,7 +1551,7 @@ def _tendon_dot(
         # chain rule, second term: Jdot += (jac2 - jac1) * d / dt (dpnt)
         Jdot += wp.dot(jacdif, dvel)
 
-        ten_Jdot_out[worldid, tenid, i] += Jdot / divisor
+        ten_Jdot_out[worldid, tenid, i] += math.safe_div(Jdot, divisor)
 
     # TODO(team): j += 2 if geom wrapping
     j += 1
@@ -1865,8 +1872,8 @@ def _transmission(
 
     # compute derivatives of length w.r.t. vec and axis
     if ok == 1:
-      scale = 1.0 - av / sdet
-      dldv = axis * scale + vec / sdet
+      scale = 1.0 - math.safe_div(av, sdet)
+      dldv = axis * scale + math.safe_div(vec, sdet)
       dlda = vec * scale
     else:
       dldv = axis
@@ -2096,7 +2103,7 @@ def _transmission_body_moment(
   contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_efc_address_in: wp.array2d(dtype=int),
   contact_worldid_in: wp.array(dtype=int),
-  efc_J_in: wp.array2d(dtype=float),
+  efc_J_in: wp.array3d(dtype=float),
   # Data out:
   actuator_moment_out: wp.array3d(dtype=float),
   actuator_trntype_body_ncon_out: wp.array2d(dtype=int),
@@ -2140,7 +2147,7 @@ def _transmission_body_moment(
     if contact_dim == 1 or opt_cone == int(ConeType.ELLIPTIC.value):
       efc_force = 1.0
       efcid0 = contact_efc_address[0]
-      wp.atomic_add(actuator_moment_out[worldid, actid], dofid, efc_J_in[efcid0, dofid] * efc_force)
+      wp.atomic_add(actuator_moment_out[worldid, actid], dofid, efc_J_in[worldid, efcid0, dofid] * efc_force)
 
     else:
       npyramid = contact_dim - 1  # number of frictional directions
@@ -2148,7 +2155,7 @@ def _transmission_body_moment(
 
       for j in range(2 * npyramid):
         efcid = contact_efc_address[j]
-        wp.atomic_add(actuator_moment_out[worldid, actid], dofid, efc_J_in[efcid, dofid] * efc_force)
+        wp.atomic_add(actuator_moment_out[worldid, actid], dofid, efc_J_in[worldid, efcid, dofid] * efc_force)
 
   # excluded contact in gap: get Jacobian, accumulate
   elif contact_exclude == 1:

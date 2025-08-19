@@ -22,6 +22,8 @@ import warp as wp
 
 from .bolt import bolt
 from .bolt import bolt_sdf_grad
+from .gear import gear
+from .gear import gear_sdf_grad
 from .nut import nut
 from .nut import nut_sdf_grad
 from .torus import torus
@@ -33,6 +35,7 @@ class SDFType(enum.Enum):
   NUT = "NUT"
   BOLT = "BOLT"
   TORUS = "TORUS"
+  GEAR = "GEAR"
 
 
 def register_sdf_plugins(mjwarp) -> Dict[str, int]:
@@ -41,16 +44,19 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
         <plugin plugin="mujoco.sdf.nut"><instance name="n"/></plugin>
         <plugin plugin="mujoco.sdf.bolt"><instance name="b"/></plugin>
         <plugin plugin="mujoco.sdf.torus"><instance name="t"/></plugin>
+        <plugin plugin="mujoco.sdf.gear"><instance name="g"/></plugin>
         </extension>
         <asset>
         <mesh name="nm"><plugin instance="n"/></mesh>
         <mesh name="bm"><plugin instance="b"/></mesh>
         <mesh name="tm"><plugin instance="t"/></mesh>
+        <mesh name="gm"><plugin instance="g"/></mesh>
         </asset>
         <worldbody>
         <body><geom type="sdf" name="ng" mesh="nm"><plugin instance="n"/></geom></body>
         <body><geom type="sdf" name="bg" mesh="bm"><plugin instance="b"/></geom></body>
         <body><geom type="sdf" name="tg" mesh="tm"><plugin instance="t"/></geom></body>
+        <body><geom type="sdf" name="gg" mesh="gm"><plugin instance="g"/></geom></body>
         </worldbody>
         </mujoco>"""
 
@@ -71,6 +77,8 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
       sdf_types[SDFType.TORUS.value] = int(m.plugin[i])
 
 
+    elif name == "gg":
+      sdf_types[SDFType.GEAR.value] = int(m.plugin[i])
 
   @wp.func
   def user_sdf(p: wp.vec3, attr: wp.vec3, sdf_type: int) -> float:
@@ -81,6 +89,8 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
       result = bolt(p, attr)
     elif sdf_type == wp.static(sdf_types[SDFType.TORUS.value]):
       result = torus(p, attr)
+    elif sdf_type == wp.static(sdf_types[SDFType.GEAR.value]):
+      result = gear(p, attr)
     return result
 
   @wp.func
@@ -91,8 +101,12 @@ def register_sdf_plugins(mjwarp) -> Dict[str, int]:
       return bolt_sdf_grad(p, attr)
     elif sdf_type == wp.static(sdf_types[SDFType.TORUS.value]):
       return torus_sdf_grad(p, attr)
+    elif sdf_type == wp.static(sdf_types[SDFType.GEAR.value]):
+      return gear_sdf_grad(p, attr)
     return wp.vec3()
 
+  mjwarp._src.collision_sdf.user_sdf = user_sdf
+  mjwarp._src.collision_sdf.user_sdf_grad = user_sdf_grad
   mjwarp._src.collision_sdf.user_sdf = user_sdf
   mjwarp._src.collision_sdf.user_sdf_grad = user_sdf_grad
 
