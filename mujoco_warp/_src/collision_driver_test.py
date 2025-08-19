@@ -32,10 +32,11 @@ from .io import sample_octree_sdf
 
 @wp.kernel
 def sample_sdf_kernel(
-  points: wp.array(dtype=wp.vec3), 
+  # In:
+  points: wp.array(dtype=wp.vec3),
   volume_data: VolumeData,
   # Out:
-  results: wp.array(dtype=float)
+  results: wp.array(dtype=float),
 ):
   """Kernel to sample SDF values at given points using Warp volume."""
   tid = wp.tid()
@@ -526,6 +527,7 @@ class CollisionTest(parameterized.TestCase):
       np.testing.assert_equal(result, True, f"Contact {i} not found in Gjk results")
 
   def test_sdf_volumes(self):
+    """Tests SDF volumes."""
     mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)
 
     octadr = mjm.mesh_octadr[0]
@@ -586,11 +588,12 @@ class CollisionTest(parameterized.TestCase):
     volume_ids_np = m.volume_ids.numpy()
     volume_id = volume_ids_np[cow_mesh_id]
 
+    center = oct_aabb[0][:3]
+    half_size = oct_aabb[0][3:]
+
     volume_data.volume_id = volume_id
-    volume_data.vmin = wp.vec3(vmin[0], vmin[1], vmin[2])
-    volume_data.vmax = wp.vec3(vmax[0], vmax[1], vmax[2])
-    volume_data.center = (volume_data.vmin + volume_data.vmax) * 0.5
-    volume_data.half_size = (volume_data.vmax - volume_data.vmin) * 0.5
+    volume_data.center = wp.vec3(center[0], center[1], center[2])
+    volume_data.half_size = wp.vec3(half_size[0], half_size[1], half_size[2])
 
     wp.launch(sample_sdf_kernel, dim=num_test_points, inputs=[points_array, volume_data], outputs=[results_array])
     wp.synchronize()
@@ -607,7 +610,7 @@ class CollisionTest(parameterized.TestCase):
         matches += 1
 
     success_rate = matches / num_test_points
-    assert success_rate >= 0.8, f"SDF matching rate too low: {success_rate:.1%} (expected >= 80%)"
+    assert success_rate >= 0.9, f"SDF matching rate too low: {success_rate:.1%} (expected >= 90%)"
 
   @parameterized.parameters(_FIXTURES.keys())
   def test_collision(self, fixture):

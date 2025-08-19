@@ -858,7 +858,7 @@ def mujoco_octree_to_warp_volume(mjm, m):
       octree_id = mjm.mesh_octadr[mesh_id]
       if octree_id != -1:
         octadr = octree_id
-        resolution = 64
+        resolution = 128
         oct_child = mjm.oct_child[8 * octadr :].reshape(-1, 8)
         oct_aabb = mjm.oct_aabb[6 * octadr :].reshape(-1, 6)
         oct_coeff = mjm.oct_coeff[8 * octadr :].reshape(-1, 8)
@@ -866,23 +866,41 @@ def mujoco_octree_to_warp_volume(mjm, m):
         root_aabb = oct_aabb[0]
         center = root_aabb[:3]
         half_size = root_aabb[3:]
-        vmin = center - half_size
-        vmax = center + half_size
 
-        x = np.linspace(vmin[0], vmax[0], resolution)
-        y = np.linspace(vmin[1], vmax[1], resolution)
-        z = np.linspace(vmin[2], vmax[2], resolution)
+        original_mins = center - half_size
+        original_maxs = center + half_size
 
-        sdf_values = np.zeros((resolution, resolution, resolution), dtype=np.float32)
+        margin_factor = 0.02
+        extents = original_maxs - original_mins
+        margin = margin_factor * extents
 
-        for i, px in enumerate(x):
-          for j, py in enumerate(y):
-            for k, pz in enumerate(z):
-              point = np.array([px, py, pz])
-              sdf_val = sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff)
-              sdf_values[i, j, k] = sdf_val
+        mins = original_mins - margin
+        maxs = original_maxs + margin
+        expanded_extents = maxs - mins
 
-        volume = wp.Volume.load_from_numpy(sdf_values)
+        voxel_size = expanded_extents.max() / resolution
+
+        nums = np.ceil(expanded_extents / voxel_size).astype(dtype=int)
+
+        actual_extents = nums * voxel_size
+        maxs = mins + actual_extents
+
+        sdf_values = np.zeros(tuple(nums), dtype=np.float32)
+
+        for x in range(nums[0]):
+          for y in range(nums[1]):
+            for z in range(nums[2]):
+              pos = mins + voxel_size * np.array([x, y, z])
+              within_bounds = np.all(pos >= original_mins) and np.all(pos <= original_maxs)
+              if within_bounds:
+                sdf_val = sample_octree_sdf(pos, oct_child, oct_aabb, oct_coeff)
+              else:
+                clamped_pos = np.clip(pos, original_mins, original_maxs)
+                sdf_val = sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
+              sdf_values[x, y, z] = sdf_val
+
+        background_value = 1.0
+        volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value)
         volumes[mesh_id] = volume
         oct_aabbs[mesh_id] = [center, half_size]
 
