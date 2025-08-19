@@ -36,13 +36,13 @@ def sample_sdf_kernel(
   points: wp.array(dtype=wp.vec3),
   volume_data: VolumeData,
   # Data out:
-  results: wp.array(dtype=float),
+  results_out: wp.array(dtype=float),
 ):
   """Kernel to sample SDF values at given points using Warp volume."""
   tid = wp.tid()
   point = points[tid]
   sdf_value = sample_volume_sdf_world(point, volume_data)
-  results[tid] = sdf_value
+  results_out[tid] = sdf_value
 
 
 _TOLERANCE = 5e-5
@@ -595,7 +595,7 @@ class CollisionTest(parameterized.TestCase):
     volume_data.center = wp.vec3(center[0], center[1], center[2])
     volume_data.half_size = wp.vec3(half_size[0], half_size[1], half_size[2])
 
-    wp.launch(sample_sdf_kernel, dim=num_test_points, inputs=[points_array, volume_data], outputs=[results_array])
+    wp.launch(sample_sdf_kernel, dim=num_test_points, inputs=[points_array, volume_data, results_array])
     wp.synchronize()
 
     warp_results = results_array.numpy()
