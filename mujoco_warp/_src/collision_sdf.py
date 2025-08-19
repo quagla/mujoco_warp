@@ -55,7 +55,7 @@ class VolumeData:
 
 @wp.func
 def make_volume_data(
-  volume_id: wp.uint64 = wp.uint64(0), center: wp.vec3 = wp.vec3(0.0), half_size: wp.vec3 = wp.vec3(0.0)
+  volume_id: wp.uint64, center: wp.vec3, half_size: wp.vec3
 ) -> VolumeData:
   volume_data = VolumeData()
   volume_data.volume_id = volume_id
@@ -483,6 +483,8 @@ def _sdf_narrowphase(
   mesh_polymapadr: wp.array(dtype=int),
   mesh_polymapnum: wp.array(dtype=int),
   mesh_polymap: wp.array(dtype=int),
+  volume_ids: wp.array(dtype=wp.uint64),
+  oct_aabb: wp.array2d(dtype=wp.vec3),
   pair_dim: wp.array(dtype=int),
   pair_solref: wp.array2d(dtype=wp.vec2),
   pair_solreffriction: wp.array2d(dtype=wp.vec2),
@@ -490,8 +492,6 @@ def _sdf_narrowphase(
   pair_margin: wp.array2d(dtype=float),
   pair_gap: wp.array2d(dtype=float),
   pair_friction: wp.array2d(dtype=vec5),
-  volume_ids: wp.array(dtype=wp.uint64),
-  oct_aabb: wp.array2d(dtype=wp.vec3),
   # In:
   plugin: wp.array(dtype=int),
   plugin_attr: wp.array(dtype=wp.vec3f),
@@ -651,7 +651,7 @@ def _sdf_narrowphase(
 
   mesh_id1 = geom_dataid[g1]
   if mesh_id1 == -1:
-    volume_data1 = make_volume_data()
+    volume_data1 = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
   else:
     volume_id1 = volume_ids[mesh_id1]
     center1 = oct_aabb[mesh_id1, 0]
@@ -660,7 +660,7 @@ def _sdf_narrowphase(
 
   mesh_id2 = geom_dataid[g2]
   if mesh_id2 == -1:
-    volume_data2 = make_volume_data()
+    volume_data2 = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
   else:
     volume_id2 = volume_ids[mesh_id2]
     center2 = oct_aabb[mesh_id2, 0]
@@ -755,6 +755,8 @@ def sdf_narrowphase(m: Model, d: Data):
       m.mesh_polymapadr,
       m.mesh_polymapnum,
       m.mesh_polymap,
+      m.volume_ids,
+      m.oct_aabb,
       m.pair_dim,
       m.pair_solref,
       m.pair_solreffriction,
@@ -762,8 +764,6 @@ def sdf_narrowphase(m: Model, d: Data):
       m.pair_margin,
       m.pair_gap,
       m.pair_friction,
-      m.volume_ids,
-      m.oct_aabb,
       m.plugin,
       m.plugin_attr,
       m.geom_plugin_index,

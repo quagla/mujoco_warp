@@ -31,7 +31,12 @@ from .io import sample_octree_sdf
 
 
 @wp.kernel
-def sample_sdf_kernel(points: wp.array(dtype=wp.vec3), volume_data: VolumeData, results: wp.array(dtype=float)):
+def sample_sdf_kernel(
+  points: wp.array(dtype=wp.vec3), 
+  volume_data: VolumeData,
+  # Out:
+  results: wp.array(dtype=float)
+):
   """Kernel to sample SDF values at given points using Warp volume."""
   tid = wp.tid()
   point = points[tid]
