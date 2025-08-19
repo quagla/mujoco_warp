@@ -21,6 +21,8 @@ from . import math
 from . import ray
 from . import smooth
 from . import support
+from .collision_sdf import VolumeData
+from .collision_sdf import make_volume_data
 from .collision_sdf import sdf
 from .types import MJ_MAXCONPAIR
 from .types import MJ_MINVAL
@@ -1950,7 +1952,8 @@ def _sensor_tactile(
 
   # compute distance
   plugin_id = geom_plugin_index[geom]
-  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id]), 0.0)
+  volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
+  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id], volume_data), 0.0)
   if depth >= 0.0:
     return
 

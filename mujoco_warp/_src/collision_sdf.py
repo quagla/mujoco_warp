@@ -265,7 +265,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
 
 
 @wp.func
-def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData = VolumeData()) -> wp.vec3:
+def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData) -> wp.vec3:
   if type == int(GeomType.PLANE.value):
     grad = wp.vec3(0.0, 0.0, 1.0)
     return grad

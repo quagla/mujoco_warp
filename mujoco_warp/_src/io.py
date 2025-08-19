@@ -900,7 +900,7 @@ def mujoco_octree_to_warp_volume(mjm, m):
               sdf_values[x, y, z] = sdf_val
 
         background_value = 1.0
-        volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value)
+        volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value, device=wp.get_device())
         volumes[mesh_id] = volume
         oct_aabbs[mesh_id] = [center, half_size]
 
