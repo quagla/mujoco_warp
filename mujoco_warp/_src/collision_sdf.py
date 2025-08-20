@@ -52,12 +52,40 @@ class VolumeData:
 
 
 @wp.func
-def make_volume_data(volume_id: wp.uint64, center: wp.vec3, half_size: wp.vec3) -> VolumeData:
+def get_volume_data(volume_id: wp.uint64, center: wp.vec3, half_size: wp.vec3) -> VolumeData:
   volume_data = VolumeData()
   volume_data.volume_id = volume_id
   volume_data.center = center
   volume_data.half_size = half_size
   return volume_data
+
+
+@wp.func
+def get_sdf_params(
+  geom_type: int,
+  geom_size: wp.vec3,
+  plugin_id: int,
+  mesh_id: int,
+  plugin: wp.array(dtype=int),
+  plugin_attr: wp.array(dtype=wp.vec3f),
+  volume_ids: wp.array(dtype=wp.uint64),
+  oct_aabb: wp.array2d(dtype=wp.vec3),
+) -> Tuple[wp.vec3, int, VolumeData]:
+  attributes = geom_size
+  plugin_index = -1
+  volume_data = get_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
+
+  if geom_type == int(GeomType.SDF.value) and plugin_id != -1:
+    attributes = plugin_attr[plugin_id]
+    plugin_index = plugin[plugin_id]
+
+  elif geom_type == int(GeomType.SDF.value) and mesh_id != -1:
+    volume_id = volume_ids[mesh_id]
+    center = oct_aabb[mesh_id, 0]
+    half_size = oct_aabb[mesh_id, 1]
+    volume_data = get_volume_data(volume_id, center, half_size)
+
+  return attributes, plugin_index, volume_data
 
 
 @wp.func
@@ -598,37 +626,14 @@ def _sdf_narrowphase(
   pos1 = geom1.pos
   rot1 = geom1.rot
 
-  if type1 == int(GeomType.SDF.value) and g1_plugin != -1:
-    attr1 = plugin_attr[g1_plugin]
-    g1_plugin_id = plugin[g1_plugin]
-  else:
-    attr1 = geom1.size
-    g1_plugin_id = -1
+  attr1, g1_plugin_id, volume_data1 = get_sdf_params(
+    type1, geom1.size, g1_plugin, geom_dataid[g1], plugin, plugin_attr, volume_ids, oct_aabb
+  )
 
-  if g2_plugin != -1:
-    attr2 = plugin_attr[g2_plugin]
-    g2_plugin_id = plugin[g2_plugin]
-  else:
-    attr2 = geom2.size
-    g2_plugin_id = -1
+  attr2, g2_plugin_id, volume_data2 = get_sdf_params(
+    type2, geom2.size, g2_plugin, geom_dataid[g2], plugin, plugin_attr, volume_ids, oct_aabb
+  )
 
-  mesh_id1 = geom_dataid[g1]
-  if mesh_id1 == -1:
-    volume_data1 = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-  else:
-    volume_id1 = volume_ids[mesh_id1]
-    center1 = oct_aabb[mesh_id1, 0]
-    half_size1 = oct_aabb[mesh_id1, 1]
-    volume_data1 = make_volume_data(volume_id1, center1, half_size1)
-
-  mesh_id2 = geom_dataid[g2]
-  if mesh_id2 == -1:
-    volume_data2 = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-  else:
-    volume_id2 = volume_ids[mesh_id2]
-    center2 = oct_aabb[mesh_id2, 0]
-    half_size2 = oct_aabb[mesh_id2, 1]
-    volume_data2 = make_volume_data(volume_id2, center2, half_size2)
   for i in range(sdf_initpoints):
     x_g2 = wp.vec3(
       aabb_intersection.min[0] + (aabb_intersection.max[0] - aabb_intersection.min[0]) * halton(i, 2),

@@ -22,7 +22,8 @@ from . import ray
 from . import smooth
 from . import support
 from .collision_sdf import VolumeData
-from .collision_sdf import make_volume_data
+from .collision_sdf import get_sdf_params
+from .collision_sdf import get_volume_data
 from .collision_sdf import sdf
 from .types import MJ_MAXCONPAIR
 from .types import MJ_MINVAL
@@ -1885,7 +1886,9 @@ def _sensor_tactile(
   # Model:
   body_rootid: wp.array(dtype=int),
   body_weldid: wp.array(dtype=int),
+  geom_type: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  geom_size: wp.array2d(dtype=wp.vec3),
   mesh_vertadr: wp.array(dtype=int),
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_normaladr: wp.array(dtype=int),
@@ -1953,19 +1956,14 @@ def _sensor_tactile(
   lpos = wp.transpose(geom_xmat_in[worldid, geom]) @ tmp
 
   plugin_id = geom_plugin_index[geom]
-  if plugin_id != -1:
-    volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-    depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id], volume_data), 0.0)
-  else:
-    if mesh_id == -1:
-      volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-    else:
-      volume_id = volume_ids[mesh_id]
-      center = oct_aabb[mesh_id, 0]
-      half_size = oct_aabb[mesh_id, 1]
-      volume_data = make_volume_data(volume_id, center, half_size)
 
-    depth = wp.min(sdf(int(GeomType.SDF.value), lpos, wp.vec3(0.0), -1, volume_data), 0.0)
+  contact_type = geom_type[geom]
+
+  plugin_attributes, plugin_index, volume_data = get_sdf_params(
+    contact_type, geom_size[geom], plugin_id, mesh_id, plugin, plugin_attr, volume_ids, oct_aabb
+  )
+
+  depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data), 0.0)
   if depth >= 0.0:
     return
 
@@ -2167,7 +2165,9 @@ def sensor_acc(m: Model, d: Data):
     inputs=[
       m.body_rootid,
       m.body_weldid,
+      m.geom_type,
       m.geom_bodyid,
+      m.geom_size,
       m.mesh_vertadr,
       m.mesh_vert,
       m.mesh_normaladr,
