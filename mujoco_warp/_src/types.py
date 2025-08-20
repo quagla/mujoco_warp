@@ -557,6 +557,7 @@ class Option:
     gjk_iterations: number of Gjk iterations in the convex narrowphase
     epa_iterations: number of Epa iterations in the convex narrowphase
     ls_parallel: evaluate engine solver step sizes in parallel
+    ls_parallel_min_step: minimum step size for solver linesearch
     wind: wind (for lift, drag, and viscosity)
     has_fluid: True if wind, density, or viscosity are non-zero at put_model time
     density: density of medium
@@ -587,7 +588,8 @@ class Option:
   is_sparse: bool
   gjk_iterations: int  # warp only
   epa_iterations: int  # warp only
-  ls_parallel: bool
+  ls_parallel: bool  # warp only
+  ls_parallel_min_step: float  # warp only
   wind: wp.array(dtype=wp.vec3)
   has_fluid: bool
   density: wp.array(dtype=float)
@@ -637,7 +639,6 @@ class Constraint:
     cost: constraint + Gauss cost                     (nworld,)
     prev_cost: cost from previous iter                (nworld,)
     state: constraint state                           (nworld, njmax)
-    gtol: linesearch termination tolerance            (nworld,)
     mv: qM @ search                                   (nworld, nv)
     jv: efc_J @ search                                (nworld, njmax)
     quad: quadratic cost coefficients                 (nworld, njmax, 3)
@@ -648,18 +649,6 @@ class Constraint:
     prev_Mgrad: previous Mgrad                        (nworld, nv)
     beta: polak-ribiere beta                          (nworld,)
     done: solver done                                 (nworld,)
-    ls_done: linesearch done                          (nworld,)
-    p0: initial point                                 (nworld, 3)
-    lo: low point bounding the line search interval   (nworld, 3)
-    lo_alpha: alpha for low point                     (nworld,)
-    hi: high point bounding the line search interval  (nworld, 3)
-    hi_alpha: alpha for high point                    (nworld,)
-    lo_next: next low point                           (nworld, 3)
-    lo_next_alpha: alpha for next low point           (nworld,)
-    hi_next: next high point                          (nworld, 3)
-    hi_next_alpha: alpha for next high point          (nworld,)
-    mid: loss at mid_alpha                            (nworld, 3)
-    mid_alpha: midpoint between lo_alpha and hi_alpha (nworld,)
     cost_candidate: costs associated with step sizes  (nworld, nlsp)
   """
 
@@ -686,7 +675,6 @@ class Constraint:
   cost: wp.array(dtype=float)
   prev_cost: wp.array(dtype=float)
   state: wp.array2d(dtype=int)
-  gtol: wp.array(dtype=float)
   mv: wp.array2d(dtype=float)
   jv: wp.array2d(dtype=float)
   quad: wp.array2d(dtype=wp.vec3)
@@ -698,18 +686,6 @@ class Constraint:
   beta: wp.array(dtype=float)
   done: wp.array(dtype=bool)
   # linesearch
-  ls_done: wp.array(dtype=bool)
-  p0: wp.array(dtype=wp.vec3)
-  lo: wp.array(dtype=wp.vec3)
-  lo_alpha: wp.array(dtype=float)
-  hi: wp.array(dtype=wp.vec3)
-  hi_alpha: wp.array(dtype=float)
-  lo_next: wp.array(dtype=wp.vec3)
-  lo_next_alpha: wp.array(dtype=float)
-  hi_next: wp.array(dtype=wp.vec3)
-  hi_next_alpha: wp.array(dtype=float)
-  mid: wp.array(dtype=wp.vec3)
-  mid_alpha: wp.array(dtype=float)
   cost_candidate: wp.array2d(dtype=float)
 
 
@@ -1199,7 +1175,7 @@ class Model:
   flex_elemedge: wp.array(dtype=int)
   flexedge_length0: wp.array(dtype=float)
   flex_stiffness: wp.array(dtype=float)
-  flex_bending: wp.array(dtype=wp.mat44f)
+  flex_bending: wp.array(dtype=float)
   flex_damping: wp.array(dtype=float)
   mesh_vertadr: wp.array(dtype=int)
   mesh_vertnum: wp.array(dtype=int)

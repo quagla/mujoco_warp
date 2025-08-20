@@ -129,8 +129,8 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       raise NotImplementedError("Contact sensor: only geom1-geom2 matching is implemented.")
 
     # reduction
-    if (mjm.sensor_intprm[is_contact_sensor, 1] != 1).any():
-      raise NotImplementedError(f"Contact sensor: only mindist reduction is implemented.")
+    if (~((mjm.sensor_intprm[is_contact_sensor, 1] == 1) | (mjm.sensor_intprm[is_contact_sensor, 1] == 2))).any():
+      raise NotImplementedError(f"Contact sensor: only mindist and maxforce reduction are implemented.")
 
   # TODO(team): remove after _update_gradient for Newton uses tile operations for islands
   nv_max = 60
@@ -141,9 +141,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   # calculate some fields that cannot be easily computed inline
   nlsp = mjm.opt.ls_iterations  # TODO(team): how to set nlsp?
-
-  # unfortunately we must create Data in order to get some model fields like M_rownnz
-  mjd = mujoco.MjData(mjm)
 
   # dof lower triangle row and column indices (used in solver)
   dof_tri_row, dof_tri_col = np.tril_indices(mjm.nv)
@@ -182,11 +179,11 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   for k in range(mjm.nv):
     # skip diagonal rows
-    if mjd.M_rownnz[k] == 1:
+    if mjm.M_rownnz[k] == 1:
       continue
     dof_depth[k] = dof_depth[mjm.dof_parentid[k]] + 1
     i = mjm.dof_parentid[k]
-    diag_k = mjd.M_rowadr[k] + mjd.M_rownnz[k] - 1
+    diag_k = mjm.M_rowadr[k] + mjm.M_rownnz[k] - 1
     Madr_ki = diag_k - 1
     while i > -1:
       qLD_updates.setdefault(dof_depth[i], []).append((i, k, Madr_ki))
@@ -465,6 +462,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       impratio=create_nmodel_batched_array(np.array(mjm.opt.impratio), dtype=float, expand_dim=False),
       is_sparse=bool(is_sparse),
       ls_parallel=False,
+      ls_parallel_min_step=1.0e-6,  # TODO(team): determine good default setting
       gjk_iterations=MJ_CCD_ITERATIONS,
       epa_iterations=MJ_CCD_ITERATIONS,
       broadphase=int(broadphase),
@@ -487,10 +485,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     qM_mulm_j=wp.array(qM_mulm_j, dtype=int),
     qM_madr_ij=wp.array(qM_madr_ij, dtype=int),
     qLD_updates=qLD_updates,
-    M_rownnz=wp.array(mjd.M_rownnz, dtype=int),
-    M_rowadr=wp.array(mjd.M_rowadr, dtype=int),
-    M_colind=wp.array(mjd.M_colind, dtype=int),
-    mapM2M=wp.array(mjd.mapM2M, dtype=int),
+    M_rownnz=wp.array(mjm.M_rownnz, dtype=int),
+    M_rowadr=wp.array(mjm.M_rowadr, dtype=int),
+    M_colind=wp.array(mjm.M_colind, dtype=int),
+    mapM2M=wp.array(mjm.mapM2M, dtype=int),
     qM_tiles=qM_tiles,
     body_tree=body_tree,
     body_parentid=wp.array(mjm.body_parentid, dtype=int),
@@ -612,7 +610,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     flex_elemedge=wp.array(mjm.flex_elemedge, dtype=int),
     flexedge_length0=wp.array(mjm.flexedge_length0, dtype=float),
     flex_stiffness=wp.array(mjm.flex_stiffness.flatten(), dtype=float),
-    flex_bending=wp.array(mjm.flex_bending, dtype=wp.mat44f),
+    flex_bending=wp.array(mjm.flex_bending.flatten(), dtype=float),
     flex_damping=wp.array(mjm.flex_damping, dtype=float),
     mesh_vertadr=wp.array(mjm.mesh_vertadr, dtype=int),
     mesh_vertnum=wp.array(mjm.mesh_vertnum, dtype=int),
@@ -1018,7 +1016,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       cost=wp.zeros((nworld,), dtype=float),
       prev_cost=wp.zeros((nworld,), dtype=float),
       state=wp.zeros((nworld, njmax), dtype=int),
-      gtol=wp.zeros((nworld,), dtype=float),
       mv=wp.zeros((nworld, mjm.nv), dtype=float),
       jv=wp.zeros((nworld, njmax), dtype=float),
       quad=wp.zeros((nworld, njmax), dtype=wp.vec3f),
@@ -1030,18 +1027,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
       beta=wp.zeros((nworld,), dtype=float),
       done=wp.zeros((nworld,), dtype=bool),
       # linesearch
-      ls_done=wp.zeros((nworld,), dtype=bool),
-      p0=wp.zeros((nworld,), dtype=wp.vec3),
-      lo=wp.zeros((nworld,), dtype=wp.vec3),
-      lo_alpha=wp.zeros((nworld,), dtype=float),
-      hi=wp.zeros((nworld,), dtype=wp.vec3),
-      hi_alpha=wp.zeros((nworld,), dtype=float),
-      lo_next=wp.zeros((nworld,), dtype=wp.vec3),
-      lo_next_alpha=wp.zeros((nworld,), dtype=float),
-      hi_next=wp.zeros((nworld,), dtype=wp.vec3),
-      hi_next_alpha=wp.zeros((nworld,), dtype=float),
-      mid=wp.zeros((nworld,), dtype=wp.vec3),
-      mid_alpha=wp.zeros((nworld,), dtype=float),
       cost_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=float),
     ),
     # RK4
@@ -1397,7 +1382,6 @@ def put_data(
       cost=wp.empty(shape=(nworld,), dtype=float),
       prev_cost=wp.empty(shape=(nworld,), dtype=float),
       state=wp.empty(shape=(nworld, njmax), dtype=int),
-      gtol=wp.empty(shape=(nworld,), dtype=float),
       mv=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       jv=wp.empty(shape=(nworld, njmax), dtype=float),
       quad=wp.empty(shape=(nworld, njmax), dtype=wp.vec3f),
@@ -1408,18 +1392,6 @@ def put_data(
       prev_Mgrad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       beta=wp.empty(shape=(nworld,), dtype=float),
       done=wp.empty(shape=(nworld,), dtype=bool),
-      ls_done=wp.zeros(shape=(nworld,), dtype=bool),
-      p0=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      lo=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      lo_alpha=wp.empty(shape=(nworld,), dtype=float),
-      hi=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      hi_alpha=wp.empty(shape=(nworld,), dtype=float),
-      lo_next=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      lo_next_alpha=wp.empty(shape=(nworld,), dtype=float),
-      hi_next=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      hi_next_alpha=wp.empty(shape=(nworld,), dtype=float),
-      mid=wp.empty(shape=(nworld,), dtype=wp.vec3),
-      mid_alpha=wp.empty(shape=(nworld,), dtype=float),
       cost_candidate=wp.empty(shape=(nworld, mjm.opt.ls_iterations), dtype=float),
     ),
     # TODO(team): skip allocation if integrator != RK4
