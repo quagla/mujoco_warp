@@ -24,10 +24,11 @@ from absl.testing import parameterized
 import mujoco_warp as mjwarp
 from mujoco_warp.test_data.collision_sdf.utils import register_sdf_plugins
 
+from . import io
 from . import test_util
 from . import types
 from .collision_sdf import VolumeData
-from .collision_sdf import sample_volume_sdf_world
+from .collision_sdf import sample_volume_sdf
 from .io import sample_octree_sdf
 
 
@@ -42,7 +43,7 @@ def sample_sdf_kernel(
   """Kernel to sample SDF values at given points using Warp volume."""
   tid = wp.tid()
   point = points[tid]
-  sdf_value = sample_volume_sdf_world(point, volume_data)
+  sdf_value = sample_volume_sdf(point, volume_data)
   results_out[tid] = sdf_value
 
 
@@ -530,7 +531,13 @@ class CollisionTest(parameterized.TestCase):
   @pytest.mark.skipif(not wp.get_device().is_cuda, reason="SDF volumes require CUDA device")
   def test_sdf_volumes(self):
     """Tests SDF volumes."""
-    mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)
+    from pathlib import Path
+
+    cow_xml_path = Path(__file__).parent.parent.parent / "benchmark" / "cow" / "cow.xml"
+    mjm = mujoco.MjModel.from_xml_path(str(cow_xml_path))
+    mjd = mujoco.MjData(mjm)
+    mujoco.mj_forward(mjm, mjd)
+    m = io.put_model(mjm)
 
     octadr = mjm.mesh_octadr[0]
     oct_child = mjm.oct_child[8 * octadr :].reshape(-1, 8)

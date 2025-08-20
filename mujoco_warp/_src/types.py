@@ -906,7 +906,7 @@ class Model:
     mesh_polymapnum: number of polygons per vertex           (nmeshvert,)
     mesh_polymap: vertex to polygon map                      (nmeshpolymap,)
     volume_ids: Warp volume IDs for SDF sampling             (nvolume,)
-    volumes: Warp volume objects containing mesh SDF data    (nvolume,)
+    volumes: Warp volume objects containing SDF data         (nvolume,)
     oct_aabb: octree axis-aligned bounding boxes             (nvolume,)
     eq_type: constraint type (EqType)                        (neq,)
     eq_obj1id: id of object 1                                (neq,)

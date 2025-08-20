@@ -176,7 +176,7 @@ def user_sdf_grad(p: wp.vec3, attr: wp.vec3, sdf_type: int) -> wp.vec3:
 
 
 @wp.func
-def sample_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> float:
+def sample_volume_sdf(xyz: wp.vec3, volume_data: VolumeData) -> float:
   center = volume_data.center
   half_size = volume_data.half_size
 
@@ -222,15 +222,15 @@ def sample_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> float:
 
 
 @wp.func
-def sample_grad_volume_sdf_world(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
+def sample_volume_grad(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
   h = 1e-4
   dx = wp.vec3(h, 0.0, 0.0)
   dy = wp.vec3(0.0, h, 0.0)
   dz = wp.vec3(0.0, 0.0, h)
-  f = sample_volume_sdf_world(xyz, volume_data)
-  grad_x = (sample_volume_sdf_world(xyz + dx, volume_data) - f) / h
-  grad_y = (sample_volume_sdf_world(xyz + dy, volume_data) - f) / h
-  grad_z = (sample_volume_sdf_world(xyz + dz, volume_data) - f) / h
+  f = sample_volume_sdf(xyz, volume_data)
+  grad_x = (sample_volume_sdf(xyz + dx, volume_data) - f) / h
+  grad_y = (sample_volume_sdf(xyz + dy, volume_data) - f) / h
+  grad_z = (sample_volume_sdf(xyz + dz, volume_data) - f) / h
   return wp.vec3(grad_x, grad_y, grad_z)
 
 
@@ -246,7 +246,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
     return ellipsoid(p, attr)
   elif type == int(GeomType.SDF.value):
     if sdf_type == -1:
-      return sample_volume_sdf_world(p, volume_data)
+      return sample_volume_sdf(p, volume_data)
     else:
       return user_sdf(p, attr, sdf_type)
   wp.printf("ERROR: SDF type not implemented\n")
@@ -266,7 +266,7 @@ def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: V
     return grad_ellipsoid(p, attr)
   elif type == int(GeomType.SDF.value):
     if sdf_type == -1:
-      return sample_grad_volume_sdf_world(p, volume_data)
+      return sample_volume_grad(p, volume_data)
     else:
       return user_sdf_grad(p, attr, sdf_type)
   wp.printf("ERROR: SDF grad type not implemented\n")
