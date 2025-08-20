@@ -1886,6 +1886,7 @@ def _sensor_tactile(
   body_rootid: wp.array(dtype=int),
   body_weldid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  geom_dataid: wp.array(dtype=int),
   mesh_vertadr: wp.array(dtype=int),
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_normaladr: wp.array(dtype=int),
@@ -1898,6 +1899,8 @@ def _sensor_tactile(
   plugin: wp.array(dtype=int),
   plugin_attr: wp.array(dtype=wp.vec3f),
   geom_plugin_index: wp.array(dtype=int),
+  volume_ids: wp.array(dtype=wp.uint64),
+  oct_aabb: wp.array2d(dtype=wp.vec3),
   taxel_vertadr: wp.array(dtype=int),
   taxel_sensorid: wp.array(dtype=int),
   # Data in:
@@ -1950,10 +1953,21 @@ def _sensor_tactile(
   tmp = xpos - geom_xpos_in[worldid, geom]
   lpos = wp.transpose(geom_xmat_in[worldid, geom]) @ tmp
 
-  # compute distance
   plugin_id = geom_plugin_index[geom]
-  volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-  depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id], volume_data), 0.0)
+  if plugin_id != -1:
+    volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
+    depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id], volume_data), 0.0)
+  else:
+    mesh_id = geom_dataid[geom]
+    if mesh_id == -1:
+      volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
+    else:
+      volume_id = volume_ids[mesh_id]
+      center = oct_aabb[mesh_id, 0]
+      half_size = oct_aabb[mesh_id, 1]
+      volume_data = make_volume_data(volume_id, center, half_size)
+
+    depth = wp.min(sdf(int(GeomType.SDF.value), lpos, wp.vec3(0.0), -1, volume_data), 0.0)
   if depth >= 0.0:
     return
 
@@ -2156,6 +2170,7 @@ def sensor_acc(m: Model, d: Data):
       m.body_rootid,
       m.body_weldid,
       m.geom_bodyid,
+      m.geom_dataid,
       m.mesh_vertadr,
       m.mesh_vert,
       m.mesh_normaladr,
@@ -2168,6 +2183,8 @@ def sensor_acc(m: Model, d: Data):
       m.plugin,
       m.plugin_attr,
       m.geom_plugin_index,
+      m.volume_ids,
+      m.oct_aabb,
       m.taxel_vertadr,
       m.taxel_sensorid,
       d.ncon,
