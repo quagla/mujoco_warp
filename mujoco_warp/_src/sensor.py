@@ -1886,7 +1886,6 @@ def _sensor_tactile(
   body_rootid: wp.array(dtype=int),
   body_weldid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
-  geom_type: wp.array(dtype=int),
   mesh_vertadr: wp.array(dtype=int),
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_normaladr: wp.array(dtype=int),
@@ -1954,13 +1953,7 @@ def _sensor_tactile(
   lpos = wp.transpose(geom_xmat_in[worldid, geom]) @ tmp
 
   plugin_id = geom_plugin_index[geom]
-
-  contact_type = geom_type[geom]
-
-  if contact_type != int(GeomType.SDF.value):
-    volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
-    depth = wp.min(sdf(contact_type, lpos, wp.vec3(0.0), -1, volume_data), 0.0)
-  elif plugin_id != -1:
+  if plugin_id != -1:
     volume_data = make_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
     depth = wp.min(sdf(int(GeomType.SDF.value), lpos, plugin_attr[plugin_id], plugin[plugin_id], volume_data), 0.0)
   else:
@@ -1971,6 +1964,7 @@ def _sensor_tactile(
       center = oct_aabb[mesh_id, 0]
       half_size = oct_aabb[mesh_id, 1]
       volume_data = make_volume_data(volume_id, center, half_size)
+
     depth = wp.min(sdf(int(GeomType.SDF.value), lpos, wp.vec3(0.0), -1, volume_data), 0.0)
   if depth >= 0.0:
     return
@@ -2174,7 +2168,6 @@ def sensor_acc(m: Model, d: Data):
       m.body_rootid,
       m.body_weldid,
       m.geom_bodyid,
-      m.geom_type,
       m.mesh_vertadr,
       m.mesh_vert,
       m.mesh_normaladr,
