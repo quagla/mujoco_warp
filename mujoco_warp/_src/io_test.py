@@ -70,8 +70,6 @@ def _check_type_matches_annotation(test_obj, obj: Any, prefix: str = ""):
   for field in dataclasses.fields(obj):
     field_name = field.name
 
-    if field_name == "volumes":
-      continue
     val = getattr(obj, field_name)
     val_type = type(val)
     type_ = field.type

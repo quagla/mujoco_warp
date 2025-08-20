@@ -851,13 +851,13 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
 
 def mujoco_octree_to_warp_volume(mjm, m):
-  volumes = [0] * len(mjm.mesh_octadr)
+  volume_ids = [0] * len(mjm.mesh_octadr)
+  volumes = []
   oct_aabbs = [None] * len(mjm.mesh_octadr)
   for mesh_id in mjm.geom_dataid:
     if mesh_id != -1 and mesh_id < len(mjm.mesh_octadr):
-      octree_id = mjm.mesh_octadr[mesh_id]
-      if octree_id != -1:
-        octadr = octree_id
+      octadr = mjm.mesh_octadr[mesh_id]
+      if octadr != -1:
         resolution = 128
         oct_child = mjm.oct_child[8 * octadr :].reshape(-1, 8)
         oct_aabb = mjm.oct_aabb[6 * octadr :].reshape(-1, 6)
@@ -899,16 +899,15 @@ def mujoco_octree_to_warp_volume(mjm, m):
                 sdf_val = sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
               sdf_values[x, y, z] = sdf_val
 
-        background_value = 1.0
         device = wp.get_device()
         if device.is_cuda:
-          volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value, device=device)
-          volumes[mesh_id] = volume
+          volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, 1.0, device=device)
+          volume_ids[mesh_id] = volume.id
+          volumes.append(volume)
         else:
-          volumes[mesh_id] = 0
+          volume_ids[mesh_id] = 0
         oct_aabbs[mesh_id] = [center, half_size]
 
-  volume_ids = [volume.id if volume != 0 else 0 for volume in volumes]
   m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
 
   processed_aabbs = []
