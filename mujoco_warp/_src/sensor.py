@@ -21,9 +21,7 @@ from . import math
 from . import ray
 from . import smooth
 from . import support
-from .collision_sdf import VolumeData
 from .collision_sdf import get_sdf_params
-from .collision_sdf import get_volume_data
 from .collision_sdf import sdf
 from .types import MJ_MAXCONPAIR
 from .types import MJ_MINVAL
@@ -1960,7 +1958,7 @@ def _sensor_tactile(
   contact_type = geom_type[geom]
 
   plugin_attributes, plugin_index, volume_data = get_sdf_params(
-    contact_type, geom_size[geom], plugin_id, mesh_id, plugin, plugin_attr, volume_ids, oct_aabb
+    contact_type, geom_size[worldid, geom], volume_ids, oct_aabb, plugin, plugin_attr, plugin_id, mesh_id
   )
 
   depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data), 0.0)
