@@ -554,10 +554,8 @@ def _contact_force(
     con_pos = pos_in[conid]
     frame = frame_in[conid]
 
-    Jqvel = float(0.0)
     for i in range(nv):
       J = float(0.0)
-      Ji = float(0.0)
       jac1p, jac1r = support.jac(
         body_parentid,
         body_rootid,
@@ -584,7 +582,7 @@ def _contact_force(
       for xyz in range(3):
         J += frame[0, xyz] * jacp_dif[xyz]
 
-      qfrc_contact_out[worldid, i] = J * dist_in[conid]
+      wp.atomic_add(qfrc_contact_out[worldid], i, -J * dist_in[conid] * 1e2)
 
 @event_scope
 def passive(m: Model, d: Data):
@@ -695,6 +693,7 @@ def passive(m: Model, d: Data):
   if m.opt.has_fluid:
     _fluid(m, d)
 
+  d.qfrc_contact.zero_()
   wp.launch(
     _contact_force,
     dim=(d.nconmax, 2 * (m.condim_max - 1) if m.condim_max > 1 else 1),
