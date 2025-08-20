@@ -1155,7 +1155,11 @@ def _efc_contact_pyramidal(
 
   includemargin = includemargin_in[conid]
   pos = dist_in[conid] - includemargin
-  active = pos < 0
+
+  geom = geom_in[conid]
+  body1 = geom_bodyid[geom[0]]
+  body2 = geom_bodyid[geom[1]]
+  active = (body1 == 0 or body2 == 0) and pos < 0
 
   if active:
     worldid = worldid_in[conid]
@@ -1168,10 +1172,6 @@ def _efc_contact_pyramidal(
     timestep = opt_timestep[worldid]
     impratio = opt_impratio[worldid]
     contact_efc_address_out[conid, dimid] = efcid
-
-    geom = geom_in[conid]
-    body1 = geom_bodyid[geom[0]]
-    body2 = geom_bodyid[geom[1]]
 
     con_pos = pos_in[conid]
     frame = frame_in[conid]

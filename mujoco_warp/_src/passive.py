@@ -347,6 +347,7 @@ def _qfrc_passive(
   qfrc_damper_in: wp.array2d(dtype=float),
   qfrc_gravcomp_in: wp.array2d(dtype=float),
   qfrc_fluid_in: wp.array2d(dtype=float),
+  qfrc_contact_in: wp.array2d(dtype=float),
   # In:
   gravcomp: bool,
   # Data out:
@@ -363,6 +364,9 @@ def _qfrc_passive(
   # add fluid force
   if opt_has_fluid:
     qfrc_passive += qfrc_fluid_in[worldid, dofid]
+
+  # add contact force
+  qfrc_passive += qfrc_contact_in[worldid, dofid]
 
   qfrc_passive_out[worldid, dofid] = qfrc_passive
 
@@ -500,6 +504,87 @@ def _flex_bending(
     for x in range(3):
       wp.atomic_add(qfrc_spring_out, worldid, body_dofadr[bodyid] + x, force[i, x])
 
+@wp.kernel
+def _contact_force(
+  # Model:
+  nv: int,
+  body_parentid: wp.array(dtype=int),
+  body_rootid: wp.array(dtype=int),
+  dof_bodyid: wp.array(dtype=int),
+  geom_bodyid: wp.array(dtype=int),
+  # Data in:
+  njmax_in: int,
+  ncon_in: wp.array(dtype=int),
+  subtree_com_in: wp.array2d(dtype=wp.vec3),
+  cdof_in: wp.array2d(dtype=wp.spatial_vector),
+  # In:
+  dist_in: wp.array(dtype=float),
+  condim_in: wp.array(dtype=int),
+  includemargin_in: wp.array(dtype=float),
+  worldid_in: wp.array(dtype=int),
+  geom_in: wp.array(dtype=wp.vec2i),
+  pos_in: wp.array(dtype=wp.vec3),
+  frame_in: wp.array(dtype=wp.mat33),
+  # Data out:
+  qfrc_contact_out: wp.array2d(dtype=float),
+):
+  conid, dimid = wp.tid()
+
+  if conid >= ncon_in[0]:
+    return
+
+  condim = condim_in[conid]
+
+  if condim == 1 and dimid > 0:
+    return
+  elif condim > 1 and dimid >= 2 * (condim - 1):
+    return
+
+  includemargin = includemargin_in[conid]
+  pos = dist_in[conid] - includemargin
+  active = pos < 0
+
+  if active:
+    worldid = worldid_in[conid]
+
+    geom = geom_in[conid]
+    body1 = geom_bodyid[geom[0]]
+    body2 = geom_bodyid[geom[1]]
+
+    con_pos = pos_in[conid]
+    frame = frame_in[conid]
+
+    Jqvel = float(0.0)
+    for i in range(nv):
+      J = float(0.0)
+      Ji = float(0.0)
+      jac1p, jac1r = support.jac(
+        body_parentid,
+        body_rootid,
+        dof_bodyid,
+        subtree_com_in,
+        cdof_in,
+        con_pos,
+        body1,
+        i,
+        worldid,
+      )
+      jac2p, jac2r = support.jac(
+        body_parentid,
+        body_rootid,
+        dof_bodyid,
+        subtree_com_in,
+        cdof_in,
+        con_pos,
+        body2,
+        i,
+        worldid,
+      )
+      jacp_dif = jac2p - jac1p
+      for xyz in range(3):
+        J += frame[0, xyz] * jacp_dif[xyz]
+
+      qfrc_contact_out[worldid, i] = J * dist_in[conid]
 
 @event_scope
 def passive(m: Model, d: Data):
@@ -611,6 +696,32 @@ def passive(m: Model, d: Data):
     _fluid(m, d)
 
   wp.launch(
+    _contact_force,
+    dim=(d.nconmax, 2 * (m.condim_max - 1) if m.condim_max > 1 else 1),
+    inputs=[
+      m.nv,
+      m.body_parentid,
+      m.body_rootid,
+      m.dof_bodyid,
+      m.geom_bodyid,
+      d.njmax,
+      d.ncon,
+      d.subtree_com,
+      d.cdof,
+      d.contact.dist,
+      d.contact.dim,
+      d.contact.includemargin,
+      d.contact.worldid,
+      d.contact.geom,
+      d.contact.pos,
+      d.contact.frame,
+    ],
+    outputs=[
+      d.qfrc_contact
+    ],
+  )
+
+  wp.launch(
     _qfrc_passive,
     dim=(d.nworld, m.nv),
     inputs=[
@@ -621,6 +732,7 @@ def passive(m: Model, d: Data):
       d.qfrc_damper,
       d.qfrc_gravcomp,
       d.qfrc_fluid,
+      d.qfrc_contact,
       gravcomp,
     ],
     outputs=[

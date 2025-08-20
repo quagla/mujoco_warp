@@ -966,6 +966,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     qfrc_gravcomp=wp.zeros((nworld, mjm.nv), dtype=float),
     qfrc_fluid=wp.zeros((nworld, mjm.nv), dtype=float),
     qfrc_passive=wp.zeros((nworld, mjm.nv), dtype=float),
+    qfrc_contact=wp.zeros((nworld, mjm.nv), dtype=float),  # warp only
     subtree_linvel=wp.zeros((nworld, mjm.nbody), dtype=wp.vec3),
     subtree_angmom=wp.zeros((nworld, mjm.nbody), dtype=wp.vec3),
     subtree_bodyvel=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),  # warp only
@@ -1335,6 +1336,7 @@ def put_data(
     qfrc_gravcomp=tile(mjd.qfrc_gravcomp),
     qfrc_fluid=tile(mjd.qfrc_fluid),
     qfrc_passive=tile(mjd.qfrc_passive),
+    qfrc_contact=wp.zeros((nworld, mjm.nv), dtype=float),
     subtree_linvel=tile(mjd.subtree_linvel, dtype=wp.vec3),
     subtree_angmom=tile(mjd.subtree_angmom, dtype=wp.vec3),
     subtree_bodyvel=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),

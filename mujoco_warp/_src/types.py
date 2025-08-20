@@ -1575,6 +1575,7 @@ class Data:
   qfrc_gravcomp: wp.array2d(dtype=float)
   qfrc_fluid: wp.array2d(dtype=float)
   qfrc_passive: wp.array2d(dtype=float)
+  qfrc_contact: wp.array2d(dtype=float)  # warp only
   subtree_linvel: wp.array2d(dtype=wp.vec3)
   subtree_angmom: wp.array2d(dtype=wp.vec3)
   subtree_bodyvel: wp.array2d(dtype=wp.spatial_vector)  # warp only
