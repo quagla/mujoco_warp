@@ -16,6 +16,7 @@
 
 import mujoco
 import numpy as np
+import pytest
 import warp as wp
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -526,6 +527,7 @@ class CollisionTest(parameterized.TestCase):
       result = check_dist
       np.testing.assert_equal(result, True, f"Contact {i} not found in Gjk results")
 
+  @pytest.mark.skipif(not wp.get_device().is_cuda, reason="SDF volumes require CUDA device")
   def test_sdf_volumes(self):
     """Tests SDF volumes."""
     mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)

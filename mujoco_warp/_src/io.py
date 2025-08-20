@@ -900,8 +900,12 @@ def mujoco_octree_to_warp_volume(mjm, m):
               sdf_values[x, y, z] = sdf_val
 
         background_value = 1.0
-        volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value, device=wp.get_device())
-        volumes[mesh_id] = volume
+        device = wp.get_device()
+        if device.is_cuda:
+          volume = wp.Volume.load_from_numpy(sdf_values, mins, voxel_size, background_value, device=device)
+          volumes[mesh_id] = volume
+        else:
+          volumes[mesh_id] = 0
         oct_aabbs[mesh_id] = [center, half_size]
 
   volume_ids = [volume.id if volume != 0 else 0 for volume in volumes]
