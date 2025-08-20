@@ -63,13 +63,13 @@ def get_volume_data(volume_id: wp.uint64, center: wp.vec3, half_size: wp.vec3) -
 @wp.func
 def get_sdf_params(
   # Model:
-  geom_type: int,
-  geom_size: wp.vec3,
   volume_ids: wp.array(dtype=wp.uint64),
   oct_aabb: wp.array2d(dtype=wp.vec3),
   plugin: wp.array(dtype=int),
   plugin_attr: wp.array(dtype=wp.vec3f),
   # In:
+  geom_type: int,
+  geom_size: wp.vec3,
   plugin_id: int,
   mesh_id: int,
 ) -> Tuple[wp.vec3, int, VolumeData]:
@@ -629,11 +629,11 @@ def _sdf_narrowphase(
   rot1 = geom1.rot
 
   attr1, g1_plugin_id, volume_data1 = get_sdf_params(
-    type1, geom1.size, volume_ids, oct_aabb, plugin, plugin_attr, g1_plugin, geom_dataid[g1]
+    volume_ids, oct_aabb, plugin, plugin_attr, type1, geom1.size, g1_plugin, geom_dataid[g1]
   )
 
   attr2, g2_plugin_id, volume_data2 = get_sdf_params(
-    type2, geom2.size, volume_ids, oct_aabb, plugin, plugin_attr, g2_plugin, geom_dataid[g2]
+    volume_ids, oct_aabb, plugin, plugin_attr, type2, geom2.size, g2_plugin, geom_dataid[g2]
   )
 
   for i in range(sdf_initpoints):
