@@ -1,26 +1,10 @@
-# Copyright 2025 The Newton Developers
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-
-"""Tests for io functions."""
-
 import dataclasses
 import typing
 from typing import Any, Dict, Optional, Union
 
 import mujoco
 import numpy as np
+import pytest
 import warp as wp
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -392,6 +376,37 @@ class IOTest(parameterized.TestCase):
 
     with self.assertRaises(NotImplementedError):
       mjwarp.put_model(mjm)
+
+  @pytest.mark.skipif(not wp.get_device().is_cuda, reason="SDF volumes require CUDA device")
+  def test_volumes(self):
+    """Tests that mujoco_octree_to_warp_volume properly processes SDF volumes."""
+    from pathlib import Path
+
+    cow_xml_path = Path(__file__).parent.parent.parent / "benchmark" / "cow" / "cow.xml"
+
+    mjm = mujoco.MjModel.from_xml_path(str(cow_xml_path))
+    mjd = mujoco.MjData(mjm)
+    mujoco.mj_forward(mjm, mjd)
+
+    m = mjwarp.put_model(mjm)
+
+    self.assertIsInstance(m.volume_ids, wp.array)
+    self.assertEqual(m.volume_ids.dtype, wp.uint64)
+    self.assertGreater(m.volume_ids.size, 0)
+
+    self.assertIsInstance(m.volumes, tuple)
+    if len(m.volumes) > 0:
+      for volume in m.volumes:
+        self.assertIsInstance(volume, wp.Volume)
+
+    self.assertIsInstance(m.oct_aabb, wp.array)
+    self.assertEqual(m.oct_aabb.dtype, wp.vec3)
+    self.assertEqual(len(m.oct_aabb.shape), 2)
+    if m.oct_aabb.size > 0:
+      self.assertEqual(m.oct_aabb.shape[1], 2)
+
+    volume_ids_numpy = m.volume_ids.numpy()
+    self.assertEqual(len(m.volumes), np.unique(volume_ids_numpy).size)
 
 
 if __name__ == "__main__":
