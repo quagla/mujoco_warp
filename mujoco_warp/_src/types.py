@@ -1373,6 +1373,7 @@ class Data:
     nf: number of friction constraints                          (nworld,)
     nl: number of limit constraints                             (nworld,)
     nefc: number of constraints                                 (nworld,)
+    nisland: number of islands                                  (nworld,)
     nsolving: number of unconverged worlds                      (1,)
     time: simulation time                                       (nworld,)
     energy: potential, kinetic energy                           (nworld, 2)
@@ -1520,6 +1521,7 @@ class Data:
   nf: wp.array(dtype=int)
   nl: wp.array(dtype=int)
   nefc: wp.array(dtype=int)
+  nisland: wp.array(dtype=int)
   nsolving: wp.array(dtype=int)  # warp only
   time: wp.array(dtype=float)
   energy: wp.array(dtype=wp.vec2)

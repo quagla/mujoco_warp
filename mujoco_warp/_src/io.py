@@ -911,6 +911,7 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     nf=wp.zeros(nworld, dtype=int),
     nl=wp.zeros(nworld, dtype=int),
     nefc=wp.zeros(nworld, dtype=int),
+    nisland=wp.zeros(nworld, dtype=int),
     nsolving=wp.zeros(1, dtype=int),  # warp only
     time=wp.zeros(nworld, dtype=float),
     energy=wp.zeros(nworld, dtype=wp.vec2),
@@ -1280,6 +1281,7 @@ def put_data(
     nf=wp.full(shape=(nworld), value=mjd.nf),
     nl=wp.full(shape=(nworld), value=mjd.nl),
     nefc=wp.full(shape=(nworld), value=mjd.nefc),
+    nisland=wp.full(shape=(nworld), value=mjd.nisland),
     nsolving=arr([nworld]),
     time=arr(mjd.time * np.ones(nworld)),
     energy=tile(mjd.energy, dtype=wp.vec2),
@@ -1497,6 +1499,7 @@ def get_data_into(
   result.time = d.time.numpy()[0]
   result.energy = d.energy.numpy()[0]
   result.ne = d.ne.numpy()[0]
+  result.nisland = d.nisland.numpy()[0]
   result.qpos[:] = d.qpos.numpy()[0]
   result.qvel[:] = d.qvel.numpy()[0]
   result.qacc_warmstart = d.qacc_warmstart.numpy()[0]
