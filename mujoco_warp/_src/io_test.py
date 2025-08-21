@@ -397,15 +397,7 @@ class IOTest(parameterized.TestCase):
   @pytest.mark.skipif(not wp.get_device().is_cuda, reason="SDF volumes require CUDA device")
   def test_volumes(self):
     """Tests that mujoco_octree_to_warp_volume properly processes SDF volumes."""
-    from pathlib import Path
-
-    cow_xml_path = Path(__file__).parent.parent.parent / "benchmark" / "cow" / "cow.xml"
-
-    mjm = mujoco.MjModel.from_xml_path(str(cow_xml_path))
-    mjd = mujoco.MjData(mjm)
-    mujoco.mj_forward(mjm, mjd)
-
-    m = mjwarp.put_model(mjm)
+    mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)
 
     self.assertIsInstance(m.volume_ids, wp.array)
     self.assertEqual(m.volume_ids.dtype, wp.uint64)
