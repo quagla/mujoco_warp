@@ -96,6 +96,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   plugin_id = np.array(plugin_id)
   plugin_attr = np.array(plugin_attr)
+  volume_ids, volumes, oct_aabb = mujoco_octree_to_warp_volume(mjm)
 
   if mjm.nflex > 1:
     raise NotImplementedError("Only one flex is unsupported.")
@@ -631,9 +632,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mesh_polymapadr=wp.array(mjm.mesh_polymapadr, dtype=int),
     mesh_polymapnum=wp.array(mjm.mesh_polymapnum, dtype=int),
     mesh_polymap=wp.array(mjm.mesh_polymap, dtype=int),
-    volume_ids=wp.array(),
-    volumes=tuple(),
-    oct_aabb=wp.array2d(),
+    volume_ids=volume_ids,
+    volumes=volumes,
+    oct_aabb=oct_aabb,
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
@@ -846,11 +847,12 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       dtype=int,
     ),
   )
-  mujoco_octree_to_warp_volume(mjm, m)
+
   return m
 
 
-def mujoco_octree_to_warp_volume(mjm, m):
+def mujoco_octree_to_warp_volume(mjm):
+  """Constructs volume data from MuJoCo octrees and returns it."""
   volume_ids = [0] * len(mjm.mesh_octadr)
   volumes = []
   oct_aabbs = [None] * len(mjm.mesh_octadr)
@@ -908,7 +910,7 @@ def mujoco_octree_to_warp_volume(mjm, m):
           volume_ids[mesh_id] = 0
         oct_aabbs[mesh_id] = [center, half_size]
 
-  m.volume_ids = wp.array(data=volume_ids, dtype=wp.uint64)
+  volume_ids_array = wp.array(data=volume_ids, dtype=wp.uint64)
 
   processed_aabbs = []
   for aabb in oct_aabbs:
@@ -920,8 +922,10 @@ def mujoco_octree_to_warp_volume(mjm, m):
       processed_aabbs.append([zero_center, zero_half_size])
 
   aabb_array = np.array(processed_aabbs, dtype=np.float32)
-  m.oct_aabb = wp.array2d(data=aabb_array, dtype=wp.vec3)
-  m.volumes = tuple(volumes)
+  oct_aabb_array = wp.array2d(data=aabb_array, dtype=wp.vec3)
+  volumes_tuple = tuple(volumes)
+
+  return volume_ids_array, volumes_tuple, oct_aabb_array
 
 
 def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: int = -1) -> types.Data:
