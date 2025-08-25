@@ -439,6 +439,30 @@ def _sphere_sphere(
 
 
 @wp.func
+def _sphere_sphere_ext_core(
+  pos1: wp.vec3,
+  radius1: float,
+  mat1: wp.mat33,
+  pos2: wp.vec3,
+  radius2: float,
+  mat2: wp.mat33,
+) -> Tuple[float, wp.vec3, wp.vec3]:
+  dir = pos2 - pos1
+  dist = wp.length(dir)
+  if dist == 0.0:
+    # Use cross product of z axes like MuJoCo
+    axis1 = wp.vec3(mat1[0, 2], mat1[1, 2], mat1[2, 2])
+    axis2 = wp.vec3(mat2[0, 2], mat2[1, 2], mat2[2, 2])
+    n = wp.cross(axis1, axis2)
+    n = wp.normalize(n)
+  else:
+    n = dir / dist
+  dist = dist - (radius1 + radius2)
+  pos = pos1 + n * (radius1 + 0.5 * dist)
+  return dist, pos, n
+
+
+@wp.func
 def _sphere_sphere_ext(
   # Data in:
   nconmax_in: int,
@@ -472,18 +496,7 @@ def _sphere_sphere_ext(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  dir = pos2 - pos1
-  dist = wp.length(dir)
-  if dist == 0.0:
-    # Use cross product of z axes like MuJoCo
-    axis1 = wp.vec3(mat1[0, 2], mat1[1, 2], mat1[2, 2])
-    axis2 = wp.vec3(mat2[0, 2], mat2[1, 2], mat2[2, 2])
-    n = wp.cross(axis1, axis2)
-    n = wp.normalize(n)
-  else:
-    n = dir / dist
-  dist = dist - (radius1 + radius2)
-  pos = pos1 + n * (radius1 + 0.5 * dist)
+  dist, pos, n = _sphere_sphere_ext_core(pos1, radius1, mat1, pos2, radius2, mat2)
 
   write_contact(
     nconmax_in,
@@ -1319,6 +1332,119 @@ def plane_convex(
 
 
 @wp.func
+def sphere_cylinder_core(
+  # In:
+  sphere_pos: wp.vec3,
+  sphere_radius: float,
+  cylinder_pos: wp.vec3,
+  cylinder_axis: wp.vec3,
+  cylinder_radius: float,
+  cylinder_half_height: float,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for sphere-cylinder collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  vec = sphere_pos - cylinder_pos
+  x = wp.dot(vec, cylinder_axis)
+
+  a_proj = cylinder_axis * x
+  p_proj = vec - a_proj
+  p_proj_sqr = wp.dot(p_proj, p_proj)
+
+  collide_side = wp.abs(x) < cylinder_half_height
+  collide_cap = p_proj_sqr < (cylinder_radius * cylinder_radius)
+
+  if collide_side and collide_cap:
+    dist_cap = cylinder_half_height - wp.abs(x)
+    dist_radius = cylinder_radius - wp.sqrt(p_proj_sqr)
+
+    if dist_cap < dist_radius:
+      collide_side = False
+    else:
+      collide_cap = False
+
+  # Side collision
+  if collide_side:
+    pos_target = cylinder_pos + a_proj
+    
+    # Use _sphere_sphere_ext_core logic
+    dist, pos, n = _sphere_sphere_ext_core(
+      sphere_pos,
+      sphere_radius,
+      wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # identity matrix for sphere
+      pos_target,
+      cylinder_radius,
+      wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # identity matrix for cylinder
+    )
+    
+    if dist <= margin:
+      contact_dist[contact_count] = dist
+      contact_pos[contact_count] = pos
+      contact_normals[contact_count] = n
+      contact_count = contact_count + 1
+
+  # Cap collision
+  elif collide_cap:
+    if x > 0.0:
+      # top cap
+      pos_cap = cylinder_pos + cylinder_axis * cylinder_half_height
+      plane_normal = cylinder_axis
+    else:
+      # bottom cap
+      pos_cap = cylinder_pos - cylinder_axis * cylinder_half_height
+      plane_normal = -cylinder_axis
+
+    dist, pos_contact = _plane_sphere(plane_normal, pos_cap, sphere_pos, sphere_radius)
+    plane_normal = -plane_normal  # Flip normal after position calculation
+
+    if dist <= margin:
+      contact_dist[contact_count] = dist
+      contact_pos[contact_count] = pos_contact
+      contact_normals[contact_count] = plane_normal
+      contact_count = contact_count + 1
+
+  # Corner collision
+  else:
+    inv_len = safe_div(1.0, wp.sqrt(p_proj_sqr))
+    p_proj = p_proj * (cylinder_radius * inv_len)
+
+    cap_offset = cylinder_axis * (wp.sign(x) * cylinder_half_height)
+    pos_corner = cylinder_pos + cap_offset + p_proj
+
+    # Use _sphere_sphere_ext_core logic with radius 0 for corner
+    dist, pos, n = _sphere_sphere_ext_core(
+      sphere_pos,
+      sphere_radius,
+      wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # identity matrix for sphere
+      pos_corner,
+      0.0,  # corner has radius 0
+      wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # identity matrix for corner
+    )
+
+    if dist <= margin:
+      contact_dist[contact_count] = dist
+      contact_pos[contact_count] = pos
+      contact_normals[contact_count] = n
+      contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def sphere_cylinder(
   # Data in:
   nconmax_in: int,
@@ -1348,86 +1474,33 @@ def sphere_cylinder(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  axis = wp.vec3(
-    cylinder.rot[0, 2],
-    cylinder.rot[1, 2],
-    cylinder.rot[2, 2],
+  """Calculates contacts between a sphere and a cylinder."""
+  # Extract cylinder axis
+  cylinder_axis = wp.vec3(cylinder.rot[0, 2], cylinder.rot[1, 2], cylinder.rot[2, 2])
+
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_cylinder_core(
+    sphere.pos,
+    sphere.size[0],  # sphere radius
+    cylinder.pos,
+    cylinder_axis,
+    cylinder.size[0],  # cylinder radius
+    cylinder.size[1],  # cylinder half_height
+    margin,
   )
 
-  vec = sphere.pos - cylinder.pos
-  x = wp.dot(vec, axis)
-
-  a_proj = axis * x
-  p_proj = vec - a_proj
-  p_proj_sqr = wp.dot(p_proj, p_proj)
-
-  collide_side = wp.abs(x) < cylinder.size[1]
-  collide_cap = p_proj_sqr < (cylinder.size[0] * cylinder.size[0])
-
-  if collide_side and collide_cap:
-    dist_cap = cylinder.size[1] - wp.abs(x)
-    dist_radius = cylinder.size[0] - wp.sqrt(p_proj_sqr)
-
-    if dist_cap < dist_radius:
-      collide_side = False
-    else:
-      collide_cap = False
-
-  # Side collision
-  if collide_side:
-    pos_target = cylinder.pos + a_proj
-
-    _sphere_sphere_ext(
-      nconmax_in,
-      sphere.pos,
-      sphere.size[0],
-      pos_target,
-      cylinder.size[0],
-      worldid,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      sphere.rot,
-      cylinder.rot,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-    return
-
-  # Cap collision
-  if collide_cap:
-    if x > 0.0:
-      # top cap
-      pos_cap = cylinder.pos + axis * cylinder.size[1]
-      plane_normal = axis
-    else:
-      # bottom cap
-      pos_cap = cylinder.pos - axis * cylinder.size[1]
-      plane_normal = -axis
-
-    dist, pos_contact = _plane_sphere(plane_normal, pos_cap, sphere.pos, sphere.size[0])
-    plane_normal = -plane_normal  # Flip normal after position calculation
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
 
     write_contact(
       nconmax_in,
       dist,
-      pos_contact,
-      make_frame(plane_normal),
+      pos,
+      frame,
       margin,
       gap,
       condim,
@@ -1450,46 +1523,6 @@ def sphere_cylinder(
       contact_geom_out,
       contact_worldid_out,
     )
-
-    return
-
-  # Corner collision
-  inv_len = safe_div(1.0, wp.sqrt(p_proj_sqr))
-  p_proj = p_proj * (cylinder.size[0] * inv_len)
-
-  cap_offset = axis * (wp.sign(x) * cylinder.size[1])
-  pos_corner = cylinder.pos + cap_offset + p_proj
-
-  _sphere_sphere_ext(
-    nconmax_in,
-    sphere.pos,
-    sphere.size[0],
-    pos_corner,
-    0.0,
-    worldid,
-    margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    sphere.rot,
-    cylinder.rot,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
-  )
 
 
 @wp.func
