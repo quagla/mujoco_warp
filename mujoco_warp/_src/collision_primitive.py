@@ -2738,62 +2738,59 @@ def _compute_rotmore(face_idx: int) -> wp.mat33:
 
 
 @wp.func
-def box_box(
-  # Data in:
-  nconmax_in: int,
+def box_box_core(
   # In:
-  box1: Geom,
-  box2: Geom,
-  worldid: int,
+  box1_pos: wp.vec3,
+  box1_rot: wp.mat33,
+  box1_size: wp.vec3,
+  box2_pos: wp.vec3,
+  box2_rot: wp.mat33,
+  box2_size: wp.vec3,
   margin: float,
-  gap: float,
-  condim: int,
-  friction: vec5,
-  solref: wp.vec2f,
-  solreffriction: wp.vec2f,
-  solimp: vec5,
-  geoms: wp.vec2i,
-  # Data out:
-  ncon_out: wp.array(dtype=int),
-  contact_dist_out: wp.array(dtype=float),
-  contact_pos_out: wp.array(dtype=wp.vec3),
-  contact_frame_out: wp.array(dtype=wp.mat33),
-  contact_includemargin_out: wp.array(dtype=float),
-  contact_friction_out: wp.array(dtype=vec5),
-  contact_solref_out: wp.array(dtype=wp.vec2),
-  contact_solreffriction_out: wp.array(dtype=wp.vec2),
-  contact_solimp_out: wp.array(dtype=vec5),
-  contact_dim_out: wp.array(dtype=int),
-  contact_geom_out: wp.array(dtype=wp.vec2i),
-  contact_worldid_out: wp.array(dtype=int),
-):
+) -> Tuple[int, vec8f, mat83f, mat83f, wp.mat33]:
+  """Core contact geometry calculation for box-box collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+      contact_frame: Contact frame for all contacts
+  """
+
+  # Initialize output matrices
+  contact_dist = vec8f()
+  contact_pos = mat83f()
+  contact_normals = mat83f()
+  contact_count = 0
+
   # Compute transforms between box's frames
+  pos21 = wp.transpose(box1_rot) @ (box2_pos - box1_pos)
+  pos12 = wp.transpose(box2_rot) @ (box1_pos - box2_pos)
 
-  pos21 = wp.transpose(box1.rot) @ (box2.pos - box1.pos)
-  pos12 = wp.transpose(box2.rot) @ (box1.pos - box2.pos)
-
-  rot21 = wp.transpose(box1.rot) @ box2.rot
+  rot21 = wp.transpose(box1_rot) @ box2_rot
   rot12 = wp.transpose(rot21)
 
   rot21abs = wp.matrix_from_rows(wp.abs(rot21[0]), wp.abs(rot21[1]), wp.abs(rot21[2]))
   rot12abs = wp.transpose(rot21abs)
 
-  plen2 = rot21abs @ box2.size
-  plen1 = rot12abs @ box1.size
+  plen2 = rot21abs @ box2_size
+  plen1 = rot12abs @ box1_size
 
   # Compute axis of maximum separation
-  s_sum_3 = 3.0 * (box1.size + box2.size)
+  s_sum_3 = 3.0 * (box1_size + box2_size)
   separation = wp.float32(margin + s_sum_3[0] + s_sum_3[1] + s_sum_3[2])
   axis_code = wp.int32(-1)
 
   # First test: consider boxes' face normals
   for i in range(3):
-    c1 = -wp.abs(pos21[i]) + box1.size[i] + plen2[i]
+    c1 = -wp.abs(pos21[i]) + box1_size[i] + plen2[i]
 
-    c2 = -wp.abs(pos12[i]) + box2.size[i] + plen1[i]
+    c2 = -wp.abs(pos12[i]) + box2_size[i] + plen1[i]
 
     if c1 < -margin or c2 < -margin:
-      return
+      return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
 
     if c1 < separation:
       separation = c1
@@ -2830,15 +2827,15 @@ def box_box(
       # Project box half-sizes onto the potential separating axis
       for k in range(3):
         if k != i:
-          c3 += box1.size[k] * wp.abs(cross_axis[k])
+          c3 += box1_size[k] * wp.abs(cross_axis[k])
         if k != j:
-          c3 += box2.size[k] * rot21abs[i, 3 - k - j] / cross_length
+          c3 += box2_size[k] * rot21abs[i, 3 - k - j] / cross_length
 
       c3 -= wp.abs(box_dist)
 
       # Early exit: no collision if separated along this axis
       if c3 < -margin:
-        return
+        return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
 
       # Track minimum separation and which edge-edge pair it occurs on
       if c3 < separation * (1.0 - 1e-12):
@@ -2860,7 +2857,7 @@ def box_box(
 
   # No axis with separation < margin found
   if axis_code == -1:
-    return
+    return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
 
   points = mat83f()
   depth = vec8f()
@@ -2875,8 +2872,8 @@ def box_box(
 
     r = rotmore @ wp.where(box_idx, rot12, rot21)
     p = rotmore @ wp.where(box_idx, pos12, pos21)
-    ss = wp.abs(rotmore @ wp.where(box_idx, box2.size, box1.size))
-    s = wp.where(box_idx, box1.size, box2.size)
+    ss = wp.abs(rotmore @ wp.where(box_idx, box2_size, box1_size))
+    s = wp.where(box_idx, box1_size, box2_size)
     rt = wp.transpose(r)
 
     lx, ly, hz = ss[0], ss[1], ss[2]
@@ -2974,8 +2971,8 @@ def box_box(
       n += 1
 
     # Set up contact frame
-    rw = wp.where(box_idx, box2.rot, box1.rot) @ wp.transpose(rotmore)
-    pw = wp.where(box_idx, box2.pos, box1.pos)
+    rw = wp.where(box_idx, box2_rot, box1_rot) @ wp.transpose(rotmore)
+    pw = wp.where(box_idx, box2_pos, box1_pos)
     normal = wp.where(box_idx, -1.0, 1.0) * wp.transpose(rw)[2]
 
   else:
@@ -3003,7 +3000,7 @@ def box_box(
     rnorm = rotmore @ clnorm
     r = rotmore @ rot21
     rt = wp.transpose(r)
-    s = wp.abs(wp.transpose(rotmore) @ box1.size)
+    s = wp.abs(wp.transpose(rotmore) @ box1_size)
 
     lx, ly, hz = s[0], s[1], s[2]
     p[2] -= hz
@@ -3012,20 +3009,20 @@ def box_box(
 
     points[0] = (
       p
-      + rt[ax1] * box2.size[ax1] * wp.where(cle2 & (1 << ax1), 1.0, -1.0)
-      + rt[ax2] * box2.size[ax2] * wp.where(cle2 & (1 << ax2), 1.0, -1.0)
+      + rt[ax1] * box2_size[ax1] * wp.where(cle2 & (1 << ax1), 1.0, -1.0)
+      + rt[ax2] * box2_size[ax2] * wp.where(cle2 & (1 << ax2), 1.0, -1.0)
     )
-    points[1] = points[0] - rt[edge2] * box2.size[edge2]
-    points[0] += rt[edge2] * box2.size[edge2]
+    points[1] = points[0] - rt[edge2] * box2_size[edge2]
+    points[0] += rt[edge2] * box2_size[edge2]
 
     points[2] = (
       p
-      + rt[ax1] * box2.size[ax1] * wp.where(cle2 & (1 << ax1), -1.0, 1.0)
-      + rt[ax2] * box2.size[ax2] * wp.where(cle2 & (1 << ax2), 1.0, -1.0)
+      + rt[ax1] * box2_size[ax1] * wp.where(cle2 & (1 << ax1), -1.0, 1.0)
+      + rt[ax2] * box2_size[ax2] * wp.where(cle2 & (1 << ax2), 1.0, -1.0)
     )
 
-    points[3] = points[2] - rt[edge2] * box2.size[edge2]
-    points[2] += rt[edge2] * box2.size[edge2]
+    points[3] = points[2] - rt[edge2] * box2_size[edge2]
+    points[2] += rt[edge2] * box2_size[edge2]
 
     n = 4
 
@@ -3036,7 +3033,7 @@ def box_box(
 
     # Check if contact normal is valid
     if wp.abs(rnorm[2]) < MJ_MINVAL:
-      return  # Shouldn't happen
+      return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()  # Shouldn't happen
 
     # Calculate inverse normal for projection
     innorm = wp.where(inv, -1.0, 1.0) / rnorm[2]
@@ -3171,21 +3168,74 @@ def box_box(
       n += 1
 
     # Set up contact data for all points
-    rw = box1.rot @ wp.transpose(rotmore)
-    pw = box1.pos
+    rw = box1_rot @ wp.transpose(rotmore)
+    pw = box1_pos
     normal = wp.where(inv, -1.0, 1.0) * rw @ rnorm
 
   frame = make_frame(normal)
-  coff = wp.atomic_add(ncon_out, 0, n)
+  contact_count = n
 
-  for i in range(min(nconmax_in - coff, n)):
+  # Copy contact data to output matrices
+  for i in range(contact_count):
     points[i, 2] += hz
     pos = rw @ points[i] + pw
+    contact_dist[i] = depth[i]
+    contact_pos[i] = pos
+    contact_normals[i] = normal
 
+  return contact_count, contact_dist, contact_pos, contact_normals, frame
+
+
+@wp.func
+def box_box(
+  # Data in:
+  nconmax_in: int,
+  # In:
+  box1: Geom,
+  box2: Geom,
+  worldid: int,
+  margin: float,
+  gap: float,
+  condim: int,
+  friction: vec5,
+  solref: wp.vec2f,
+  solreffriction: wp.vec2f,
+  solimp: vec5,
+  geoms: wp.vec2i,
+  # Data out:
+  ncon_out: wp.array(dtype=int),
+  contact_dist_out: wp.array(dtype=float),
+  contact_pos_out: wp.array(dtype=wp.vec3),
+  contact_frame_out: wp.array(dtype=wp.mat33),
+  contact_includemargin_out: wp.array(dtype=float),
+  contact_friction_out: wp.array(dtype=vec5),
+  contact_solref_out: wp.array(dtype=wp.vec2),
+  contact_solreffriction_out: wp.array(dtype=wp.vec2),
+  contact_solimp_out: wp.array(dtype=vec5),
+  contact_dim_out: wp.array(dtype=int),
+  contact_geom_out: wp.array(dtype=wp.vec2i),
+  contact_worldid_out: wp.array(dtype=int),
+):
+  """Calculates contacts between two boxes."""
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals, frame = box_box_core(
+    box1.pos,
+    box1.rot,
+    box1.size,
+    box2.pos,
+    box2.rot,
+    box2.size,
+    margin,
+  )
+
+  # Write all contacts at once using atomic operations
+  coff = wp.atomic_add(ncon_out, 0, contact_count)
+
+  for i in range(min(nconmax_in - coff, contact_count)):
     cid = coff + i
 
-    contact_dist_out[cid] = depth[i]
-    contact_pos_out[cid] = pos
+    contact_dist_out[cid] = contact_dist[i]
+    contact_pos_out[cid] = contact_pos[i]
     contact_frame_out[cid] = frame
     contact_geom_out[cid] = geoms
     contact_worldid_out[cid] = worldid
