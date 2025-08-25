@@ -2057,6 +2057,73 @@ def contact_params(
 
 
 @wp.func
+def sphere_box_core(
+  # In:
+  sphere_pos: wp.vec3,
+  sphere_radius: float,
+  box_pos: wp.vec3,
+  box_rot: wp.mat33,
+  box_size: wp.vec3,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for sphere-box collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  center = wp.transpose(box_rot) @ (sphere_pos - box_pos)
+
+  clamped = wp.max(-box_size, wp.min(box_size, center))
+  clamped_dir, dist = normalize_with_norm(clamped - center)
+
+  if dist - sphere_radius > margin:
+    return contact_count, contact_dist, contact_pos, contact_normals
+
+  # sphere center inside box
+  if dist <= MJ_MINVAL:
+    closest = 2.0 * (box_size[0] + box_size[1] + box_size[2])
+    k = wp.int32(0)
+    for i in range(6):
+      face_dist = wp.abs(wp.where(i % 2, 1.0, -1.0) * box_size[i // 2] - center[i // 2])
+      if closest > face_dist:
+        closest = face_dist
+        k = i
+
+    nearest = wp.vec3(0.0)
+    nearest[k // 2] = wp.where(k % 2, -1.0, 1.0)
+    pos = center + nearest * (sphere_radius - closest) / 2.0
+    contact_normal = box_rot @ nearest
+    contact_distance = -closest - sphere_radius
+
+  else:
+    deepest = center + clamped_dir * sphere_radius
+    pos = 0.5 * (clamped + deepest)
+    contact_normal = box_rot @ clamped_dir
+    contact_distance = dist - sphere_radius
+
+  contact_position = box_pos + box_rot @ pos
+
+  if contact_distance <= margin:
+    contact_dist[contact_count] = contact_distance
+    contact_pos[contact_count] = contact_position
+    contact_normals[contact_count] = contact_normal
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def _sphere_box(
   # Data in:
   nconmax_in: int,
@@ -2089,64 +2156,50 @@ def _sphere_box(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  center = wp.transpose(box_rot) @ (sphere_pos - box_pos)
-
-  clamped = wp.max(-box_size, wp.min(box_size, center))
-  clamped_dir, dist = normalize_with_norm(clamped - center)
-
-  if dist - sphere_size > margin:
-    return
-
-  # sphere center inside box
-  if dist <= MJ_MINVAL:
-    closest = 2.0 * (box_size[0] + box_size[1] + box_size[2])
-    k = wp.int32(0)
-    for i in range(6):
-      face_dist = wp.abs(wp.where(i % 2, 1.0, -1.0) * box_size[i // 2] - center[i // 2])
-      if closest > face_dist:
-        closest = face_dist
-        k = i
-
-    nearest = wp.vec3(0.0)
-    nearest[k // 2] = wp.where(k % 2, -1.0, 1.0)
-    pos = center + nearest * (sphere_size - closest) / 2.0
-    contact_normal = box_rot @ nearest
-    contact_dist = -closest - sphere_size
-
-  else:
-    deepest = center + clamped_dir * sphere_size
-    pos = 0.5 * (clamped + deepest)
-    contact_normal = box_rot @ clamped_dir
-    contact_dist = dist - sphere_size
-
-  contact_pos = box_pos + box_rot @ pos
-  write_contact(
-    nconmax_in,
-    contact_dist,
-    contact_pos,
-    make_frame(contact_normal),
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_box_core(
+    sphere_pos,
+    sphere_size,
+    box_pos,
+    box_rot,
+    box_size,
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    worldid,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
