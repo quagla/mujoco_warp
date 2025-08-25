@@ -13,8 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-import warp as wp
 from typing import Tuple
+
+import warp as wp
 
 from .collision_hfield import hfield_triangle_prism
 from .math import closest_segment_point
