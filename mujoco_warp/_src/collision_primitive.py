@@ -1086,6 +1086,64 @@ def plane_ellipsoid(
 
 
 @wp.func
+def plane_box_core(
+  # In:
+  plane_normal: wp.vec3,
+  plane_pos: wp.vec3,
+  box_pos: wp.vec3,
+  box_rot: wp.mat33,
+  box_size: wp.vec3,
+  margin: float,
+) -> Tuple[int, wp.vec4, mat43f, mat43f]:
+  """Core contact geometry calculation for plane-box collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = wp.vec4(0.0, 0.0, 0.0, 0.0)
+  contact_pos = mat43f()
+  contact_normals = mat43f()
+  contact_count = int(0)
+
+  corner = wp.vec3()
+  dist = wp.dot(box_pos - plane_pos, plane_normal)
+
+  # test all corners, pick bottom 4
+  for i in range(8):
+    # get corner in local coordinates
+    corner.x = wp.where(i & 1, box_size.x, -box_size.x)
+    corner.y = wp.where(i & 2, box_size.y, -box_size.y)
+    corner.z = wp.where(i & 4, box_size.z, -box_size.z)
+
+    # get corner in global coordinates relative to box center
+    corner = box_rot * corner
+
+    # compute distance to plane, skip if too far or pointing up
+    ldist = wp.dot(plane_normal, corner)
+    if dist + ldist > margin or ldist > 0:
+      continue
+
+    cdist = dist + ldist
+    pos = corner + box_pos + (plane_normal * cdist / -2.0)
+    
+    contact_dist[contact_count] = cdist
+    contact_pos[contact_count] = pos
+    contact_normals[contact_count] = plane_normal
+    contact_count = contact_count + 1
+    
+    if contact_count >= 4:
+      break
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def plane_box(
   # Data in:
   nconmax_in: int,
@@ -1115,31 +1173,27 @@ def plane_box(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  count = int(0)
-  corner = wp.vec3()
-  dist = wp.dot(box.pos - plane.pos, plane.normal)
+  """Calculates contacts between a box and a plane."""
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = plane_box_core(
+    plane.normal,
+    plane.pos,
+    box.pos,
+    box.rot,
+    box.size,
+    margin,
+  )
 
-  # test all corners, pick bottom 4
-  for i in range(8):
-    # get corner in local coordinates
-    corner.x = wp.where(i & 1, box.size.x, -box.size.x)
-    corner.y = wp.where(i & 2, box.size.y, -box.size.y)
-    corner.z = wp.where(i & 4, box.size.z, -box.size.z)
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
 
-    # get corner in global coordinates relative to box center
-    corner = box.rot * corner
-
-    # compute distance to plane, skip if too far or pointing up
-    ldist = wp.dot(plane.normal, corner)
-    if dist + ldist > margin or ldist > 0:
-      continue
-
-    cdist = dist + ldist
-    frame = make_frame(plane.normal)
-    pos = corner + box.pos + (plane.normal * cdist / -2.0)
     write_contact(
       nconmax_in,
-      cdist,
+      dist,
       pos,
       frame,
       margin,
@@ -1164,9 +1218,6 @@ def plane_box(
       contact_geom_out,
       contact_worldid_out,
     )
-    count += 1
-    if count >= 4:
-      break
 
 
 _HUGE_VAL = 1e6
