@@ -342,7 +342,13 @@ def plane_sphere_wrapper(
 
 
 @wp.func
-def _sphere_sphere(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: float) -> Tuple[float, wp.vec3, wp.vec3]:
+def _sphere_sphere(
+  # In:
+  pos1: wp.vec3,
+  radius1: float,
+  pos2: wp.vec3,
+  radius2: float,
+) -> Tuple[float, wp.vec3, wp.vec3]:
   """Core sphere-sphere collision calculation.
 
   Args:
@@ -477,6 +483,7 @@ def _sphere_sphere(
 
 @wp.func
 def _sphere_sphere_ext(
+  # In:
   pos1: wp.vec3,
   radius1: float,
   mat1: wp.mat33,
