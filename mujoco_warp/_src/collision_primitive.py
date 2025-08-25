@@ -265,7 +265,7 @@ def plane_sphere_core(
 
 
 @wp.func
-def plane_sphere(
+def plane_sphere_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -580,7 +580,7 @@ def _sphere_sphere_ext(
 
 
 @wp.func
-def sphere_sphere(
+def sphere_sphere_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -717,7 +717,7 @@ def sphere_capsule_core(
 
 
 @wp.func
-def sphere_capsule(
+def sphere_capsule_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -869,7 +869,7 @@ def capsule_capsule_core(
 
 
 @wp.func
-def capsule_capsule(
+def capsule_capsule_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1025,7 +1025,7 @@ def plane_capsule_core(
 
 
 @wp.func
-def plane_capsule(
+def plane_capsule_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1154,7 +1154,7 @@ def plane_ellipsoid_core(
 
 
 @wp.func
-def plane_ellipsoid(
+def plane_ellipsoid_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1297,7 +1297,7 @@ def plane_box_core(
 
 
 @wp.func
-def plane_box(
+def plane_box_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1614,7 +1614,7 @@ def plane_convex_core(
 
 
 @wp.func
-def plane_convex(
+def plane_convex_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1808,7 +1808,7 @@ def sphere_cylinder_core(
 
 
 @wp.func
-def sphere_cylinder(
+def sphere_cylinder_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -1999,7 +1999,7 @@ def plane_cylinder_core(
 
 
 @wp.func
-def plane_cylinder(
+def plane_cylinder_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -2324,7 +2324,7 @@ def _sphere_box(
 
 
 @wp.func
-def sphere_box(
+def sphere_box_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -2755,7 +2755,7 @@ def capsule_box_core(
 
 
 @wp.func
-def capsule_box(
+def capsule_box_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -3325,7 +3325,7 @@ def box_box_core(
 
 
 @wp.func
-def box_box(
+def box_box_wrapper(
   # Data in:
   nconmax_in: int,
   # In:
@@ -3386,19 +3386,19 @@ def box_box(
 
 
 _PRIMITIVE_COLLISIONS = {
-  (GeomType.PLANE.value, GeomType.SPHERE.value): plane_sphere,
-  (GeomType.PLANE.value, GeomType.CAPSULE.value): plane_capsule,
-  (GeomType.PLANE.value, GeomType.ELLIPSOID.value): plane_ellipsoid,
-  (GeomType.PLANE.value, GeomType.CYLINDER.value): plane_cylinder,
-  (GeomType.PLANE.value, GeomType.BOX.value): plane_box,
-  (GeomType.PLANE.value, GeomType.MESH.value): plane_convex,
-  (GeomType.SPHERE.value, GeomType.SPHERE.value): sphere_sphere,
-  (GeomType.SPHERE.value, GeomType.CAPSULE.value): sphere_capsule,
-  (GeomType.SPHERE.value, GeomType.CYLINDER.value): sphere_cylinder,
-  (GeomType.SPHERE.value, GeomType.BOX.value): sphere_box,
-  (GeomType.CAPSULE.value, GeomType.CAPSULE.value): capsule_capsule,
-  (GeomType.CAPSULE.value, GeomType.BOX.value): capsule_box,
-  (GeomType.BOX.value, GeomType.BOX.value): box_box,
+  (GeomType.PLANE.value, GeomType.SPHERE.value): plane_sphere_wrapper,
+  (GeomType.PLANE.value, GeomType.CAPSULE.value): plane_capsule_wrapper,
+  (GeomType.PLANE.value, GeomType.ELLIPSOID.value): plane_ellipsoid_wrapper,
+  (GeomType.PLANE.value, GeomType.CYLINDER.value): plane_cylinder_wrapper,
+  (GeomType.PLANE.value, GeomType.BOX.value): plane_box_wrapper,
+  (GeomType.PLANE.value, GeomType.MESH.value): plane_convex_wrapper,
+  (GeomType.SPHERE.value, GeomType.SPHERE.value): sphere_sphere_wrapper,
+  (GeomType.SPHERE.value, GeomType.CAPSULE.value): sphere_capsule_wrapper,
+  (GeomType.SPHERE.value, GeomType.CYLINDER.value): sphere_cylinder_wrapper,
+  (GeomType.SPHERE.value, GeomType.BOX.value): sphere_box_wrapper,
+  (GeomType.CAPSULE.value, GeomType.CAPSULE.value): capsule_capsule_wrapper,
+  (GeomType.CAPSULE.value, GeomType.BOX.value): capsule_box_wrapper,
+  (GeomType.BOX.value, GeomType.BOX.value): box_box_wrapper,
 }
 
 
