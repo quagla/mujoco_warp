@@ -14,6 +14,7 @@
 # ==============================================================================
 
 import warp as wp
+from typing import Tuple
 
 from .collision_hfield import hfield_triangle_prism
 from .math import closest_segment_point
@@ -36,7 +37,7 @@ wp.set_module_options({"enable_backward": False})
 class vec8f(wp.types.vector(length=8, dtype=wp.float32)):
   pass
 
-
+# The number of rows is the maximum number of contacts that can be returned
 class mat43f(wp.types.matrix(shape=(4, 3), dtype=wp.float32)):
   pass
 
@@ -1301,6 +1302,107 @@ def sphere_cylinder(
 
 
 @wp.func
+def plane_cylinder_core(
+  # In:
+  plane_normal: wp.vec3,
+  plane_pos: wp.vec3,
+  cylinder_center: wp.vec3,
+  cylinder_axis: wp.vec3,
+  cylinder_radius: float,
+  cylinder_half_height: float,
+  margin: float,
+) -> Tuple[int, wp.vec4, mat43f, mat43f]:
+  """Core contact geometry calculation for plane-cylinder collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances 
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = wp.vec4(0.0, 0.0, 0.0, 0.0)
+  contact_pos = mat43f()
+  contact_normals = mat43f()
+  contact_count = 0
+
+  n = plane_normal
+  axis = cylinder_axis
+
+  # Project, make sure axis points toward plane
+  prjaxis = wp.dot(n, axis)
+  if prjaxis > 0:
+    axis = -axis
+    prjaxis = -prjaxis
+
+  # Compute normal distance from plane to cylinder center
+  dist0 = wp.dot(cylinder_center - plane_pos, n)
+
+  # Remove component of -normal along cylinder axis
+  vec = axis * prjaxis - n
+  len_sqr = wp.dot(vec, vec)
+
+  # If vector is nondegenerate, normalize and scale by radius
+  # Otherwise use cylinder's x-axis scaled by radius
+  vec = wp.where(
+    len_sqr >= 1e-12,
+    vec * safe_div(cylinder_radius, wp.sqrt(len_sqr)),
+    wp.vec3(1.0, 0.0, 0.0) * cylinder_radius,  # Default x-axis when degenerate
+  )
+
+  # Project scaled vector on normal
+  prjvec = wp.dot(vec, n)
+
+  # Scale cylinder axis by half-length
+  axis = axis * cylinder_half_height
+  prjaxis = prjaxis * cylinder_half_height
+
+  # First contact point (end cap closer to plane)
+  dist1 = dist0 + prjaxis + prjvec
+  if dist1 <= margin:
+    pos1 = cylinder_center + vec + axis - n * (dist1 * 0.5)
+    contact_dist[contact_count] = dist1
+    contact_pos[contact_count] = pos1
+    contact_normals[contact_count] = n  # Normal vector
+    contact_count = contact_count + 1
+
+  # Second contact point (end cap farther from plane)
+  dist2 = dist0 - prjaxis + prjvec
+  if dist2 <= margin:
+    pos2 = cylinder_center + vec - axis - n * (dist2 * 0.5)
+    contact_dist[contact_count] = dist2
+    contact_pos[contact_count] = pos2
+    contact_normals[contact_count] = n  # Normal vector
+    contact_count = contact_count + 1
+
+  # Try triangle contact points on side closer to plane
+  prjvec1 = -prjvec * 0.5
+  dist3 = dist0 + prjaxis + prjvec1
+  if dist3 <= margin:
+    # Compute sideways vector scaled by radius*sqrt(3)/2
+    vec1 = wp.cross(vec, axis)
+    vec1 = wp.normalize(vec1) * (cylinder_radius * wp.sqrt(3.0) * 0.5)
+
+    # Add contact point A - adjust to closest side
+    pos3 = cylinder_center + vec1 + axis - vec * 0.5 - n * (dist3 * 0.5)
+    contact_dist[contact_count] = dist3
+    contact_pos[contact_count] = pos3
+    contact_normals[contact_count] = n  # Normal vector
+    contact_count = contact_count + 1
+
+    # Add contact point B - adjust to closest side
+    pos4 = cylinder_center - vec1 + axis - vec * 0.5 - n * (dist3 * 0.5)
+    contact_dist[contact_count] = dist3
+    contact_pos[contact_count] = pos4
+    contact_normals[contact_count] = n  # Normal vector
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def plane_cylinder(
   # Data in:
   nconmax_in: int,
@@ -1331,151 +1433,31 @@ def plane_cylinder(
   contact_worldid_out: wp.array(dtype=int),
 ):
   """Calculates contacts between a cylinder and a plane."""
-  # Extract plane normal and cylinder axis
-  n = plane.normal
-  axis = wp.vec3(cylinder.rot[0, 2], cylinder.rot[1, 2], cylinder.rot[2, 2])
+  # Extract cylinder axis
+  cylinder_axis = wp.vec3(cylinder.rot[0, 2], cylinder.rot[1, 2], cylinder.rot[2, 2])
 
-  # Project, make sure axis points toward plane
-  prjaxis = wp.dot(n, axis)
-  if prjaxis > 0:
-    axis = -axis
-    prjaxis = -prjaxis
-
-  # Compute normal distance from plane to cylinder center
-  dist0 = wp.dot(cylinder.pos - plane.pos, n)
-
-  # Remove component of -normal along cylinder axis
-  vec = axis * prjaxis - n
-  len_sqr = wp.dot(vec, vec)
-
-  # If vector is nondegenerate, normalize and scale by radius
-  # Otherwise use cylinder's x-axis scaled by radius
-  vec = wp.where(
-    len_sqr >= 1e-12,
-    vec * safe_div(cylinder.size[0], wp.sqrt(len_sqr)),
-    wp.vec3(cylinder.rot[0, 0], cylinder.rot[1, 0], cylinder.rot[2, 0]) * cylinder.size[0],
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = plane_cylinder_core(
+    plane.normal,
+    plane.pos,
+    cylinder.pos,
+    cylinder_axis,
+    cylinder.size[0],  # radius
+    cylinder.size[1],  # half_height
+    margin,
   )
 
-  # Project scaled vector on normal
-  prjvec = wp.dot(vec, n)
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
 
-  # Scale cylinder axis by half-length
-  axis = axis * cylinder.size[1]
-  prjaxis = prjaxis * cylinder.size[1]
-
-  frame = make_frame(n)
-
-  # First contact point (end cap closer to plane)
-  dist1 = dist0 + prjaxis + prjvec
-  if dist1 <= margin:
-    pos1 = cylinder.pos + vec + axis - n * (dist1 * 0.5)
     write_contact(
       nconmax_in,
-      dist1,
-      pos1,
-      frame,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      worldid,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-  else:
-    # If nearest point is above margin, no contacts
-    return
-
-  # Second contact point (end cap farther from plane)
-  dist2 = dist0 - prjaxis + prjvec
-  if dist2 <= margin:
-    pos2 = cylinder.pos + vec - axis - n * (dist2 * 0.5)
-    write_contact(
-      nconmax_in,
-      dist2,
-      pos2,
-      make_frame(plane.normal),
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      worldid,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-
-  # Try triangle contact points on side closer to plane
-  prjvec1 = -prjvec * 0.5
-  dist3 = dist0 + prjaxis + prjvec1
-  if dist3 <= margin:
-    # Compute sideways vector scaled by radius*sqrt(3)/2
-    vec1 = wp.cross(vec, axis)
-    vec1 = wp.normalize(vec1) * (cylinder.size[0] * wp.sqrt(3.0) * 0.5)
-
-    # Add contact point A - adjust to closest side
-    pos3 = cylinder.pos + vec1 + axis - vec * 0.5 - n * (dist3 * 0.5)
-    write_contact(
-      nconmax_in,
-      dist3,
-      pos3,
-      frame,
-      margin,
-      gap,
-      condim,
-      friction,
-      solref,
-      solreffriction,
-      solimp,
-      geoms,
-      worldid,
-      ncon_out,
-      contact_dist_out,
-      contact_pos_out,
-      contact_frame_out,
-      contact_includemargin_out,
-      contact_friction_out,
-      contact_solref_out,
-      contact_solreffriction_out,
-      contact_solimp_out,
-      contact_dim_out,
-      contact_geom_out,
-      contact_worldid_out,
-    )
-
-    # Add contact point B - adjust to closest side
-    pos4 = cylinder.pos - vec1 + axis - vec * 0.5 - n * (dist3 * 0.5)
-    write_contact(
-      nconmax_in,
-      dist3,
-      pos4,
+      dist,
+      pos,
       frame,
       margin,
       gap,
