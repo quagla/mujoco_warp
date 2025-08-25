@@ -612,6 +612,58 @@ def sphere_sphere(
 
 
 @wp.func
+def sphere_capsule_core(
+  # In:
+  sphere_pos: wp.vec3,
+  sphere_radius: float,
+  capsule_pos: wp.vec3,
+  capsule_axis: wp.vec3,
+  capsule_radius: float,
+  capsule_half_length: float,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for sphere-capsule collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  # Calculate capsule segment
+  segment = capsule_axis * capsule_half_length
+
+  # Find closest point on capsule centerline to sphere center
+  pt = closest_segment_point(capsule_pos - segment, capsule_pos + segment, sphere_pos)
+
+  # Use sphere-sphere collision between sphere and closest point
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere_core(
+    sphere_pos,
+    sphere_radius,
+    pt,
+    capsule_radius,
+    margin,
+  )
+
+  # Copy results from inner sphere-sphere calculation
+  if contact_count_inner > 0:
+    contact_dist[contact_count] = contact_dist_inner[0]
+    contact_pos[contact_count] = contact_pos_inner[0]
+    contact_normals[contact_count] = contact_normals_inner[0]
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def sphere_capsule(
   # Data in:
   nconmax_in: int,
@@ -642,42 +694,54 @@ def sphere_capsule(
   contact_worldid_out: wp.array(dtype=int),
 ):
   """Calculates one contact between a sphere and a capsule."""
+  # Extract capsule axis
   axis = wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
-  length = cap.size[1]
-  segment = axis * length
 
-  # Find closest point on capsule centerline to sphere center
-  pt = closest_segment_point(cap.pos - segment, cap.pos + segment, sphere.pos)
-
-  # Treat as sphere-sphere collision between sphere and closest point
-  _sphere_sphere(
-    nconmax_in,
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_capsule_core(
     sphere.pos,
-    sphere.size[0],
-    pt,
-    cap.size[0],
-    worldid,
+    sphere.size[0],  # sphere radius
+    cap.pos,
+    axis,
+    cap.size[0],  # capsule radius
+    cap.size[1],  # capsule half length
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
