@@ -220,7 +220,7 @@ def _plane_sphere(plane_normal: wp.vec3, plane_pos: wp.vec3, sphere_pos: wp.vec3
 
 
 @wp.func
-def plane_sphere_core(
+def plane_sphere(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -296,7 +296,7 @@ def plane_sphere_wrapper(
 ):
   """Calculates contacts between a sphere and a plane."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = plane_sphere_core(
+  contact_count, contact_dist, contact_pos, contact_normals = plane_sphere(
     plane.normal,
     plane.pos,
     sphere.pos,
@@ -341,15 +341,15 @@ def plane_sphere_wrapper(
 
 
 @wp.func
-def _sphere_sphere_core(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: float) -> Tuple[float, wp.vec3, wp.vec3]:
+def _sphere_sphere(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: float) -> Tuple[float, wp.vec3, wp.vec3]:
   """Core sphere-sphere collision calculation.
-  
+
   Args:
     pos1: Center position of the first sphere
     radius1: Radius of the first sphere
     pos2: Center position of the second sphere
     radius2: Radius of the second sphere
-  
+
   Returns:
     Tuple containing:
       dist: Distance between sphere surfaces (negative if overlapping)
@@ -368,7 +368,7 @@ def _sphere_sphere_core(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: f
 
 
 @wp.func
-def sphere_sphere_core(
+def sphere_sphere(
   # In:
   pos1: wp.vec3,
   radius1: float,
@@ -400,7 +400,7 @@ def sphere_sphere_core(
   contact_count = 0
 
   # Calculate contact distance, position, and normal
-  dist, pos, n = _sphere_sphere_core(pos1, radius1, pos2, radius2)
+  dist, pos, n = _sphere_sphere(pos1, radius1, pos2, radius2)
 
   if dist <= margin:
     contact_dist[contact_count] = dist
@@ -443,7 +443,7 @@ def _sphere_sphere(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  dist, pos, n = _sphere_sphere_core(pos1, radius1, pos2, radius2)
+  dist, pos, n = _sphere_sphere(pos1, radius1, pos2, radius2)
 
   write_contact(
     nconmax_in,
@@ -475,7 +475,7 @@ def _sphere_sphere(
 
 
 @wp.func
-def _sphere_sphere_ext_core(
+def _sphere_sphere_ext(
   pos1: wp.vec3,
   radius1: float,
   mat1: wp.mat33,
@@ -484,7 +484,7 @@ def _sphere_sphere_ext_core(
   mat2: wp.mat33,
 ) -> Tuple[float, wp.vec3, wp.vec3]:
   """Core sphere-sphere collision calculation with orientation matrices.
-  
+
   Args:
     pos1: Center position of the first sphere
     radius1: Radius of the first sphere
@@ -492,7 +492,7 @@ def _sphere_sphere_ext_core(
     pos2: Center position of the second sphere
     radius2: Radius of the second sphere
     mat2: Orientation matrix of the second sphere
-  
+
   Returns:
     Tuple containing:
       dist: Distance between sphere surfaces (negative if overlapping)
@@ -548,7 +548,7 @@ def _sphere_sphere_ext(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  dist, pos, n = _sphere_sphere_ext_core(pos1, radius1, mat1, pos2, radius2, mat2)
+  dist, pos, n = _sphere_sphere_ext(pos1, radius1, mat1, pos2, radius2, mat2)
 
   write_contact(
     nconmax_in,
@@ -611,7 +611,7 @@ def sphere_sphere_wrapper(
 ):
   """Calculates contacts between two spheres."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = sphere_sphere_core(
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_sphere(
     sphere1.pos,
     sphere1.size[0],  # radius1
     sphere2.pos,
@@ -656,7 +656,7 @@ def sphere_sphere_wrapper(
 
 
 @wp.func
-def sphere_capsule_core(
+def sphere_capsule(
   # In:
   sphere_pos: wp.vec3,
   sphere_radius: float,
@@ -698,7 +698,7 @@ def sphere_capsule_core(
   pt = closest_segment_point(capsule_pos - segment, capsule_pos + segment, sphere_pos)
 
   # Use sphere-sphere collision between sphere and closest point
-  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere_core(
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere(
     sphere_pos,
     sphere_radius,
     pt,
@@ -751,7 +751,7 @@ def sphere_capsule_wrapper(
   axis = wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = sphere_capsule_core(
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_capsule(
     sphere.pos,
     sphere.size[0],  # sphere radius
     cap.pos,
@@ -798,7 +798,7 @@ def sphere_capsule_wrapper(
 
 
 @wp.func
-def capsule_capsule_core(
+def capsule_capsule(
   # In:
   cap1_pos: wp.vec3,
   cap1_axis: wp.vec3,
@@ -850,7 +850,7 @@ def capsule_capsule_core(
   )
 
   # Use sphere-sphere collision between closest points
-  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere_core(
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere(
     pt1,
     cap1_radius,
     pt2,
@@ -904,7 +904,7 @@ def capsule_capsule_wrapper(
   cap2_axis = wp.vec3(cap2.rot[0, 2], cap2.rot[1, 2], cap2.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = capsule_capsule_core(
+  contact_count, contact_dist, contact_pos, contact_normals = capsule_capsule(
     cap1.pos,
     cap1_axis,
     cap1.size[0],  # radius1
@@ -953,7 +953,7 @@ def capsule_capsule_wrapper(
 
 
 @wp.func
-def plane_capsule_core(
+def plane_capsule(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -1059,7 +1059,7 @@ def plane_capsule_wrapper(
   capsule_axis = wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals, frame = plane_capsule_core(
+  contact_count, contact_dist, contact_pos, contact_normals, frame = plane_capsule(
     plane.normal,
     plane.pos,
     cap.pos,
@@ -1105,7 +1105,7 @@ def plane_capsule_wrapper(
 
 
 @wp.func
-def plane_ellipsoid_core(
+def plane_ellipsoid(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -1185,7 +1185,7 @@ def plane_ellipsoid_wrapper(
 ):
   """Calculates contacts between an ellipsoid and a plane."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = plane_ellipsoid_core(
+  contact_count, contact_dist, contact_pos, contact_normals = plane_ellipsoid(
     plane.normal,
     plane.pos,
     ellipsoid.pos,
@@ -1231,7 +1231,7 @@ def plane_ellipsoid_wrapper(
 
 
 @wp.func
-def plane_box_core(
+def plane_box(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -1328,7 +1328,7 @@ def plane_box_wrapper(
 ):
   """Calculates contacts between a box and a plane."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = plane_box_core(
+  contact_count, contact_dist, contact_pos, contact_normals = plane_box(
     plane.normal,
     plane.pos,
     box.pos,
@@ -1377,7 +1377,7 @@ _HUGE_VAL = 1e6
 
 
 @wp.func
-def plane_convex_core(
+def plane_convex(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -1645,7 +1645,7 @@ def plane_convex_wrapper(
 ):
   """Calculates contacts between a plane and a convex object."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = plane_convex_core(
+  contact_count, contact_dist, contact_pos, contact_normals = plane_convex(
     plane.normal,
     plane.pos,
     convex,
@@ -1688,7 +1688,7 @@ def plane_convex_wrapper(
 
 
 @wp.func
-def sphere_cylinder_core(
+def sphere_cylinder(
   # In:
   sphere_pos: wp.vec3,
   sphere_radius: float,
@@ -1747,7 +1747,7 @@ def sphere_cylinder_core(
     pos_target = cylinder_pos + a_proj
 
     # Use _sphere_sphere_ext_core logic
-    dist, pos, n = _sphere_sphere_core(
+    dist, pos, n = _sphere_sphere(
       sphere_pos,
       sphere_radius,
       pos_target,
@@ -1789,7 +1789,7 @@ def sphere_cylinder_core(
     pos_corner = cylinder_pos + cap_offset + p_proj
 
     # Use _sphere_sphere_ext_core logic with radius 0 for corner
-    dist, pos, n = _sphere_sphere_ext_core(
+    dist, pos, n = _sphere_sphere_ext(
       sphere_pos,
       sphere_radius,
       wp.mat33(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),  # identity matrix for sphere
@@ -1842,7 +1842,7 @@ def sphere_cylinder_wrapper(
   cylinder_axis = wp.vec3(cylinder.rot[0, 2], cylinder.rot[1, 2], cylinder.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = sphere_cylinder_core(
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_cylinder(
     sphere.pos,
     sphere.size[0],  # sphere radius
     cylinder.pos,
@@ -1889,7 +1889,7 @@ def sphere_cylinder_wrapper(
 
 
 @wp.func
-def plane_cylinder_core(
+def plane_cylinder(
   # In:
   plane_normal: wp.vec3,
   plane_pos: wp.vec3,
@@ -2033,7 +2033,7 @@ def plane_cylinder_wrapper(
   cylinder_axis = wp.vec3(cylinder.rot[0, 2], cylinder.rot[1, 2], cylinder.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = plane_cylinder_core(
+  contact_count, contact_dist, contact_pos, contact_normals = plane_cylinder(
     plane.normal,
     plane.pos,
     cylinder.pos,
@@ -2170,7 +2170,7 @@ def contact_params(
 
 
 @wp.func
-def sphere_box_core(
+def sphere_box(
   # In:
   sphere_pos: wp.vec3,
   sphere_radius: float,
@@ -2278,7 +2278,7 @@ def _sphere_box(
   contact_worldid_out: wp.array(dtype=int),
 ):
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = sphere_box_core(
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_box(
     sphere_pos,
     sphere_size,
     box_pos,
@@ -2385,7 +2385,7 @@ def sphere_box_wrapper(
 
 
 @wp.func
-def capsule_box_core(
+def capsule_box(
   # In:
   capsule_pos: wp.vec3,
   capsule_axis: wp.vec3,
@@ -2714,7 +2714,7 @@ def capsule_box_core(
   s1_pos_g = box_rot @ s1_pos_l + box_pos
 
   # collide with sphere using core function
-  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_box_core(
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_box(
     s1_pos_g,
     capsule_radius,
     box_pos,
@@ -2735,7 +2735,7 @@ def capsule_box_core(
     s2_pos_g = box_rot @ s2_pos_l + box_pos
 
     # collide with sphere using core function
-    contact_count_inner2, contact_dist_inner2, contact_pos_inner2, contact_normals_inner2 = sphere_box_core(
+    contact_count_inner2, contact_dist_inner2, contact_pos_inner2, contact_normals_inner2 = sphere_box(
       s2_pos_g,
       capsule_radius,
       box_pos,
@@ -2789,7 +2789,7 @@ def capsule_box_wrapper(
   axis = wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
 
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = capsule_box_core(
+  contact_count, contact_dist, contact_pos, contact_normals = capsule_box(
     cap.pos,
     axis,
     cap.size[0],  # capsule radius
@@ -2869,7 +2869,7 @@ def _compute_rotmore(face_idx: int) -> wp.mat33:
 
 
 @wp.func
-def box_box_core(
+def box_box(
   # In:
   box1_pos: wp.vec3,
   box1_rot: wp.mat33,
@@ -3356,7 +3356,7 @@ def box_box_wrapper(
 ):
   """Calculates contacts between two boxes."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals = box_box_core(
+  contact_count, contact_dist, contact_pos, contact_normals = box_box(
     box1.pos,
     box1.rot,
     box1.size,
