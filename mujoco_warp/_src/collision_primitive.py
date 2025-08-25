@@ -660,6 +660,66 @@ def sphere_capsule(
 
 
 @wp.func
+def capsule_capsule_core(
+  # In:
+  cap1_pos: wp.vec3,
+  cap1_axis: wp.vec3,
+  cap1_radius: float,
+  cap1_half_length: float,
+  cap2_pos: wp.vec3,
+  cap2_axis: wp.vec3,
+  cap2_radius: float,
+  cap2_half_length: float,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for capsule-capsule collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  # Calculate capsule segments
+  seg1 = cap1_axis * cap1_half_length
+  seg2 = cap2_axis * cap2_half_length
+
+  # Find closest points between capsule centerlines
+  pt1, pt2 = closest_segment_to_segment_points(
+    cap1_pos - seg1,
+    cap1_pos + seg1,
+    cap2_pos - seg2,
+    cap2_pos + seg2,
+  )
+
+  # Use sphere-sphere collision between closest points
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere_core(
+    pt1,
+    cap1_radius,
+    pt2,
+    cap2_radius,
+    margin,
+  )
+
+  # Copy results from inner sphere-sphere calculation
+  if contact_count_inner > 0:
+    contact_dist[contact_count] = contact_dist_inner[0]
+    contact_pos[contact_count] = contact_pos_inner[0]
+    contact_normals[contact_count] = contact_normals_inner[0]
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def capsule_capsule(
   # Data in:
   nconmax_in: int,
@@ -689,48 +749,58 @@ def capsule_capsule(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  axis1 = wp.vec3(cap1.rot[0, 2], cap1.rot[1, 2], cap1.rot[2, 2])
-  axis2 = wp.vec3(cap2.rot[0, 2], cap2.rot[1, 2], cap2.rot[2, 2])
-  length1 = cap1.size[1]
-  length2 = cap2.size[1]
-  seg1 = axis1 * length1
-  seg2 = axis2 * length2
+  """Calculates contacts between two capsules."""
+  # Extract capsule axes
+  cap1_axis = wp.vec3(cap1.rot[0, 2], cap1.rot[1, 2], cap1.rot[2, 2])
+  cap2_axis = wp.vec3(cap2.rot[0, 2], cap2.rot[1, 2], cap2.rot[2, 2])
 
-  pt1, pt2 = closest_segment_to_segment_points(
-    cap1.pos - seg1,
-    cap1.pos + seg1,
-    cap2.pos - seg2,
-    cap2.pos + seg2,
-  )
-
-  _sphere_sphere(
-    nconmax_in,
-    pt1,
-    cap1.size[0],
-    pt2,
-    cap2.size[0],
-    worldid,
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = capsule_capsule_core(
+    cap1.pos,
+    cap1_axis,
+    cap1.size[0],  # radius1
+    cap1.size[1],  # half_length1
+    cap2.pos,
+    cap2_axis,
+    cap2.size[0],  # radius2
+    cap2.size[1],  # half_length2
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
