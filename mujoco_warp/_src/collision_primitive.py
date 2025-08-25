@@ -2264,44 +2264,41 @@ def sphere_box(
 
 
 @wp.func
-def capsule_box(
-  # Data in:
-  nconmax_in: int,
+def capsule_box_core(
   # In:
-  cap: Geom,
-  box: Geom,
-  worldid: int,
+  capsule_pos: wp.vec3,
+  capsule_axis: wp.vec3,
+  capsule_radius: float,
+  capsule_half_length: float,
+  box_pos: wp.vec3,
+  box_rot: wp.mat33,
+  box_size: wp.vec3,
   margin: float,
-  gap: float,
-  condim: int,
-  friction: vec5,
-  solref: wp.vec2f,
-  solreffriction: wp.vec2f,
-  solimp: vec5,
-  geoms: wp.vec2i,
-  # Data out:
-  ncon_out: wp.array(dtype=int),
-  contact_dist_out: wp.array(dtype=float),
-  contact_pos_out: wp.array(dtype=wp.vec3),
-  contact_frame_out: wp.array(dtype=wp.mat33),
-  contact_includemargin_out: wp.array(dtype=float),
-  contact_friction_out: wp.array(dtype=vec5),
-  contact_solref_out: wp.array(dtype=wp.vec2),
-  contact_solreffriction_out: wp.array(dtype=wp.vec2),
-  contact_solimp_out: wp.array(dtype=vec5),
-  contact_dim_out: wp.array(dtype=int),
-  contact_geom_out: wp.array(dtype=wp.vec2i),
-  contact_worldid_out: wp.array(dtype=int),
-):
-  """Calculates contacts between a capsule and a box."""
+) -> Tuple[int, vec2f, mat23f, mat23f]:
+  """Core contact geometry calculation for capsule-box collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec2f(0.0, 0.0)
+  contact_pos = mat23f()
+  contact_normals = mat23f()
+  contact_count = 0
+
   # Based on the mjc implementation
-  boxmatT = wp.transpose(box.rot)
-  pos = boxmatT @ (cap.pos - box.pos)
-  axis = boxmatT @ wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
-  halfaxis = axis * cap.size[1]  # halfaxis is the capsule direction
+  boxmatT = wp.transpose(box_rot)
+  pos = boxmatT @ (capsule_pos - box_pos)
+  axis = boxmatT @ capsule_axis
+  halfaxis = axis * capsule_half_length  # halfaxis is the capsule direction
   axisdir = wp.int32(halfaxis[0] > 0.0) + 2 * wp.int32(halfaxis[1] > 0.0) + 4 * wp.int32(halfaxis[2] > 0.0)
 
-  bestdistmax = margin + 2.0 * (cap.size[0] + cap.size[1] + box.size[0] + box.size[1] + box.size[2])
+  bestdistmax = margin + 2.0 * (capsule_radius + capsule_half_length + box_size[0] + box_size[1] + box_size[2])
 
   # keep track of closest point
   bestdist = wp.float32(bestdistmax)
@@ -2330,14 +2327,14 @@ def capsule_box(
     ax_out = wp.int32(-1)
 
     for j in range(3):
-      if boxPoint[j] < -box.size[j]:
+      if boxPoint[j] < -box_size[j]:
         n_out += 1
         ax_out = j
-        boxPoint[j] = -box.size[j]
-      elif boxPoint[j] > box.size[j]:
+        boxPoint[j] = -box_size[j]
+      elif boxPoint[j] > box_size[j]:
         n_out += 1
         ax_out = j
-        boxPoint[j] = box.size[j]
+        boxPoint[j] = box_size[j]
 
     if n_out > 1:
       continue
@@ -2369,18 +2366,18 @@ def capsule_box(
           wp.where(i & 2, 1.0, -1.0),
           wp.where(i & 4, 1.0, -1.0),
         ),
-        box.size,
+        box_size,
       )
       box_pt[j] = 0.0
 
       # find closest point between capsule and the edge
       dif = box_pt - pos
 
-      u = -box.size[j] * dif[j]
+      u = -box_size[j] * dif[j]
       v = wp.dot(halfaxis, dif)
-      ma = box.size[j] * box.size[j]
-      mb = -box.size[j] * halfaxis[j]
-      mc = cap.size[1] * cap.size[1]
+      ma = box_size[j] * box_size[j]
+      mb = -box_size[j] * halfaxis[j]
+      mc = capsule_half_length * capsule_half_length
       det = ma * mc - mb * mb
       if wp.abs(det) < MJ_MINVAL:
         continue
@@ -2422,7 +2419,7 @@ def capsule_box(
           s1 = 0
 
       dif -= halfaxis * x2
-      dif[j] += box.size[j] * x1
+      dif[j] += box_size[j] * x1
 
       # encode relative positions of the closest points
       ct = s1 * 3 + s2
@@ -2443,7 +2440,7 @@ def capsule_box(
 
   p = wp.vec2(pos.x, pos.y)
   dd = wp.vec2(halfaxis.x, halfaxis.y)
-  s = wp.vec2(box.size.x, box.size.y)
+  s = wp.vec2(box_size.x, box_size.y)
   secondpos = wp.float32(-4.0)
 
   uu = dd.x * s.y
@@ -2464,7 +2461,7 @@ def capsule_box(
     c1 = wp.where((ee2 > 0) == w_neg, 1, 2)
 
   if cltype == -4:  # invalid type
-    return
+    return contact_count, contact_dist, contact_pos, contact_normals
 
   if cltype >= 0 and cltype // 3 != 1:  # closest to a corner of the box
     c1 = axisdir ^ clcorner
@@ -2496,13 +2493,13 @@ def capsule_box(
         ax2 = 1
 
       if axis[ax] * axis[ax] > 0.5:  # second point along the edge of the box
-        m = 2.0 * safe_div(box.size[ax], wp.abs(halfaxis[ax]))
+        m = 2.0 * safe_div(box_size[ax], wp.abs(halfaxis[ax]))
         secondpos = min(1.0 - wp.float32(mul) * bestsegmentpos, m)
       else:  # second point along a face of the box
         # check for overshoot again
         m = 2.0 * min(
-          safe_div(box.size[ax1], wp.abs(halfaxis[ax1])),
-          safe_div(box.size[ax2], wp.abs(halfaxis[ax2])),
+          safe_div(box_size[ax1], wp.abs(halfaxis[ax1])),
+          safe_div(box_size[ax2], wp.abs(halfaxis[ax2])),
         )
         secondpos = -min(1.0 + wp.float32(mul) * bestsegmentpos, m)
       secondpos *= wp.float32(mul)
@@ -2543,7 +2540,7 @@ def capsule_box(
       # now find out whether we point towards the opposite side or towards one of the sides
       # and also find the farthest point along the capsule that is above the box
 
-      e1 = 2.0 * safe_div(box.size[ax2], wp.abs(halfaxis[ax2]))
+      e1 = 2.0 * safe_div(box_size[ax2], wp.abs(halfaxis[ax2]))
       secondpos = min(e1, secondpos)
 
       if ((axisdir & (1 << ax)) != 0) == ((c1 & (1 << ax2)) != 0):
@@ -2551,7 +2548,7 @@ def capsule_box(
       else:
         e2 = 1.0 + bestboxpos
 
-      e1 = box.size[ax] * safe_div(e2, wp.abs(halfaxis[ax]))
+      e1 = box_size[ax] * safe_div(e2, wp.abs(halfaxis[ax]))
 
       secondpos = min(e1, secondpos)
       secondpos *= wp.float32(mul)
@@ -2571,11 +2568,11 @@ def capsule_box(
       for i in range(3):
         if i != clface:
           ha_r = safe_div(wp.float32(mul), halfaxis[i])
-          e1 = (box.size[i] - tmp1[i]) * ha_r
+          e1 = (box_size[i] - tmp1[i]) * ha_r
           if 0 < e1 and e1 < secondpos:
             secondpos = e1
 
-          e1 = (-box.size[i] - tmp1[i]) * ha_r
+          e1 = (-box_size[i] - tmp1[i]) * ha_r
           if 0 < e1 and e1 < secondpos:
             secondpos = e1
 
@@ -2583,50 +2580,107 @@ def capsule_box(
 
   # create sphere in original orientation at first contact point
   s1_pos_l = pos + halfaxis * bestsegmentpos
-  s1_pos_g = box.rot @ s1_pos_l + box.pos
+  s1_pos_g = box_rot @ s1_pos_l + box_pos
 
-  # collide with sphere
-  _sphere_box(
-    nconmax_in,
+  # collide with sphere using core function
+  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_box_core(
     s1_pos_g,
-    cap.size[0],
-    box.pos,
-    box.rot,
-    box.size,
-    worldid,
+    capsule_radius,
+    box_pos,
+    box_rot,
+    box_size,
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Copy results from first sphere collision
+  if contact_count_inner > 0:
+    contact_dist[contact_count] = contact_dist_inner[0]
+    contact_pos[contact_count] = contact_pos_inner[0]
+    contact_normals[contact_count] = contact_normals_inner[0]
+    contact_count = contact_count + 1
 
   if secondpos > -3:  # secondpos was modified
     s2_pos_l = pos + halfaxis * (secondpos + bestsegmentpos)
-    s2_pos_g = box.rot @ s2_pos_l + box.pos
-    _sphere_box(
-      nconmax_in,
+    s2_pos_g = box_rot @ s2_pos_l + box_pos
+
+    # collide with sphere using core function
+    contact_count_inner2, contact_dist_inner2, contact_pos_inner2, contact_normals_inner2 = sphere_box_core(
       s2_pos_g,
-      cap.size[0],
-      box.pos,
-      box.rot,
-      box.size,
-      worldid,
+      capsule_radius,
+      box_pos,
+      box_rot,
+      box_size,
+      margin,
+    )
+
+    # Copy results from second sphere collision
+    if contact_count_inner2 > 0 and contact_count < 2:
+      contact_dist[contact_count] = contact_dist_inner2[0]
+      contact_pos[contact_count] = contact_pos_inner2[0]
+      contact_normals[contact_count] = contact_normals_inner2[0]
+      contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
+def capsule_box(
+  # Data in:
+  nconmax_in: int,
+  # In:
+  cap: Geom,
+  box: Geom,
+  worldid: int,
+  margin: float,
+  gap: float,
+  condim: int,
+  friction: vec5,
+  solref: wp.vec2f,
+  solreffriction: wp.vec2f,
+  solimp: vec5,
+  geoms: wp.vec2i,
+  # Data out:
+  ncon_out: wp.array(dtype=int),
+  contact_dist_out: wp.array(dtype=float),
+  contact_pos_out: wp.array(dtype=wp.vec3),
+  contact_frame_out: wp.array(dtype=wp.mat33),
+  contact_includemargin_out: wp.array(dtype=float),
+  contact_friction_out: wp.array(dtype=vec5),
+  contact_solref_out: wp.array(dtype=wp.vec2),
+  contact_solreffriction_out: wp.array(dtype=wp.vec2),
+  contact_solimp_out: wp.array(dtype=vec5),
+  contact_dim_out: wp.array(dtype=int),
+  contact_geom_out: wp.array(dtype=wp.vec2i),
+  contact_worldid_out: wp.array(dtype=int),
+):
+  """Calculates contacts between a capsule and a box."""
+  # Extract capsule axis
+  axis = wp.vec3(cap.rot[0, 2], cap.rot[1, 2], cap.rot[2, 2])
+
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = capsule_box_core(
+    cap.pos,
+    axis,
+    cap.size[0],  # capsule radius
+    cap.size[1],  # capsule half length
+    box.pos,
+    box.rot,
+    box.size,
+    margin,
+  )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
       margin,
       gap,
       condim,
@@ -2635,6 +2689,7 @@ def capsule_box(
       solreffriction,
       solimp,
       geoms,
+      worldid,
       ncon_out,
       contact_dist_out,
       contact_pos_out,
