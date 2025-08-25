@@ -968,6 +968,47 @@ def plane_capsule(
 
 
 @wp.func
+def plane_ellipsoid_core(
+  # In:
+  plane_normal: wp.vec3,
+  plane_pos: wp.vec3,
+  ellipsoid_pos: wp.vec3,
+  ellipsoid_rot: wp.mat33,
+  ellipsoid_size: wp.vec3,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for plane-ellipsoid collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  # Calculate ellipsoid support point in direction opposite to plane normal
+  sphere_support = -wp.normalize(wp.cw_mul(wp.transpose(ellipsoid_rot) @ plane_normal, ellipsoid_size))
+  pos = ellipsoid_pos + ellipsoid_rot @ wp.cw_mul(sphere_support, ellipsoid_size)
+  dist = wp.dot(plane_normal, pos - plane_pos)
+  pos = pos - plane_normal * dist * 0.5
+
+  if dist <= margin:
+    contact_dist[contact_count] = dist
+    contact_pos[contact_count] = pos
+    contact_normals[contact_count] = plane_normal
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def plane_ellipsoid(
   # Data in:
   nconmax_in: int,
@@ -997,38 +1038,51 @@ def plane_ellipsoid(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  sphere_support = -wp.normalize(wp.cw_mul(wp.transpose(ellipsoid.rot) @ plane.normal, ellipsoid.size))
-  pos = ellipsoid.pos + ellipsoid.rot @ wp.cw_mul(sphere_support, ellipsoid.size)
-  dist = wp.dot(plane.normal, pos - plane.pos)
-  pos = pos - plane.normal * dist * 0.5
-
-  write_contact(
-    nconmax_in,
-    dist,
-    pos,
-    make_frame(plane.normal),
+  """Calculates contacts between an ellipsoid and a plane."""
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = plane_ellipsoid_core(
+    plane.normal,
+    plane.pos,
+    ellipsoid.pos,
+    ellipsoid.rot,
+    ellipsoid.size,
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    worldid,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
