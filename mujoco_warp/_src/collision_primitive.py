@@ -37,7 +37,16 @@ wp.set_module_options({"enable_backward": False})
 class vec8f(wp.types.vector(length=8, dtype=wp.float32)):
   pass
 
+
+class vec1f(wp.types.vector(length=1, dtype=wp.float32)):
+  pass
+
+
 # The number of rows is the maximum number of contacts that can be returned
+class mat13f(wp.types.matrix(shape=(1, 3), dtype=wp.float32)):
+  pass
+
+
 class mat43f(wp.types.matrix(shape=(4, 3), dtype=wp.float32)):
   pass
 
@@ -203,6 +212,44 @@ def _plane_sphere(plane_normal: wp.vec3, plane_pos: wp.vec3, sphere_pos: wp.vec3
 
 
 @wp.func
+def plane_sphere_core(
+  # In:
+  plane_normal: wp.vec3,
+  plane_pos: wp.vec3,
+  sphere_pos: wp.vec3,
+  sphere_radius: float,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for plane-sphere collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  # Calculate contact distance and position
+  dist = wp.dot(sphere_pos - plane_pos, plane_normal) - sphere_radius
+
+  if dist <= margin:
+    pos = sphere_pos - plane_normal * (sphere_radius + 0.5 * dist)
+    contact_dist[contact_count] = dist
+    contact_pos[contact_count] = pos
+    contact_normals[contact_count] = plane_normal  # Normal vector
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def plane_sphere(
   # Data in:
   nconmax_in: int,
@@ -232,35 +279,50 @@ def plane_sphere(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  dist, pos = _plane_sphere(plane.normal, plane.pos, sphere.pos, sphere.size[0])
-
-  write_contact(
-    nconmax_in,
-    dist,
-    pos,
-    make_frame(plane.normal),
+  """Calculates contacts between a sphere and a plane."""
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = plane_sphere_core(
+    plane.normal,
+    plane.pos,
+    sphere.pos,
+    sphere.size[0],  # radius
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    worldid,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
@@ -1317,7 +1379,7 @@ def plane_cylinder_core(
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
-      contact_dist: Vector of contact distances 
+      contact_dist: Vector of contact distances
       contact_pos: Matrix of contact positions (one per row)
       contact_normals: Matrix of contact normal vectors (one per row)
   """
