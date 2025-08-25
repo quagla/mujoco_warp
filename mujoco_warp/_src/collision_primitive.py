@@ -2747,7 +2747,7 @@ def box_box_core(
   box2_rot: wp.mat33,
   box2_size: wp.vec3,
   margin: float,
-) -> Tuple[int, vec8f, mat83f, mat83f, wp.mat33]:
+) -> Tuple[int, vec8f, mat83f, mat83f]:
   """Core contact geometry calculation for box-box collision.
 
   Returns:
@@ -2756,7 +2756,6 @@ def box_box_core(
       contact_dist: Vector of contact distances
       contact_pos: Matrix of contact positions (one per row)
       contact_normals: Matrix of contact normal vectors (one per row)
-      contact_frame: Contact frame for all contacts
   """
 
   # Initialize output matrices
@@ -2790,7 +2789,7 @@ def box_box_core(
     c2 = -wp.abs(pos12[i]) + box2_size[i] + plen1[i]
 
     if c1 < -margin or c2 < -margin:
-      return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
+      return contact_count, contact_dist, contact_pos, contact_normals
 
     if c1 < separation:
       separation = c1
@@ -2835,7 +2834,7 @@ def box_box_core(
 
       # Early exit: no collision if separated along this axis
       if c3 < -margin:
-        return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
+        return contact_count, contact_dist, contact_pos, contact_normals
 
       # Track minimum separation and which edge-edge pair it occurs on
       if c3 < separation * (1.0 - 1e-12):
@@ -2857,7 +2856,7 @@ def box_box_core(
 
   # No axis with separation < margin found
   if axis_code == -1:
-    return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()
+    return contact_count, contact_dist, contact_pos, contact_normals
 
   points = mat83f()
   depth = vec8f()
@@ -3033,7 +3032,7 @@ def box_box_core(
 
     # Check if contact normal is valid
     if wp.abs(rnorm[2]) < MJ_MINVAL:
-      return contact_count, contact_dist, contact_pos, contact_normals, wp.mat33()  # Shouldn't happen
+      return contact_count, contact_dist, contact_pos, contact_normals  # Shouldn't happen
 
     # Calculate inverse normal for projection
     innorm = wp.where(inv, -1.0, 1.0) / rnorm[2]
@@ -3172,7 +3171,6 @@ def box_box_core(
     pw = box1_pos
     normal = wp.where(inv, -1.0, 1.0) * rw @ rnorm
 
-  frame = make_frame(normal)
   contact_count = n
 
   # Copy contact data to output matrices
@@ -3183,7 +3181,7 @@ def box_box_core(
     contact_pos[i] = pos
     contact_normals[i] = normal
 
-  return contact_count, contact_dist, contact_pos, contact_normals, frame
+  return contact_count, contact_dist, contact_pos, contact_normals
 
 
 @wp.func
@@ -3218,7 +3216,7 @@ def box_box(
 ):
   """Calculates contacts between two boxes."""
   # Call the core function to get contact geometry
-  contact_count, contact_dist, contact_pos, contact_normals, frame = box_box_core(
+  contact_count, contact_dist, contact_pos, contact_normals = box_box_core(
     box1.pos,
     box1.rot,
     box1.size,
@@ -3236,7 +3234,7 @@ def box_box(
 
     contact_dist_out[cid] = contact_dist[i]
     contact_pos_out[cid] = contact_pos[i]
-    contact_frame_out[cid] = frame
+    contact_frame_out[cid] = make_frame(contact_normals[i])
     contact_geom_out[cid] = geoms
     contact_worldid_out[cid] = worldid
     contact_includemargin_out[cid] = margin - gap
