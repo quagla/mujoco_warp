@@ -326,6 +326,56 @@ def plane_sphere(
 
 
 @wp.func
+def _sphere_sphere_core(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: float) -> Tuple[float, wp.vec3, wp.vec3]:
+  dir = pos2 - pos1
+  dist = wp.length(dir)
+  if dist == 0.0:
+    n = wp.vec3(1.0, 0.0, 0.0)
+  else:
+    n = dir / dist
+  dist = dist - (radius1 + radius2)
+  pos = pos1 + n * (radius1 + 0.5 * dist)
+  return dist, pos, n
+
+
+@wp.func
+def sphere_sphere_core(
+  # In:
+  pos1: wp.vec3,
+  radius1: float,
+  pos2: wp.vec3,
+  radius2: float,
+  margin: float,
+) -> Tuple[int, vec1f, mat13f, mat13f]:
+  """Core contact geometry calculation for sphere-sphere collision.
+
+  Returns:
+    Tuple containing:
+      contact_count: Number of contact points found
+      contact_dist: Vector of contact distances
+      contact_pos: Matrix of contact positions (one per row)
+      contact_normals: Matrix of contact normal vectors (one per row)
+  """
+
+  # Initialize output matrices
+  contact_dist = vec1f(0.0)
+  contact_pos = mat13f()
+  contact_normals = mat13f()
+  contact_count = 0
+
+  # Calculate contact distance, position, and normal
+  dist, pos, n = _sphere_sphere_core(pos1, radius1, pos2, radius2)
+
+  if dist <= margin:
+    contact_dist[contact_count] = dist
+    contact_pos[contact_count] = pos
+    contact_normals[contact_count] = n  # Normal vector
+    contact_count = contact_count + 1
+
+  return contact_count, contact_dist, contact_pos, contact_normals
+
+
+@wp.func
 def _sphere_sphere(
   # Data in:
   nconmax_in: int,
@@ -357,14 +407,7 @@ def _sphere_sphere(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  dir = pos2 - pos1
-  dist = wp.length(dir)
-  if dist == 0.0:
-    n = wp.vec3(1.0, 0.0, 0.0)
-  else:
-    n = dir / dist
-  dist = dist - (radius1 + radius2)
-  pos = pos1 + n * (radius1 + 0.5 * dist)
+  dist, pos, n = _sphere_sphere_core(pos1, radius1, pos2, radius2)
 
   write_contact(
     nconmax_in,
@@ -501,34 +544,50 @@ def sphere_sphere(
   contact_geom_out: wp.array(dtype=wp.vec2i),
   contact_worldid_out: wp.array(dtype=int),
 ):
-  _sphere_sphere(
-    nconmax_in,
+  """Calculates contacts between two spheres."""
+  # Call the core function to get contact geometry
+  contact_count, contact_dist, contact_pos, contact_normals = sphere_sphere_core(
     sphere1.pos,
-    sphere1.size[0],
+    sphere1.size[0],  # radius1
     sphere2.pos,
-    sphere2.size[0],
-    worldid,
+    sphere2.size[0],  # radius2
     margin,
-    gap,
-    condim,
-    friction,
-    solref,
-    solreffriction,
-    solimp,
-    geoms,
-    ncon_out,
-    contact_dist_out,
-    contact_pos_out,
-    contact_frame_out,
-    contact_includemargin_out,
-    contact_friction_out,
-    contact_solref_out,
-    contact_solreffriction_out,
-    contact_solimp_out,
-    contact_dim_out,
-    contact_geom_out,
-    contact_worldid_out,
   )
+
+  # Loop over the contacts and write them
+  for i in range(contact_count):
+    dist = contact_dist[i]
+    pos = contact_pos[i]
+    normal = contact_normals[i]
+    frame = make_frame(normal)
+
+    write_contact(
+      nconmax_in,
+      dist,
+      pos,
+      frame,
+      margin,
+      gap,
+      condim,
+      friction,
+      solref,
+      solreffriction,
+      solimp,
+      geoms,
+      worldid,
+      ncon_out,
+      contact_dist_out,
+      contact_pos_out,
+      contact_frame_out,
+      contact_includemargin_out,
+      contact_friction_out,
+      contact_solref_out,
+      contact_solreffriction_out,
+      contact_solimp_out,
+      contact_dim_out,
+      contact_geom_out,
+      contact_worldid_out,
+    )
 
 
 @wp.func
