@@ -230,6 +230,13 @@ def plane_sphere_core(
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for plane-sphere collision.
 
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    sphere_pos: Center position of the sphere
+    sphere_radius: Radius of the sphere
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -335,6 +342,20 @@ def plane_sphere(
 
 @wp.func
 def _sphere_sphere_core(pos1: wp.vec3, radius1: float, pos2: wp.vec3, radius2: float) -> Tuple[float, wp.vec3, wp.vec3]:
+  """Core sphere-sphere collision calculation.
+  
+  Args:
+    pos1: Center position of the first sphere
+    radius1: Radius of the first sphere
+    pos2: Center position of the second sphere
+    radius2: Radius of the second sphere
+  
+  Returns:
+    Tuple containing:
+      dist: Distance between sphere surfaces (negative if overlapping)
+      pos: Contact position
+      n: Contact normal vector
+  """
   dir = pos2 - pos1
   dist = wp.length(dir)
   if dist == 0.0:
@@ -356,6 +377,13 @@ def sphere_sphere_core(
   margin: float,
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for sphere-sphere collision.
+
+  Args:
+    pos1: Center position of the first sphere
+    radius1: Radius of the first sphere
+    pos2: Center position of the second sphere
+    radius2: Radius of the second sphere
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -455,6 +483,22 @@ def _sphere_sphere_ext_core(
   radius2: float,
   mat2: wp.mat33,
 ) -> Tuple[float, wp.vec3, wp.vec3]:
+  """Core sphere-sphere collision calculation with orientation matrices.
+  
+  Args:
+    pos1: Center position of the first sphere
+    radius1: Radius of the first sphere
+    mat1: Orientation matrix of the first sphere
+    pos2: Center position of the second sphere
+    radius2: Radius of the second sphere
+    mat2: Orientation matrix of the second sphere
+  
+  Returns:
+    Tuple containing:
+      dist: Distance between sphere surfaces (negative if overlapping)
+      pos: Contact position
+      n: Contact normal vector
+  """
   dir = pos2 - pos1
   dist = wp.length(dir)
   if dist == 0.0:
@@ -624,6 +668,15 @@ def sphere_capsule_core(
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for sphere-capsule collision.
 
+  Args:
+    sphere_pos: Center position of the sphere
+    sphere_radius: Radius of the sphere
+    capsule_pos: Center position of the capsule
+    capsule_axis: Axis direction of the capsule
+    capsule_radius: Radius of the capsule
+    capsule_half_length: Half length of the capsule
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -758,6 +811,17 @@ def capsule_capsule_core(
   margin: float,
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for capsule-capsule collision.
+
+  Args:
+    cap1_pos: Center position of the first capsule
+    cap1_axis: Axis direction of the first capsule
+    cap1_radius: Radius of the first capsule
+    cap1_half_length: Half length of the first capsule
+    cap2_pos: Center position of the second capsule
+    cap2_axis: Axis direction of the second capsule
+    cap2_radius: Radius of the second capsule
+    cap2_half_length: Half length of the second capsule
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -901,6 +965,15 @@ def plane_capsule_core(
 ) -> Tuple[int, vec2f, mat23f, mat23f, wp.mat33]:
   """Core contact geometry calculation for plane-capsule collision.
 
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    capsule_pos: Center position of the capsule
+    capsule_axis: Axis direction of the capsule
+    capsule_radius: Radius of the capsule
+    capsule_half_length: Half length of the capsule
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -1043,6 +1116,14 @@ def plane_ellipsoid_core(
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for plane-ellipsoid collision.
 
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    ellipsoid_pos: Center position of the ellipsoid
+    ellipsoid_rot: Rotation matrix of the ellipsoid
+    ellipsoid_size: Size (radii) of the ellipsoid along each axis
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -1160,6 +1241,14 @@ def plane_box_core(
   margin: float,
 ) -> Tuple[int, wp.vec4, mat43f, mat43f]:
   """Core contact geometry calculation for plane-box collision.
+
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    box_pos: Center position of the box
+    box_rot: Rotation matrix of the box
+    box_size: Half-extents of the box along each axis
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -1296,6 +1385,12 @@ def plane_convex_core(
   margin: float,
 ) -> Tuple[int, wp.vec4, mat43f, mat43f]:
   """Core contact geometry calculation for plane-convex collision.
+
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    convex: Convex geometry object containing position, rotation, and mesh data
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -1605,6 +1700,15 @@ def sphere_cylinder_core(
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for sphere-cylinder collision.
 
+  Args:
+    sphere_pos: Center position of the sphere
+    sphere_radius: Radius of the sphere
+    cylinder_pos: Center position of the cylinder
+    cylinder_axis: Axis direction of the cylinder
+    cylinder_radius: Radius of the cylinder
+    cylinder_half_height: Half height of the cylinder
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -1796,6 +1900,15 @@ def plane_cylinder_core(
   margin: float,
 ) -> Tuple[int, wp.vec4, mat43f, mat43f]:
   """Core contact geometry calculation for plane-cylinder collision.
+
+  Args:
+    plane_normal: Normal vector of the plane
+    plane_pos: Position point on the plane
+    cylinder_center: Center position of the cylinder
+    cylinder_axis: Axis direction of the cylinder
+    cylinder_radius: Radius of the cylinder
+    cylinder_half_height: Half height of the cylinder
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -2068,6 +2181,14 @@ def sphere_box_core(
 ) -> Tuple[int, vec1f, mat13f, mat13f]:
   """Core contact geometry calculation for sphere-box collision.
 
+  Args:
+    sphere_pos: Center position of the sphere
+    sphere_radius: Radius of the sphere
+    box_pos: Center position of the box
+    box_rot: Rotation matrix of the box
+    box_size: Half-extents of the box along each axis
+    margin: Contact margin distance
+
   Returns:
     Tuple containing:
       contact_count: Number of contact points found
@@ -2276,6 +2397,16 @@ def capsule_box_core(
   margin: float,
 ) -> Tuple[int, vec2f, mat23f, mat23f]:
   """Core contact geometry calculation for capsule-box collision.
+
+  Args:
+    capsule_pos: Center position of the capsule
+    capsule_axis: Axis direction of the capsule
+    capsule_radius: Radius of the capsule
+    capsule_half_length: Half length of the capsule
+    box_pos: Center position of the box
+    box_rot: Rotation matrix of the box
+    box_size: Half-extents of the box along each axis
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
@@ -2749,6 +2880,15 @@ def box_box_core(
   margin: float,
 ) -> Tuple[int, vec8f, mat83f, mat83f]:
   """Core contact geometry calculation for box-box collision.
+
+  Args:
+    box1_pos: Center position of the first box
+    box1_rot: Rotation matrix of the first box
+    box1_size: Half-extents of the first box along each axis
+    box2_pos: Center position of the second box
+    box2_rot: Rotation matrix of the second box
+    box2_size: Half-extents of the second box along each axis
+    margin: Contact margin distance
 
   Returns:
     Tuple containing:
