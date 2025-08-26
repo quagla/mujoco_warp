@@ -37,11 +37,9 @@ def _hfield_subgrid(
   """Returns height field subgrid that overlaps with geom AABB.
 
   Args:
-    geom_dataid (wp.array(dtype=int)): geom data ids
-    hfield_nrow (wp.array(dtype=int)): height field number of rows
-    hfield_ncol (wp.array(dtype=int)): height field number of columns
-    hfield_size (wp.array(dtype=int)): height field size
-    hfieldid (int): height field geom id
+    nrow (int): height field number of rows
+    ncol (int): height field number of columns
+    size (wp.vec4): height field size
     xmax (float): geom maximum x position
     xmin (float): geom minimum x position
     ymax (float): geom maximum y position
