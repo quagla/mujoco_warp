@@ -69,7 +69,7 @@
     <default class="partnet_100015/">
       <joint frictionloss="1"/>
       <default class="partnet_100015/collision">
-        <mesh scale="0.20000000000000001 0.20000000000000001 0.20000000000000001" inertia="convex"/>
+        <mesh scale="0.20000000000000001 0.20000000000000001 0.20000000000000001"/>
         <geom type="mesh"/>
       </default>
     </default>
@@ -104,6 +104,8 @@
     <mesh name="vx300s_7_gripper_wrist_mount" class="/" file="vx300s_7_gripper_wrist_mount-61d29471843d7ca6e0e8a970bdc9256a822c8b15.stl"/>
     <mesh name="vx300s_8_custom_finger_left" class="/" file="vx300s_8_custom_finger_left-bf982864f8591ef106a4b771fc7502c724ef3d7c.stl"/>
     <mesh name="vx300s_8_custom_finger_right" class="/" file="vx300s_8_custom_finger_right-41349941da5624f43b137273d462f62ab9605c36.stl"/>
+    <mesh name="lid" class="partnet_100015/collision" file="lid.obj"/>
+    <mesh name="base" class="partnet_100015/collision" file="base.obj"/>
     <mesh name="d405_solid" class="/" file="d405_solid-a35f08a7e5e7488eb120fc62c3e6458e6be0f956.stl"/>
   </asset>
   <worldbody>
@@ -312,10 +314,10 @@
         <body name="partnet_100015/link_1" quat="0.5 0.5 -0.5 -0.5">
           <body name="partnet_100015/link_0">
             <joint name="partnet_100015/joint_0" class="partnet_100015/" type="slide" pos="0 0 0" axis="0 1 0" range="0 0.059999999999999998"/>
-            <geom name="partnet_100015/original-17_col_collision_0" class="partnet_100015/collision" rgba="0.2429661695188895 0.1717615006243578 0.69881767504896219 1" mesh="partnet_100015/original-17_col_collision_0"/>s
+            <geom name="lid" class="partnet_100015/collision" rgba="0.2429661695188895 0.1717615006243578 0.69881767504896219 1" mesh="lid"/>
           </body>
 
-          <geom name="partnet_100015/original-19_col_collision_0" class="partnet_100015/collision" rgba="0.076814437851910111 0.34142362485887601 0.52972081751580347 1" mesh="partnet_100015/original-19_col_collision_0"/>
+          <geom name="base" class="partnet_100015/collision" rgba="0.076814437851910111 0.34142362485887601 0.52972081751580347 1" mesh="base"/>
         </body>
       </body>
     </body>
