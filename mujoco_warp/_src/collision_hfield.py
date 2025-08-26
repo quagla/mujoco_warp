@@ -37,16 +37,16 @@ def _hfield_subgrid(
   """Returns height field subgrid that overlaps with geom AABB.
 
   Args:
-    nrow (int): height field number of rows
-    ncol (int): height field number of columns
-    size (wp.vec4): height field size
-    xmax (float): geom maximum x position
-    xmin (float): geom minimum x position
-    ymax (float): geom maximum y position
-    ymin (float): geom minimum y position
+    nrow: height field number of rows
+    ncol: height field number of columns
+    size: height field size
+    xmax: geom maximum x position
+    xmin: geom minimum x position
+    ymax: geom maximum y position
+    ymin: geom minimum y position
 
   Returns:
-    Tuple[int, int, int, int]: grid coordinate bounds
+    grid coordinate bounds
   """
 
   # grid resolution
@@ -78,17 +78,17 @@ def hfield_triangle_prism(
   """Returns triangular prism vertex information in compressed representation.
 
   Args:
-    geom_dataid (wp.array(dtype=int)): geom data ids
-    hfield_adr (wp.array(dtype=int)): address for height field
-    hfield_nrow (wp.array(dtype=int)): height field number of rows
-    hfield_ncol (wp.array(dtype=int)): height field number of columns
-    hfield_size (wp.array(dtype=wp.vec4)): height field sizes
-    hfield_data (wp.array(dtype=float)): height field data
-    hfieldid (int): height field geom id
-    hftri_index (int): height field triangle index
+    geom_dataid: geom data ids
+    hfield_adr: address for height field
+    hfield_nrow: height field number of rows
+    hfield_ncol: height field number of columns
+    hfield_size: height field sizes
+    hfield_data: height field data
+    hfieldid: height field geom id
+    hftri_index: height field triangle index
 
   Returns:
-    wp.mat33: triangular prism vertex information (compressed)
+    triangular prism vertex information (compressed)
   """
   # https://mujoco.readthedocs.io/en/stable/XMLreference.html#asset-hfield
 
@@ -161,11 +161,11 @@ def hfield_prism_vertex(prism: wp.mat33, vert_index: int) -> wp.vec3:
   coordinates from the stored vertices.
 
   Args:
-      prism (wp.mat33): 3x3 compressed representation of a triangular prism
-      vert_index (int): index of vertex to extract (0-5)
+      prism: 3x3 compressed representation of a triangular prism
+      vert_index: index of vertex to extract (0-5)
 
   Returns:
-      wp.vec3: 3D coordinates of the requested vertex
+      3D coordinates of the requested vertex
   """
   if vert_index == 0 or vert_index == 1:
     return prism[vert_index]  # first two vertices stored directly
@@ -219,25 +219,25 @@ def _hfield_midphase(
   one for each potentially colliding triangle.
 
   Args:
-    geom_type (wp.array(dtype=int)): geom type
-    geom_dataid (wp.array(dtype=int)): geom data id
-    geom_rbound (wp.array(dtype=float)): geom bounding sphere radius
-    geom_margin (wp.array(dtype=float)): geom margin
-    hfield_nrow (wp.array(dtype=int)): height field number of rows
-    hfield_ncol (wp.array(dtype=int)): height field number of columns
-    hfield_size (wp.array(dtype=wp.vec4)): height field size
-    nconmax_in (int): maximum number of contacts
-    geom_xpos_in (wp.array(dtype=wp.vec3)): geom position
-    geom_xmat_in (wp.array(dtype=wp.mat33)): geom orientation
-    collision_pair_in (wp.array(dtype=wp.vec2i)): collision pair
-    collision_hftri_index_in (wp.array(dtype=int)): triangle indices, -1 for height field pair
-    collision_pairid_in (wp.array(dtype=int)): collision pair id from broadphase
-    collision_worldid_in (wp.array(dtype=int)): collision world id from broadphase
-    collision_pair_out (wp.array(dtype=wp.vec2i)): collision pair from midphase
-    collision_hftri_index_out (wp.array(dtype=int)): triangle indices from midphase
-    collision_pairid_out (wp.array(dtype=int)): collision pair id from midphase
-    collision_worldid_out (wp.array(dtype=int)): collision world id from midphase
-    ncollision_out (wp.array(dtype=int)): number of collisions from broadphase and midphase
+    geom_type: geom type
+    geom_dataid: geom data id
+    geom_rbound: geom bounding sphere radius
+    geom_margin: geom margin
+    hfield_nrow: height field number of rows
+    hfield_ncol: height field number of columns
+    hfield_size: height field size
+    nconmax_in: maximum number of contacts
+    geom_xpos_in: geom position
+    geom_xmat_in: geom orientation
+    collision_pair_in: collision pair
+    collision_hftri_index_in: triangle indices, -1 for height field pair
+    collision_pairid_in: collision pair id from broadphase
+    collision_worldid_in: collision world id from broadphase
+    collision_pair_out: collision pair from midphase
+    collision_hftri_index_out: triangle indices from midphase
+    collision_pairid_out: collision pair id from midphase
+    collision_worldid_out: collision world id from midphase
+    ncollision_out: number of collisions from broadphase and midphase
   """
   pairid = wp.tid()
 
