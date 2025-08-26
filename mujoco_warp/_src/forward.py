@@ -985,8 +985,8 @@ def forward(m: Model, d: Data):
   energy = m.opt.enableflags & EnableBit.ENERGY
 
   fwd_position(m, d, factorize=False)
+  d.sensordata.zero_()
   sensor.sensor_pos(m, d)
-
   if energy:
     if m.sensor_e_potential == 0:  # not computed by sensor
       sensor.energy_pos(m, d)
