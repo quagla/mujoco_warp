@@ -513,7 +513,7 @@ def com_pos(m: Model, d: Data):
 
 
 @wp.kernel
-def _cam_fn(
+def _cam_local_to_global(
   # Model:
   cam_mode: wp.array(dtype=int),
   cam_bodyid: wp.array(dtype=int),
@@ -580,7 +580,7 @@ def _cam_fn(
 
 
 @wp.kernel
-def _light_fn(
+def _light_local_to_global(
   # Model:
   light_mode: wp.array(dtype=int),
   light_bodyid: wp.array(dtype=int),
@@ -647,7 +647,7 @@ def camlight(m: Model, d: Data):
   including special handling for tracking and target modes.
   """
   wp.launch(
-    _cam_fn,
+    _cam_local_to_global,
     dim=(d.nworld, m.ncam),
     inputs=[
       m.cam_mode,
@@ -665,7 +665,7 @@ def camlight(m: Model, d: Data):
     outputs=[d.cam_xpos, d.cam_xmat],
   )
   wp.launch(
-    _light_fn,
+    _light_local_to_global,
     dim=(d.nworld, m.nlight),
     inputs=[
       m.light_mode,
