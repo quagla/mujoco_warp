@@ -44,7 +44,6 @@ class BlockDim:
   euler_dense: int = 32
   actuator_velocity: int = 32
   tendon_velocity: int = 32
-  qfrc_actuator: int = 32
   # ray
   ray: int = 64
   # sensor
