@@ -260,7 +260,7 @@ def plane_sphere(
     contact_dist[contact_count] = dist
     contact_pos[contact_count] = pos
     contact_normals[contact_count] = plane_normal  # Normal vector
-    contact_count = contact_count + 1
+    contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -305,11 +305,11 @@ def plane_sphere_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -413,7 +413,7 @@ def sphere_sphere(
     contact_dist[contact_count] = dist
     contact_pos[contact_count] = pos
     contact_normals[contact_count] = n  # Normal vector
-    contact_count = contact_count + 1
+    contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -627,11 +627,11 @@ def sphere_sphere_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -719,7 +719,7 @@ def sphere_capsule(
     contact_dist[contact_count] = contact_dist_inner[0]
     contact_pos[contact_count] = contact_pos_inner[0]
     contact_normals[contact_count] = contact_normals_inner[0]
-    contact_count = contact_count + 1
+    contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -769,11 +769,11 @@ def sphere_capsule_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -839,12 +839,6 @@ def capsule_capsule(
       contact_normals: Matrix of contact normal vectors (one per row)
   """
 
-  # Initialize output matrices
-  contact_dist = vec1f(0.0)
-  contact_pos = mat13f()
-  contact_normals = mat13f()
-  contact_count = 0
-
   # Calculate capsule segments
   seg1 = cap1_axis * cap1_half_length
   seg2 = cap2_axis * cap2_half_length
@@ -858,22 +852,13 @@ def capsule_capsule(
   )
 
   # Use sphere-sphere collision between closest points
-  contact_count_inner, contact_dist_inner, contact_pos_inner, contact_normals_inner = sphere_sphere(
+  return sphere_sphere(
     pt1,
     cap1_radius,
     pt2,
     cap2_radius,
     margin,
   )
-
-  # Copy results from inner sphere-sphere calculation
-  if contact_count_inner > 0:
-    contact_dist[contact_count] = contact_dist_inner[0]
-    contact_pos[contact_count] = contact_pos_inner[0]
-    contact_normals[contact_count] = contact_normals_inner[0]
-    contact_count = contact_count + 1
-
-  return contact_count, contact_dist, contact_pos, contact_normals
 
 
 @wp.func
@@ -924,11 +909,11 @@ def capsule_capsule_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -1156,7 +1141,7 @@ def plane_ellipsoid(
     contact_dist[contact_count] = dist
     contact_pos[contact_count] = pos
     contact_normals[contact_count] = plane_normal
-    contact_count = contact_count + 1
+    contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -1202,11 +1187,11 @@ def plane_ellipsoid_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -1766,7 +1751,7 @@ def sphere_cylinder(
       contact_dist[contact_count] = dist
       contact_pos[contact_count] = pos
       contact_normals[contact_count] = n
-      contact_count = contact_count + 1
+      contact_count = 1
 
   # Cap collision
   elif collide_cap:
@@ -1786,7 +1771,7 @@ def sphere_cylinder(
       contact_dist[contact_count] = dist
       contact_pos[contact_count] = pos_contact
       contact_normals[contact_count] = plane_normal
-      contact_count = contact_count + 1
+      contact_count = 1
 
   # Corner collision
   else:
@@ -1810,7 +1795,7 @@ def sphere_cylinder(
       contact_dist[contact_count] = dist
       contact_pos[contact_count] = pos
       contact_normals[contact_count] = n
-      contact_count = contact_count + 1
+      contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -1860,11 +1845,11 @@ def sphere_cylinder_wrapper(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
@@ -2247,7 +2232,7 @@ def sphere_box(
     contact_dist[contact_count] = contact_distance
     contact_pos[contact_count] = contact_position
     contact_normals[contact_count] = contact_normal
-    contact_count = contact_count + 1
+    contact_count = 1
 
   return contact_count, contact_dist, contact_pos, contact_normals
 
@@ -2295,11 +2280,11 @@ def _sphere_box(
     margin,
   )
 
-  # Loop over the contacts and write them
-  for i in range(contact_count):
-    dist = contact_dist[i]
-    pos = contact_pos[i]
-    normal = contact_normals[i]
+  # Write contact if found (at most 1 contact possible)
+  if contact_count > 0:
+    dist = contact_dist[0]
+    pos = contact_pos[0]
+    normal = contact_normals[0]
     frame = make_frame(normal)
 
     write_contact(
