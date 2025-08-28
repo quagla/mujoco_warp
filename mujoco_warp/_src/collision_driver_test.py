@@ -599,7 +599,8 @@ class CollisionTest(parameterized.TestCase):
     self.assertEqual(m.nxn_geom_pair.numpy().shape[0], 3)
     np.testing.assert_equal(m.nxn_pairid.numpy(), np.array([-2, -1, -1]))
 
-  def test_contact_pair(self):
+  @parameterized.parameters(list(types.BroadphaseType))
+  def test_contact_pair(self, broadphase):
     """Tests contact pair."""
     # no pairs
     _, _, m, _ = test_util.fixture(
@@ -612,7 +613,8 @@ class CollisionTest(parameterized.TestCase):
           </body>
         </worldbody>
       </mujoco>
-    """
+    """,
+      broadphase=broadphase,
     )
     self.assertTrue((m.nxn_pairid.numpy() == -1).all())
 
@@ -797,8 +799,6 @@ class CollisionTest(parameterized.TestCase):
     np.testing.assert_allclose(d.contact.solref.numpy()[1], np.array([-0.25, -0.5]))
     np.testing.assert_allclose(d.contact.solreffriction.numpy()[1], np.array([2.0, 4.0]))
     np.testing.assert_allclose(d.contact.solimp.numpy()[1], np.array([0.1, 0.2, 0.3, 0.4, 0.5]))
-
-    # TODO(team): test sap_broadphase
 
   @parameterized.parameters(
     (True, True),
