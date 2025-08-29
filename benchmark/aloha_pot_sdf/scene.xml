@@ -107,7 +107,7 @@
     <mesh name="d405_solid" class="/" file="d405_solid-a35f08a7e5e7488eb120fc62c3e6458e6be0f956.stl"/>
     <texture name="texspot" type="2d" file="spot.png"/>
     <material name="matspot" texture="texspot"/>
-    <mesh name="spot" file="../aloha_pot_sdf/spot.obj" scale=".1 .1 .1"/>
+    <mesh name="spot" file="../../mujoco_warp/test_data/collision_sdf/asset/spot.obj" scale=".1 .1 .1"/>
   </asset>
   <worldbody>
     <light name="light" class="/" castshadow="true" pos="0 0.10000000000000001 2.5"/>
