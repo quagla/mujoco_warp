@@ -851,8 +851,10 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   return m
 
 
-def _mujoco_octree_to_warp_volume(mjm: mujoco.MjModel) -> Tuple[wp.array, Tuple[wp.Volume, ...], wp.array]:
-  """Constructs volume data from MuJoCo octrees and returns it."""
+def _mujoco_octree_to_warp_volume(
+  mjm: mujoco.MjModel, resolution: int = 128
+) -> Tuple[wp.array, Tuple[wp.Volume, ...], wp.array]:
+  """Constructs volume data from MuJoCo octrees."""
   volume_ids = [0] * len(mjm.mesh_octadr)
   volumes = []
   oct_aabbs = [None] * len(mjm.mesh_octadr)
@@ -860,7 +862,6 @@ def _mujoco_octree_to_warp_volume(mjm: mujoco.MjModel) -> Tuple[wp.array, Tuple[
     if mesh_id != -1 and mesh_id < len(mjm.mesh_octadr):
       octadr = mjm.mesh_octadr[mesh_id]
       if octadr != -1:
-        resolution = 128
         oct_child = mjm.oct_child[8 * octadr :].reshape(-1, 8)
         oct_aabb = mjm.oct_aabb[6 * octadr :].reshape(-1, 6)
         oct_coeff = mjm.oct_coeff[8 * octadr :].reshape(-1, 8)
@@ -895,10 +896,10 @@ def _mujoco_octree_to_warp_volume(mjm: mujoco.MjModel) -> Tuple[wp.array, Tuple[
               pos = mins + voxel_size * np.array([x, y, z])
               within_bounds = np.all(pos >= original_mins) and np.all(pos <= original_maxs)
               if within_bounds:
-                sdf_val = sample_octree_sdf(pos, oct_child, oct_aabb, oct_coeff)
+                sdf_val = _sample_octree_sdf(pos, oct_child, oct_aabb, oct_coeff)
               else:
                 clamped_pos = np.clip(pos, original_mins, original_maxs)
-                sdf_val = sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
+                sdf_val = _sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
               sdf_values[x, y, z] = sdf_val
 
         device = wp.get_device()
@@ -1734,8 +1735,13 @@ def get_data_into(
   result.sensordata[:] = d.sensordata.numpy()
 
 
-def sample_octree_sdf(point: np.ndarray, oct_child: np.ndarray, oct_aabb: np.ndarray, oct_coeff: np.ndarray) -> float:
-  eps = 1e-6
+def _sample_octree_sdf(
+  point: np.ndarray, oct_child: np.ndarray, oct_aabb: np.ndarray, oct_coeff: np.ndarray, eps: float = 1e-6
+) -> float:
+  """Sample SDF value at a point using MuJoCo's octree structure.
+
+  Traverses octree to leaf nodes and interpolates between 8 corner coefficients.
+  """
   node = 0
 
   while True:
