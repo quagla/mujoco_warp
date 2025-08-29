@@ -386,7 +386,7 @@ def plane_box(
 
   Returns:
     Tuple containing:
-      contact_dist: Vector of contact distances
+      contact_dist: Vector of contact distances (wp.inf for unpopulated contacts)
       contact_pos: Matrix of contact positions (one per row)
       contact_normal: contact normal vector
   """
@@ -436,7 +436,7 @@ def plane_convex(plane_normal: wp.vec3, plane_pos: wp.vec3, convex: Geom) -> Tup
 
   Returns:
     Tuple containing:
-      contact_dist: Vector of contact distances
+      contact_dist: Vector of contact distances (wp.inf for unpopulated contacts)
       contact_pos: Matrix of contact positions (one per row)
       contact_normal: Matrix of contact normal vectors (one per row)
   """
@@ -876,13 +876,15 @@ def box_box(
 
   Returns:
     Tuple containing:
-      contact_dist: Vector of contact distances
+      contact_dist: Vector of contact distances (wp.inf for unpopulated contacts)
       contact_pos: Matrix of contact positions (one per row)
       contact_normals: Matrix of contact normal vectors (one per row)
   """
 
   # Initialize output matrices
   contact_dist = vec8f()
+  for i in range(8):
+    contact_dist[i] = wp.inf
   contact_pos = mat83f()
   contact_normals = mat83f()
   contact_count = 0
@@ -1388,7 +1390,7 @@ def capsule_box(
 
   Returns:
     Tuple containing:
-      contact_dist: Vector of contact distances
+      contact_dist: Vector of contact distances (wp.inf for unpopulated contacts)
       contact_pos: Matrix of contact positions (one per row)
       contact_normals: Matrix of contact normal vectors (one per row)
   """
