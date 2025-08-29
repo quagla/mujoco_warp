@@ -96,7 +96,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   plugin_id = np.array(plugin_id)
   plugin_attr = np.array(plugin_attr)
-  volume_ids, volumes, oct_aabb = mujoco_octree_to_warp_volume(mjm)
+  volume_ids, volumes, oct_aabb = _mujoco_octree_to_warp_volume(mjm)
 
   if mjm.nflex > 1:
     raise NotImplementedError("Only one flex is unsupported.")
@@ -851,7 +851,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   return m
 
 
-def mujoco_octree_to_warp_volume(mjm):
+def _mujoco_octree_to_warp_volume(mjm: mujoco.MjModel) -> Tuple[wp.array, Tuple[wp.Volume, ...], wp.array]:
   """Constructs volume data from MuJoCo octrees and returns it."""
   volume_ids = [0] * len(mjm.mesh_octadr)
   volumes = []
@@ -1734,7 +1734,7 @@ def get_data_into(
   result.sensordata[:] = d.sensordata.numpy()
 
 
-def sample_octree_sdf(point, oct_child, oct_aabb, oct_coeff):
+def sample_octree_sdf(point: np.ndarray, oct_child: np.ndarray, oct_aabb: np.ndarray, oct_coeff: np.ndarray) -> float:
   eps = 1e-6
   node = 0
 

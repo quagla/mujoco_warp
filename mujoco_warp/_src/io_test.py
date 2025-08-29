@@ -21,7 +21,6 @@ from typing import Any, Dict, Optional, Union
 
 import mujoco
 import numpy as np
-import pytest
 import warp as wp
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -394,9 +393,10 @@ class IOTest(parameterized.TestCase):
     with self.assertRaises(NotImplementedError):
       mjwarp.put_model(mjm)
 
-  @pytest.mark.skipif(not wp.get_device().is_cuda, reason="SDF volumes require CUDA device")
   def test_volumes(self):
     """Tests that mujoco_octree_to_warp_volume properly processes SDF volumes."""
+    if not wp.get_device().is_cuda:
+      self.skipTest("SDF volumes require CUDA device")
     mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)
 
     self.assertIsInstance(m.volume_ids, wp.array)
