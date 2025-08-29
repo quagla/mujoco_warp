@@ -896,10 +896,10 @@ def _mujoco_octree_to_warp_volume(
               pos = mins + voxel_size * np.array([x, y, z])
               within_bounds = np.all(pos >= original_mins) and np.all(pos <= original_maxs)
               if within_bounds:
-                sdf_val = _sample_octree_sdf(pos, oct_child, oct_aabb, oct_coeff)
+                sdf_val = sample_octree_sdf(pos, oct_child, oct_aabb, oct_coeff)
               else:
                 clamped_pos = np.clip(pos, original_mins, original_maxs)
-                sdf_val = _sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
+                sdf_val = sample_octree_sdf(clamped_pos, oct_child, oct_aabb, oct_coeff)
               sdf_values[x, y, z] = sdf_val
 
         device = wp.get_device()
@@ -1735,7 +1735,7 @@ def get_data_into(
   result.sensordata[:] = d.sensordata.numpy()
 
 
-def _sample_octree_sdf(
+def sample_octree_sdf(
   point: np.ndarray, oct_child: np.ndarray, oct_aabb: np.ndarray, oct_coeff: np.ndarray, eps: float = 1e-6
 ) -> float:
   """Sample SDF value at a point using MuJoCo's octree structure.
