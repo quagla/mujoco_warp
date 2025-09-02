@@ -22,7 +22,7 @@ from .collision_primitive import _geom
 from .collision_primitive import contact_params
 from .collision_primitive import write_contact
 from .math import make_frame
-from .ray import _ray_mesh
+from .ray import ray_mesh
 from .types import Data
 from .types import GeomType
 from .types import Model
@@ -294,7 +294,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
   elif type == int(GeomType.MESH.value) and mesh_data.valid:
     mesh_data.pnt = p
     mesh_data.vec = -wp.normalize(p)
-    dist = _ray_mesh(
+    dist = ray_mesh(
       mesh_data.nmeshface,
       mesh_data.mesh_vertadr,
       mesh_data.mesh_vert,
@@ -307,7 +307,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
       mesh_data.vec,
     )
     if dist > wp.norm_l2(p):
-      return -_ray_mesh(
+      return -ray_mesh(
         mesh_data.nmeshface,
         mesh_data.mesh_vertadr,
         mesh_data.mesh_vert,
@@ -343,7 +343,7 @@ def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: V
   elif type == int(GeomType.MESH.value) and mesh_data.valid:
     mesh_data.pnt = p
     mesh_data.vec = -wp.normalize(p)
-    dist = _ray_mesh(
+    dist = ray_mesh(
       mesh_data.nmeshface,
       mesh_data.mesh_vertadr,
       mesh_data.mesh_vert,
