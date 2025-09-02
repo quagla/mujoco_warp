@@ -562,11 +562,11 @@ def _sdf_narrowphase(
   hfield_ncol: wp.array(dtype=int),
   hfield_size: wp.array(dtype=wp.vec4),
   hfield_data: wp.array(dtype=float),
-  mesh_faceadr: wp.array(dtype=int),
   mesh_vertadr: wp.array(dtype=int),
   mesh_vertnum: wp.array(dtype=int),
-  mesh_face: wp.array(dtype=wp.vec3i),
   mesh_vert: wp.array(dtype=wp.vec3),
+  mesh_faceadr: wp.array(dtype=int),
+  mesh_face: wp.array(dtype=wp.vec3i),
   mesh_graphadr: wp.array(dtype=int),
   mesh_graph: wp.array(dtype=int),
   mesh_polynum: wp.array(dtype=int),
@@ -749,8 +749,8 @@ def _sdf_narrowphase(
   mesh_data1.data_id = geom_dataid[g1]
   mesh_data1.pos = geom1.pos
   mesh_data1.mat = geom1.rot
-  mesh_data1.pnt = wp.vec3(-1.)
-  mesh_data1.vec = wp.vec3(0.)
+  mesh_data1.pnt = wp.vec3(-1.0)
+  mesh_data1.vec = wp.vec3(0.0)
 
   mesh_data2.nmeshface = nmeshface
   mesh_data2.mesh_vertadr = mesh_vertadr
@@ -760,8 +760,8 @@ def _sdf_narrowphase(
   mesh_data2.data_id = geom_dataid[g2]
   mesh_data2.pos = geom2.pos
   mesh_data2.mat = geom2.rot
-  mesh_data2.pnt = wp.vec3(-1.)
-  mesh_data2.vec = wp.vec3(0.)
+  mesh_data2.pnt = wp.vec3(-1.0)
+  mesh_data2.vec = wp.vec3(0.0)
 
   for i in range(sdf_initpoints):
     x_g2 = wp.vec3(
@@ -841,11 +841,11 @@ def sdf_narrowphase(m: Model, d: Data):
       m.hfield_ncol,
       m.hfield_size,
       m.hfield_data,
-      m.mesh_faceadr,
       m.mesh_vertadr,
       m.mesh_vertnum,
-      m.mesh_face,
       m.mesh_vert,
+      m.mesh_faceadr,
+      m.mesh_face,
       m.mesh_graphadr,
       m.mesh_graph,
       m.mesh_polynum,
