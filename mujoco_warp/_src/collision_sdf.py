@@ -65,6 +65,7 @@ class MeshData:
   mat: wp.mat33
   pnt: wp.vec3
   vec: wp.vec3
+  valid: bool = False
 
 
 @wp.func
@@ -290,7 +291,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
     return box(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return ellipsoid(p, attr)
-  elif type == int(GeomType.MESH.value):
+  elif type == int(GeomType.MESH.value) and mesh_data.valid:
     mesh_data.pnt = p
     mesh_data.vec = -wp.normalize(p)
     dist = _ray_mesh(
@@ -339,7 +340,7 @@ def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: V
     return grad_box(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return grad_ellipsoid(p, attr)
-  elif type == int(GeomType.MESH.value):
+  elif type == int(GeomType.MESH.value) and mesh_data.valid:
     mesh_data.pnt = p
     mesh_data.vec = -wp.normalize(p)
     dist = _ray_mesh(
@@ -748,6 +749,7 @@ def _sdf_narrowphase(
   mesh_data1.mat = geom1.rot
   mesh_data1.pnt = wp.vec3(-1.0)
   mesh_data1.vec = wp.vec3(0.0)
+  mesh_data1.valid = True
 
   mesh_data2.nmeshface = nmeshface
   mesh_data2.mesh_vertadr = mesh_vertadr
@@ -759,6 +761,7 @@ def _sdf_narrowphase(
   mesh_data2.mat = geom2.rot
   mesh_data2.pnt = wp.vec3(-1.0)
   mesh_data2.vec = wp.vec3(0.0)
+  mesh_data2.valid = True
 
   for i in range(sdf_initpoints):
     x_g2 = wp.vec3(
