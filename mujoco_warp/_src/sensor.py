@@ -1967,7 +1967,7 @@ def _sensor_tactile(
     volume_ids, oct_aabb, plugin, plugin_attr, contact_type, geom_size[worldid, geom], plugin_id, mesh_id
   )
 
-  depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data), 0.0)
+  depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data, None), 0.0)
   if depth >= 0.0:
     return
 
