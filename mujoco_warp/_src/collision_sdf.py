@@ -88,7 +88,7 @@ def get_sdf_params(
   g_size: wp.vec3,
   plugin_id: int,
   mesh_id: int,
-) -> Tuple[wp.vec3, int, VolumeData]:
+) -> Tuple[wp.vec3, int, VolumeData, MeshData]:
   attributes = g_size
   plugin_index = -1
   volume_data = get_volume_data(wp.uint64(0), wp.vec3(0.0), wp.vec3(0.0))
@@ -103,7 +103,7 @@ def get_sdf_params(
     half_size = oct_aabb[mesh_id, 1]
     volume_data = get_volume_data(volume_id, center, half_size)
 
-  return attributes, plugin_index, volume_data
+  return attributes, plugin_index, volume_data, MeshData()
 
 
 @wp.func
@@ -281,7 +281,7 @@ def sample_volume_grad(xyz: wp.vec3, volume_data: VolumeData) -> wp.vec3:
 
 
 @wp.func
-def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData, mesh_data: MeshData | None) -> float:
+def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: VolumeData, mesh_data: MeshData) -> float:
   if type == int(GeomType.PLANE.value):
     return p[2]
   elif type == int(GeomType.SPHERE.value):
@@ -290,7 +290,7 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
     return box(p, attr)
   elif type == int(GeomType.ELLIPSOID.value):
     return ellipsoid(p, attr)
-  elif type == int(GeomType.MESH.value) and mesh_data:
+  elif type == int(GeomType.MESH.value):
     mesh_data.pnt = p
     mesh_data.vec = -wp.normalize(p)
     dist = _ray_mesh(
@@ -730,16 +730,13 @@ def _sdf_narrowphase(
   pos1 = geom1.pos
   rot1 = geom1.rot
 
-  attr1, g1_plugin_id, volume_data1 = get_sdf_params(
+  attr1, g1_plugin_id, volume_data1, mesh_data1 = get_sdf_params(
     volume_ids, oct_aabb, plugin, plugin_attr, type1, geom1.size, g1_plugin, geom_dataid[g1]
   )
 
-  attr2, g2_plugin_id, volume_data2 = get_sdf_params(
+  attr2, g2_plugin_id, volume_data2, mesh_data2 = get_sdf_params(
     volume_ids, oct_aabb, plugin, plugin_attr, type2, geom2.size, g2_plugin, geom_dataid[g2]
   )
-
-  mesh_data1 = MeshData()
-  mesh_data2 = MeshData()
 
   mesh_data1.nmeshface = nmeshface
   mesh_data1.mesh_vertadr = mesh_vertadr
