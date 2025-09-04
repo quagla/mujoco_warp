@@ -121,16 +121,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   if mjm.opt.noslip_iterations > 0:
     raise NotImplementedError(f"noslip solver not implemented.")
 
-  # contact sensor
-  is_contact_sensor = mjm.sensor_type == types.SensorType.CONTACT
-  if is_contact_sensor.any():
-    # matching
-    if (
-      (mjm.sensor_objtype[is_contact_sensor] != types.ObjType.GEOM)
-      | (mjm.sensor_reftype[is_contact_sensor] != types.ObjType.GEOM)
-    ).any():
-      raise NotImplementedError("Contact sensor: only geom1-geom2 matching is implemented.")
-
   # TODO(team): remove after _update_gradient for Newton uses tile operations for islands
   nv_max = 60
   if mjm.nv > nv_max and mjm.opt.jacobian == mujoco.mjtJacobian.mjJAC_DENSE:
@@ -476,6 +466,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       sdf_iterations=mjm.opt.sdf_iterations,
       run_collision_detection=True,
       legacy_gjk=False,
+      contact_sensor_maxmatch=64,
     ),
     stat=types.Statistic(
       meaninertia=mjm.stat.meaninertia,

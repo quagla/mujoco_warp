@@ -154,31 +154,6 @@ class IOTest(parameterized.TestCase):
       """
       )
 
-  @parameterized.parameters(
-    '<contact geom1="plane"/>',
-    '<contact geom2="plane"/>',
-    '<contact site="site"/>',
-  )
-  def test_contact_sensor(self, contact_sensor):
-    mjm = mujoco.MjModel.from_xml_string(f"""
-      <mujoco>
-        <worldbody>
-          <site name="site"/>
-          <geom name="plane" type="plane" size="10 10 .001"/>
-          <body name="body">
-            <geom name="sphere" size=".1"/>
-            <joint type="slide" axis="0 0 1"/>
-          </body>
-        </worldbody>
-        <sensor>
-          {contact_sensor}
-        </sensor>
-      </mujoco>
-    """)
-
-    with self.assertRaises(NotImplementedError):
-      mjwarp.put_model(mjm)
-
   def test_sdf(self):
     """Tests that an SDF can be loaded."""
     mjm, mjd, m, d = test_util.fixture(fname="collision_sdf/cow.xml", qpos0=True)
