@@ -34,17 +34,6 @@ MAX_WORLDS = 2**24
 _TOLERANCE_F32 = 1.0e-6
 
 
-def _hfield_geom_pair(mjm: mujoco.MjModel) -> Tuple[int, np.array]:
-  geom1, geom2 = np.triu_indices(mjm.ngeom, k=1)
-  geom_type_hf = mujoco.mjtGeom.mjGEOM_HFIELD
-  has_hfield = (mjm.geom_type[geom1] == geom_type_hf) | (mjm.geom_type[geom2] == geom_type_hf)
-  nhfieldgeompair = np.sum(has_hfield)
-  geompair2hfgeompair = -1 * np.ones(mjm.ngeom * (mjm.ngeom - 1) // 2, dtype=int)
-  geompair2hfgeompair[has_hfield] = np.arange(nhfieldgeompair)
-
-  return nhfieldgeompair, geompair2hfgeompair
-
-
 def _max_meshdegree(mjm: mujoco.MjModel) -> int:
   if mjm.mesh_polyvertnum.size == 0:
     return 4
@@ -407,9 +396,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   condim = np.concatenate((mjm.geom_condim, mjm.pair_dim))
   condim_max = np.max(condim) if len(condim) > 0 else 0
 
-  # height field
-  nhfieldgeom, geompair2hfgeom = _hfield_geom_pair(mjm)
-
   m = types.Model(
     nq=mjm.nq,
     nv=mjm.nv,
@@ -648,7 +634,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     oct_coeff=wp.array(mjm.oct_coeff, dtype=types.vec8f),
     nhfield=mjm.nhfield,
     nhfielddata=mjm.nhfielddata,
-    nhfieldgeom=nhfieldgeom,
     hfield_adr=wp.array(mjm.hfield_adr, dtype=int),
     hfield_nrow=wp.array(mjm.hfield_nrow, dtype=int),
     hfield_ncol=wp.array(mjm.hfield_ncol, dtype=int),
@@ -838,7 +823,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     mat_texrepeat=create_nmodel_batched_array(mjm.mat_texrepeat, dtype=wp.vec2),
     mat_rgba=create_nmodel_batched_array(mjm.mat_rgba, dtype=wp.vec4),
     actuator_trntype_body_adr=wp.array(np.nonzero(mjm.actuator_trntype == mujoco.mjtTrn.mjTRN_BODY)[0], dtype=int),
-    geompair2hfgeompair=wp.array(geompair2hfgeom, dtype=int),
     block_dim=types.BlockDim(),
     geom_pair_type_count=tuple(geom_type_pair_count),
     has_sdf_geom=bool(np.any(mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF)),
@@ -922,7 +906,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     njmax=njmax,
     solver_niter=wp.zeros(nworld, dtype=int),
     ncon=wp.zeros(1, dtype=int),
-    ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
     ne=wp.zeros(nworld, dtype=int),
     ne_connect=wp.zeros(nworld, dtype=int),  # warp only
     ne_weld=wp.zeros(nworld, dtype=int),  # warp only
@@ -1074,7 +1057,6 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1, nconmax: int = -1, njmax: in
     ),
     # collision driver
     collision_pair=wp.zeros((nconmax,), dtype=wp.vec2i),
-    collision_hftri_index=wp.zeros((nconmax,), dtype=int),
     collision_pairid=wp.zeros((nconmax,), dtype=int),
     collision_worldid=wp.zeros((nconmax,), dtype=int),
     ncollision=wp.zeros((1,), dtype=int),
@@ -1304,7 +1286,6 @@ def put_data(
     njmax=njmax,
     solver_niter=tile(mjd.solver_niter[0]),
     ncon=arr([mjd.ncon * nworld]),
-    ncon_hfield=wp.zeros((nworld, _hfield_geom_pair(mjm)[0]), dtype=int),  # warp only
     ne=wp.full(shape=(nworld), value=mjd.ne),
     ne_connect=wp.full(shape=(nworld), value=ne_connect),
     ne_weld=wp.full(shape=(nworld), value=ne_weld),
@@ -1450,7 +1431,6 @@ def put_data(
     sap_segment_index=arr(np.array([i * mjm.ngeom if i < nworld + 1 else 0 for i in range(2 * nworld)]).reshape((nworld, 2))),
     # collision driver
     collision_pair=wp.empty(nconmax, dtype=wp.vec2i),
-    collision_hftri_index=wp.empty(nconmax, dtype=int),
     collision_pairid=wp.empty(nconmax, dtype=int),
     collision_worldid=wp.empty(nconmax, dtype=int),
     ncollision=wp.zeros(1, dtype=int),
@@ -1680,7 +1660,6 @@ def _reset_nworld(
   na: int,
   neq: int,
   nsensordata: int,
-  nhfieldgeom: int,
   qpos0: wp.array2d(dtype=float),
   eq_active0: wp.array(dtype=bool),
   # Data in:
@@ -1688,7 +1667,6 @@ def _reset_nworld(
   # Data out:
   solver_niter_out: wp.array(dtype=int),
   ncon_out: wp.array(dtype=int),
-  ncon_hfield_out: wp.array2d(dtype=int),
   ne_out: wp.array(dtype=int),
   ne_connect_out: wp.array(dtype=int),
   ne_weld_out: wp.array(dtype=int),
@@ -1716,8 +1694,6 @@ def _reset_nworld(
   solver_niter_out[worldid] = 0
   if worldid == 0:
     ncon_out[0] = 0
-  for i in range(nhfieldgeom):
-    ncon_hfield_out[worldid, i] = 0
   ne_out[worldid] = 0
   ne_connect_out[worldid] = 0
   ne_weld_out[worldid] = 0
@@ -1841,11 +1817,10 @@ def reset_data(m: types.Model, d: types.Data):
   wp.launch(
     _reset_nworld,
     dim=d.nworld,
-    inputs=[m.nq, m.nv, m.nu, m.na, m.neq, m.nsensordata, m.nhfieldgeom, m.qpos0, m.eq_active0, d.nworld],
+    inputs=[m.nq, m.nv, m.nu, m.na, m.neq, m.nsensordata, m.qpos0, m.eq_active0, d.nworld],
     outputs=[
       d.solver_niter,
       d.ncon,
-      d.ncon_hfield,
       d.ne,
       d.ne_connect,
       d.ne_weld,
