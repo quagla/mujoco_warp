@@ -185,7 +185,7 @@ def _efc_equality_connect(
   obj1id = eq_obj1id[eqid]
   obj2id = eq_obj2id[eqid]
 
-  if nsite and eq_objtype[eqid] == wp.static(types.ObjType.SITE.value):
+  if nsite and eq_objtype[eqid] == types.ObjType.SITE:
     # body1id stores the index of site_bodyid.
     body1id = site_bodyid[obj1id]
     body2id = site_bodyid[obj2id]
@@ -253,7 +253,7 @@ def _efc_equality_connect(
       0.0,
       Jqvel[i],
       0.0,
-      ConstraintType.EQUALITY.value,
+      ConstraintType.EQUALITY,
       eqid,
       efc_type_out,
       efc_id_out,
@@ -358,7 +358,7 @@ def _efc_equality_joint(
     0.0,
     Jqvel,
     0.0,
-    ConstraintType.EQUALITY.value,
+    ConstraintType.EQUALITY,
     eqid,
     efc_type_out,
     efc_id_out,
@@ -466,7 +466,7 @@ def _efc_equality_tendon(
     0.0,
     Jqvel,
     0.0,
-    ConstraintType.EQUALITY.value,
+    ConstraintType.EQUALITY,
     eqid,
     efc_type_out,
     efc_id_out,
@@ -536,7 +536,7 @@ def _efc_friction_dof(
     0.0,
     Jqvel,
     dof_frictionloss[worldid, dofid],
-    ConstraintType.FRICTION_DOF.value,
+    ConstraintType.FRICTION_DOF,
     dofid,
     efc_type_out,
     efc_id_out,
@@ -610,7 +610,7 @@ def _efc_friction_tendon(
     0.0,
     Jqvel,
     frictionloss,
-    ConstraintType.FRICTION_TENDON.value,
+    ConstraintType.FRICTION_TENDON,
     tenid,
     efc_type_out,
     efc_id_out,
@@ -679,7 +679,7 @@ def _efc_equality_weld(
   if efcid + 6 >= njmax_in:
     return
 
-  is_site = eq_objtype[eqid] == wp.static(types.ObjType.SITE.value) and nsite > 0
+  is_site = eq_objtype[eqid] == types.ObjType.SITE and nsite > 0
 
   obj1id = eq_obj1id[eqid]
   obj2id = eq_obj2id[eqid]
@@ -780,7 +780,7 @@ def _efc_equality_weld(
       0.0,
       Jqvelp[i],
       0.0,
-      ConstraintType.EQUALITY.value,
+      ConstraintType.EQUALITY,
       eqid,
       efc_type_out,
       efc_id_out,
@@ -808,7 +808,7 @@ def _efc_equality_weld(
       0.0,
       Jqvelr[i],
       0.0,
-      ConstraintType.EQUALITY.value,
+      ConstraintType.EQUALITY,
       eqid,
       efc_type_out,
       efc_id_out,
@@ -892,7 +892,7 @@ def _efc_limit_slide_hinge(
       jntmargin,
       Jqvel,
       0.0,
-      ConstraintType.LIMIT_JOINT.value,
+      ConstraintType.LIMIT_JOINT,
       jntid,
       efc_type_out,
       efc_id_out,
@@ -985,7 +985,7 @@ def _efc_limit_ball(
       jntmargin,
       Jqvel,
       0.0,
-      ConstraintType.LIMIT_JOINT.value,
+      ConstraintType.LIMIT_JOINT,
       jntid,
       efc_type_out,
       efc_id_out,
@@ -1058,7 +1058,7 @@ def _efc_limit_tendon(
     scl = float(dist_min < dist_max) * 2.0 - 1.0
 
     adr = tendon_adr[tenid]
-    if wrap_type[adr] == wp.static(types.WrapType.JOINT.value):
+    if wrap_type[adr] == types.WrapType.JOINT:
       ten_num = tendon_num[tenid]
       for i in range(ten_num):
         dofadr = jnt_dofadr[wrap_objid[adr + i]]
@@ -1084,7 +1084,7 @@ def _efc_limit_tendon(
       tenmargin,
       Jqvel,
       0.0,
-      ConstraintType.LIMIT_TENDON.value,
+      ConstraintType.LIMIT_TENDON,
       tenid,
       efc_type_out,
       efc_id_out,
@@ -1232,9 +1232,9 @@ def _efc_contact_pyramidal(
       Jqvel += J * qvel_in[worldid, i]
 
     if condim == 1:
-      efc_type = int(ConstraintType.CONTACT_FRICTIONLESS.value)
+      efc_type = ConstraintType.CONTACT_FRICTIONLESS
     else:
-      efc_type = int(ConstraintType.CONTACT_PYRAMIDAL.value)
+      efc_type = ConstraintType.CONTACT_PYRAMIDAL
 
     _update_efc_row(
       worldid,
@@ -1400,9 +1400,9 @@ def _efc_contact_elliptic(
       pos_aref = 0.0
 
     if condim == 1:
-      efc_type = int(ConstraintType.CONTACT_FRICTIONLESS.value)
+      efc_type = ConstraintType.CONTACT_FRICTIONLESS
     else:
-      efc_type = int(ConstraintType.CONTACT_ELLIPTIC.value)
+      efc_type = ConstraintType.CONTACT_ELLIPTIC
 
     _update_efc_row(
       worldid,
@@ -1455,10 +1455,10 @@ def make_constraint(m: types.Model, d: types.Data):
     inputs=[d.ne, d.ne_connect, d.ne_weld, d.ne_jnt, d.ne_ten, d.nf, d.nl, d.nefc],
   )
 
-  if not (m.opt.disableflags & types.DisableBit.CONSTRAINT.value):
+  if not (m.opt.disableflags & types.DisableBit.CONSTRAINT):
     refsafe = m.opt.disableflags & types.DisableBit.REFSAFE
 
-    if not (m.opt.disableflags & types.DisableBit.EQUALITY.value):
+    if not (m.opt.disableflags & types.DisableBit.EQUALITY):
       wp.launch(
         _efc_equality_connect,
         dim=(d.nworld, m.eq_connect_adr.size),
@@ -1626,7 +1626,7 @@ def make_constraint(m: types.Model, d: types.Data):
         outputs=[d.ne],
       )
 
-    if not (m.opt.disableflags & types.DisableBit.FRICTIONLOSS.value):
+    if not (m.opt.disableflags & types.DisableBit.FRICTIONLOSS):
       wp.launch(
         _efc_friction_dof,
         dim=(d.nworld, m.nv),
@@ -1687,7 +1687,7 @@ def make_constraint(m: types.Model, d: types.Data):
       )
 
     # limit
-    if not (m.opt.disableflags & types.DisableBit.LIMIT.value):
+    if not (m.opt.disableflags & types.DisableBit.LIMIT):
       wp.launch(
         _efc_limit_ball,
         dim=(d.nworld, m.jnt_limited_ball_adr.size),
@@ -1795,8 +1795,8 @@ def make_constraint(m: types.Model, d: types.Data):
       )
 
     # contact
-    if not (m.opt.disableflags & types.DisableBit.CONTACT.value):
-      if m.opt.cone == types.ConeType.PYRAMIDAL.value:
+    if not (m.opt.disableflags & types.DisableBit.CONTACT):
+      if m.opt.cone == types.ConeType.PYRAMIDAL:
         wp.launch(
           _efc_contact_pyramidal,
           dim=(d.nconmax, 2 * (m.condim_max - 1) if m.condim_max > 1 else 1),
@@ -1840,7 +1840,7 @@ def make_constraint(m: types.Model, d: types.Data):
             d.efc.frictionloss,
           ],
         )
-      elif m.opt.cone == types.ConeType.ELLIPTIC.value:
+      elif m.opt.cone == types.ConeType.ELLIPTIC:
         wp.launch(
           _efc_contact_elliptic,
           dim=(d.nconmax, m.condim_max),
