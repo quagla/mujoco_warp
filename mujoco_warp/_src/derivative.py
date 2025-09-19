@@ -34,6 +34,7 @@ def _qderiv_actuator_passive(
   # Model:
   nu: int,
   opt_timestep: wp.array(dtype=float),
+  opt_disableflags: int,
   opt_is_sparse: bool,
   dof_damping: wp.array2d(dtype=float),
   actuator_dyntype: wp.array(dtype=int),
@@ -51,18 +52,17 @@ def _qderiv_actuator_passive(
   # In:
   qMi: wp.array(dtype=int),
   qMj: wp.array(dtype=int),
-  actuation_enabled: bool,
-  passive_enabled: bool,
   # Data out:
   qM_integration_out: wp.array3d(dtype=float),
 ):
   worldid, elemid = wp.tid()
+
   dofiid = qMi[elemid]
   dofjid = qMj[elemid]
 
   qderiv = float(0.0)
-  for actid in range(nu):
-    if actuation_enabled:
+  if not opt_disableflags & DisableBit.ACTUATION:
+    for actid in range(nu):
       if actuator_gaintype[actid] == GainType.AFFINE:
         gain = actuator_gainprm[worldid, actid][2]
       else:
@@ -84,7 +84,7 @@ def _qderiv_actuator_passive(
 
   # TODO(team): fluid model derivative
 
-  if passive_enabled and dofiid == dofjid:
+  if not opt_disableflags & DisableBit.DAMPER and dofiid == dofjid:
     qderiv -= dof_damping[worldid, dofiid]
 
   qderiv *= opt_timestep[worldid]
@@ -141,18 +141,17 @@ def deriv_smooth_vel(m: Model, d: Data, flg_forward: bool = True):
     flg_forward (bool, optional): If True forward dynamics else inverse dynamics routine.
                                   Default is True.
   """
-  actuation_enabled = not (m.opt.disableflags & DisableBit.ACTUATION)
-  passive_enabled = not (m.opt.disableflags & (DisableBit.SPRING | DisableBit.DAMPER))
-
   qMi = m.qM_fullm_i if m.opt.is_sparse else m.dof_tri_row
   qMj = m.qM_fullm_j if m.opt.is_sparse else m.dof_tri_col
-  if actuation_enabled or passive_enabled:
+
+  if ~(m.opt.disableflags & (DisableBit.ACTUATION | DisableBit.DAMPER)):
     wp.launch(
       _qderiv_actuator_passive,
       dim=(d.nworld, qMi.size),
       inputs=[
         m.nu,
         m.opt.timestep,
+        m.opt.disableflags,
         m.opt.is_sparse,
         m.dof_damping,
         m.actuator_dyntype,
@@ -168,13 +167,14 @@ def deriv_smooth_vel(m: Model, d: Data, flg_forward: bool = True):
         d.qM,
         qMi,
         qMj,
-        actuation_enabled,
-        passive_enabled,
       ],
       outputs=[d.qM_integration],
     )
+  else:
+    # TODO(team): directly utilize qM for these settings
+    wp.copy(d.qM_integration, d.qM)
 
-  if passive_enabled:
+  if not m.opt.disableflags & DisableBit.DAMPER:
     wp.launch(
       _qderiv_tendon_damping,
       dim=(d.nworld, qMi.size),

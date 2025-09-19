@@ -37,8 +37,8 @@ def _assert_eq(a, b, name):
 
 
 class PassiveTest(parameterized.TestCase):
-  @parameterized.product(passive=(0, DisableBit.SPRING | DisableBit.DAMPER), gravity=(0, DisableBit.GRAVITY))
-  def test_passive(self, passive, gravity):
+  @parameterized.product(spring=(0, DisableBit.SPRING), damper=(0, DisableBit.DAMPER), gravity=(0, DisableBit.GRAVITY))
+  def test_passive(self, spring, damper, gravity):
     """Tests passive."""
     _, mjd, m, d = test_data.fixture(
       "pendula.xml",
@@ -46,7 +46,7 @@ class PassiveTest(parameterized.TestCase):
       ctrl_noise=0.1,
       qfrc_noise=0.1,
       xfrc_noise=0.1,
-      overrides={"opt.disableflags": DisableBit.CONTACT | passive | gravity},
+      overrides={"opt.disableflags": DisableBit.CONTACT | spring | damper | gravity},
     )
 
     for arr in (d.qfrc_spring, d.qfrc_damper, d.qfrc_gravcomp, d.qfrc_passive):

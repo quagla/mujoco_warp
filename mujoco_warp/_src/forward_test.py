@@ -193,14 +193,15 @@ class ForwardTest(parameterized.TestCase):
   @parameterized.product(
     jacobian=(mujoco.mjtJacobian.mjJAC_AUTO, mujoco.mjtJacobian.mjJAC_DENSE),
     actuation=(0, DisableBit.ACTUATION),
-    passive=(0, DisableBit.SPRING | DisableBit.DAMPER),
+    spring=(0, DisableBit.SPRING),
+    damper=(0, DisableBit.DAMPER),
   )
-  def test_implicit(self, jacobian, actuation, passive):
+  def test_implicit(self, jacobian, actuation, spring, damper):
     mjm, mjd, _, _ = test_data.fixture(
       "pendula.xml",
       overrides={
         "opt.jacobian": jacobian,
-        "opt.disableflags": DisableBit.CONTACT | actuation | passive,
+        "opt.disableflags": DisableBit.CONTACT | actuation | spring | damper,
         "opt.integrator": IntegratorType.IMPLICITFAST,
       },
     )
