@@ -38,6 +38,7 @@ from .types import Data
 from .types import GeomType
 from .types import Model
 from .types import vec5
+from .warp_util import cache_kernel
 from .warp_util import event_scope
 from .warp_util import kernel as nested_kernel
 
@@ -1449,13 +1450,7 @@ _primitive_collisions_types = []
 _primitive_collisions_func = []
 
 
-def _primitive_narrowphase_builder(m: Model):
-  for types, func in _PRIMITIVE_COLLISIONS.items():
-    idx = upper_trid_index(len(GeomType), types[0].value, types[1].value)
-    if m.geom_pair_type_count[idx] and types not in _primitive_collisions_types:
-      _primitive_collisions_types.append(types)
-      _primitive_collisions_func.append(func)
-
+def _create_narrowphase_kernel():
   @nested_kernel(module="unique", enable_backward=False)
   def _primitive_narrowphase(
     # Model:
@@ -1633,6 +1628,16 @@ def _primitive_narrowphase_builder(m: Model):
         )
 
   return _primitive_narrowphase
+
+
+def _primitive_narrowphase_builder(m: Model):
+  for types, func in _PRIMITIVE_COLLISIONS.items():
+    idx = upper_trid_index(len(GeomType), types[0].value, types[1].value)
+    if m.geom_pair_type_count[idx] and types not in _primitive_collisions_types:
+      _primitive_collisions_types.append(types)
+      _primitive_collisions_func.append(func)
+
+  return _create_narrowphase_kernel()
 
 
 @event_scope

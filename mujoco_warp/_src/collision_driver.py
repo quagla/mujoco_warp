@@ -233,6 +233,7 @@ def _obb_filter(
   return True
 
 
+@cache_kernel
 def _broadphase_filter(opt_broadphase_filter: int):
   @wp.func
   def func(

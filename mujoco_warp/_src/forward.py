@@ -548,10 +548,8 @@ def fwd_position(m: Model, d: Data, factorize: bool = True):
   smooth.transmission(m, d)
 
 
-# TODO(team): sparse actuator_moment version
-def _actuator_velocity(m: Model, d: Data):
-  NV = m.nv
-
+@cache_kernel
+def _create_actuator_velocity_kernel(NV: int):
   @nested_kernel(module="unique", enable_backward=False)
   def actuator_velocity(
     # Data in:
@@ -567,8 +565,15 @@ def _actuator_velocity(m: Model, d: Data):
     actuator_velocity_tile = wp.tile_reduce(wp.add, moment_qvel_tile)
     actuator_velocity_out[worldid, actid] = actuator_velocity_tile[0]
 
+  return actuator_velocity
+
+
+# TODO(team): sparse actuator_moment version
+def _actuator_velocity(m: Model, d: Data):
+  NV = m.nv
+
   wp.launch_tiled(
-    actuator_velocity,
+    _create_actuator_velocity_kernel(NV),
     dim=(d.nworld, m.nu),
     inputs=[
       d.qvel,
