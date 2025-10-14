@@ -52,6 +52,9 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   Returns:
     Model: The model containing kinematic and dynamic information (device).
   """
+  # check for compatible cuda toolkit and driver versions
+  warp_util.check_toolkit_driver()
+
   # check supported features
   for field, field_types, field_str in (
     (mjm.actuator_trntype, types.TrnType, "Actuator transmission type"),
@@ -521,7 +524,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       ccd_iterations=mjm.opt.ccd_iterations,
       broadphase=int(broadphase),
       broadphase_filter=int(types.BroadphaseFilter.PLANE | types.BroadphaseFilter.SPHERE | types.BroadphaseFilter.OBB),
-      graph_conditional=True and warp_util.conditional_graph_supported(),
+      graph_conditional=True,
       sdf_initpoints=mjm.opt.sdf_initpoints,
       sdf_iterations=mjm.opt.sdf_iterations,
       run_collision_detection=True,
