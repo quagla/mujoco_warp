@@ -1377,6 +1377,7 @@ def box_box_wrapper(
     box2.pos,
     box2.rot,
     box2.size,
+    margin,
   )
 
   for i in range(8):
