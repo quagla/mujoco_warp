@@ -908,6 +908,24 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   return m
 
 
+def _get_padded_sizes(nv: int, njmax: int, nworld: int, is_sparse: bool, tile_size: int):
+  # if dense - we just pad to the next multiple of 4 for nv, to get the fast load path.
+  #            we pad to the next multiple of tile_size for njmax to avoid out of bounds accesses.
+  # if sparse - we pad to the next multiple of tile_size for njmax, and nv.
+
+  def round_up(x, multiple):
+    return ((x + multiple - 1) // multiple) * multiple
+
+  njmax_padded = round_up(njmax, tile_size)
+
+  if is_sparse:
+    nv_padded = round_up(nv, tile_size)
+  else:
+    nv_padded = round_up(nv, 4)
+
+  return njmax_padded, nv_padded
+
+
 def make_data(
   mjm: mujoco.MjModel,
   nworld: int = 1,
@@ -967,6 +985,13 @@ def make_data(
   max_meshdegree = _max_meshdegree(mjm)
   nsensorcontact = np.sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_CONTACT)
   nrangefinder = sum(mjm.sensor_type == mujoco.mjtSensor.mjSENS_RANGEFINDER)
+
+  if mujoco.mj_isSparse(mjm):
+    tile_size = types.TILE_SIZE_JTDAJ_SPARSE
+  else:
+    tile_size = types.TILE_SIZE_JTDAJ_DENSE
+
+  njmax_padded, nv_padded = _get_padded_sizes(mjm.nv, njmax, nworld, mujoco.mj_isSparse(mjm), tile_size)
 
   return types.Data(
     solver_niter=wp.zeros(nworld, dtype=int),
@@ -1060,10 +1085,10 @@ def make_data(
     efc=types.Constraint(
       type=wp.zeros((nworld, njmax), dtype=int),
       id=wp.zeros((nworld, njmax), dtype=int),
-      J=wp.zeros((nworld, njmax, mjm.nv), dtype=float),
+      J=wp.zeros((nworld, njmax_padded, nv_padded), dtype=float),
       pos=wp.zeros((nworld, njmax), dtype=float),
       margin=wp.zeros((nworld, njmax), dtype=float),
-      D=wp.zeros((nworld, njmax), dtype=float),
+      D=wp.zeros((nworld, njmax_padded), dtype=float),
       vel=wp.zeros((nworld, njmax), dtype=float),
       aref=wp.zeros((nworld, njmax), dtype=float),
       frictionloss=wp.zeros((nworld, njmax), dtype=float),
@@ -1080,12 +1105,12 @@ def make_data(
       gauss=wp.zeros((nworld,), dtype=float),
       cost=wp.zeros((nworld,), dtype=float),
       prev_cost=wp.zeros((nworld,), dtype=float),
-      state=wp.zeros((nworld, njmax), dtype=int),
+      state=wp.zeros((nworld, njmax_padded), dtype=int),
       mv=wp.zeros((nworld, mjm.nv), dtype=float),
       jv=wp.zeros((nworld, njmax), dtype=float),
       quad=wp.zeros((nworld, njmax), dtype=wp.vec3f),
       quad_gauss=wp.zeros((nworld,), dtype=wp.vec3f),
-      h=wp.zeros((nworld, mjm.nv, mjm.nv), dtype=float),
+      h=wp.zeros((nworld, nv_padded, nv_padded), dtype=float),
       alpha=wp.zeros((nworld,), dtype=float),
       prev_grad=wp.zeros((nworld, mjm.nv), dtype=float),
       prev_Mgrad=wp.zeros((nworld, mjm.nv), dtype=float),
@@ -1301,10 +1326,17 @@ def put_data(
   ne_jnt = int(np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_JOINT) & mjd.eq_active))
   ne_ten = int(np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_TENDON) & mjd.eq_active))
 
+  if mujoco.mj_isSparse(mjm):
+    tile_size = types.TILE_SIZE_JTDAJ_SPARSE
+  else:
+    tile_size = types.TILE_SIZE_JTDAJ_DENSE
+
+  njmax_padded, nv_padded = _get_padded_sizes(mjm.nv, njmax, nworld, mujoco.mj_isSparse(mjm), tile_size)
+
   efc_type_fill = np.zeros((nworld, njmax))
   efc_id_fill = np.zeros((nworld, njmax))
-  efc_J_fill = np.zeros((nworld, njmax, mjm.nv))
-  efc_D_fill = np.zeros((nworld, njmax))
+  efc_J_fill = np.zeros((nworld, njmax_padded, nv_padded))
+  efc_D_fill = np.zeros((nworld, njmax_padded))
   efc_vel_fill = np.zeros((nworld, njmax))
   efc_pos_fill = np.zeros((nworld, njmax))
   efc_aref_fill = np.zeros((nworld, njmax))
@@ -1315,7 +1347,7 @@ def put_data(
   nefc = mjd.nefc
   efc_type_fill[:, :nefc] = np.tile(mjd.efc_type, (nworld, 1))
   efc_id_fill[:, :nefc] = np.tile(mjd.efc_id, (nworld, 1))
-  efc_J_fill[:, :nefc, :] = np.tile(efc_J, (nworld, 1, 1))
+  efc_J_fill[:, :nefc, : mjm.nv] = np.tile(efc_J, (nworld, 1, 1))
   efc_D_fill[:, :nefc] = np.tile(mjd.efc_D, (nworld, 1))
   efc_vel_fill[:, :nefc] = np.tile(mjd.efc_vel, (nworld, 1))
   efc_pos_fill[:, :nefc] = np.tile(mjd.efc_pos, (nworld, 1))
@@ -1464,12 +1496,12 @@ def put_data(
       gauss=wp.empty(shape=(nworld,), dtype=float),
       cost=wp.empty(shape=(nworld,), dtype=float),
       prev_cost=wp.empty(shape=(nworld,), dtype=float),
-      state=wp.empty(shape=(nworld, njmax), dtype=int),
+      state=wp.zeros(shape=(nworld, njmax_padded), dtype=int),
       mv=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       jv=wp.empty(shape=(nworld, njmax), dtype=float),
       quad=wp.empty(shape=(nworld, njmax), dtype=wp.vec3f),
       quad_gauss=wp.empty(shape=(nworld,), dtype=wp.vec3f),
-      h=wp.empty(shape=(nworld, mjm.nv, mjm.nv), dtype=float),
+      h=wp.zeros(shape=(nworld, nv_padded, nv_padded), dtype=float),
       alpha=wp.empty(shape=(nworld,), dtype=float),
       prev_grad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       prev_Mgrad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
@@ -1714,7 +1746,7 @@ def get_data_into(
         adr += 1
     mujoco.mj_factorM(mjm, result)
     if nefc > 0:
-      result.efc_J[: nefc * mjm.nv] = d.efc.J.numpy()[0, :nefc].flatten()
+      result.efc_J[: nefc * mjm.nv] = d.efc.J.numpy()[0, :nefc, : mjm.nv].flatten()
 
   # efc
   result.efc_type[:] = d.efc.type.numpy()[0, efc_idx]

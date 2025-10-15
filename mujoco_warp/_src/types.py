@@ -29,6 +29,9 @@ MJ_MAX_EPAHORIZON = 12
 # maximum average number of trianglarfaces EPA can insert at each iteration
 MJ_MAX_EPAFACES = 5
 
+TILE_SIZE_JTDAJ_SPARSE = 16
+TILE_SIZE_JTDAJ_DENSE = 16
+
 
 # TODO(team): add check that all wp.launch_tiled 'block_dim' settings are configurable
 @dataclasses.dataclass
@@ -56,6 +59,8 @@ class BlockDim:
   cholesky_factorize_solve: int = 32
   # solver
   update_gradient_cholesky: int = 64
+  update_gradient_JTDAJ_sparse: int = 64
+  update_gradient_JTDAJ_dense: int = 96
   # support
   mul_m_dense: int = 32
 
