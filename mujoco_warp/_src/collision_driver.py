@@ -237,7 +237,7 @@ def _broadphase_filter(m: Model):
   @wp.func
   def func(
     # Model:
-    geom_aabb: wp.array2d(dtype=wp.vec3),
+    geom_aabb: wp.array3d(dtype=wp.vec3),
     geom_rbound: wp.array2d(dtype=float),
     geom_margin: wp.array2d(dtype=float),
     # Data in:
@@ -253,8 +253,9 @@ def _broadphase_filter(m: Model):
     # 4: aabb
     # 8: obb
 
-    center1, center2 = geom_aabb[geom1, 0], geom_aabb[geom2, 0]
-    size1, size2 = geom_aabb[geom1, 1], geom_aabb[geom2, 1]
+    aabb_id = worldid % geom_aabb.shape[0] if wp.static(m.geom_aabb.shape[0] > 1) else 0
+    center1, center2 = geom_aabb[aabb_id, geom1, 0], geom_aabb[aabb_id, geom2, 0]
+    size1, size2 = geom_aabb[aabb_id, geom1, 1], geom_aabb[aabb_id, geom2, 1]
 
     rbound_id = worldid % geom_rbound.shape[0] if wp.static(m.geom_rbound.shape[0] > 1) else 0
     rbound1, rbound2 = geom_rbound[rbound_id, geom1], geom_rbound[rbound_id, geom2]
@@ -399,7 +400,7 @@ def _sap_broadphase(broadphase_filter):
     # Model:
     ngeom: int,
     geom_type: wp.array(dtype=int),
-    geom_aabb: wp.array2d(dtype=wp.vec3),
+    geom_aabb: wp.array3d(dtype=wp.vec3),
     geom_rbound: wp.array2d(dtype=float),
     geom_margin: wp.array2d(dtype=float),
     nxn_pairid: wp.array(dtype=int),
@@ -601,7 +602,7 @@ def _nxn_broadphase(broadphase_filter):
   def kernel(
     # Model:
     geom_type: wp.array(dtype=int),
-    geom_aabb: wp.array2d(dtype=wp.vec3),
+    geom_aabb: wp.array3d(dtype=wp.vec3),
     geom_rbound: wp.array2d(dtype=float),
     geom_margin: wp.array2d(dtype=float),
     nxn_geom_pair: wp.array(dtype=wp.vec2i),
