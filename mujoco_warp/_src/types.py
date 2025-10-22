@@ -680,7 +680,6 @@ class Constraint:
     prev_Mgrad: previous Mgrad                        (nworld, nv)
     beta: polak-ribiere beta                          (nworld,)
     done: solver done                                 (nworld,)
-    cost_candidate: costs associated with step sizes  (nworld, nlsp)
   """
 
   type: wp.array2d(dtype=int)
@@ -716,8 +715,6 @@ class Constraint:
   prev_Mgrad: wp.array2d(dtype=float)
   beta: wp.array(dtype=float)
   done: wp.array(dtype=bool)
-  # linesearch
-  cost_candidate: wp.array2d(dtype=float)
 
 
 @dataclasses.dataclass
@@ -997,7 +994,6 @@ class Model:
     mapM2M: index mapping from M (legacy) to M (CSR)         (nC)
 
   warp only fields:
-    nlsp: number of step sizes for parallel linsearch
     nsensortaxel: number of taxels in all tactile sensors
     condim_max: maximum condim for geoms
     nmaxpolygon: maximum number of verts per polygon
@@ -1327,7 +1323,6 @@ class Model:
   M_colind: wp.array(dtype=int)
   mapM2M: wp.array(dtype=int)
   # warp only fields:
-  nlsp: int
   nsensortaxel: int
   condim_max: int
   nmaxpolygon: int

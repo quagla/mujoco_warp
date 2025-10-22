@@ -122,9 +122,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
 
   is_sparse = mujoco.mj_isSparse(mjm)
 
-  # calculate some fields that cannot be easily computed inline
-  nlsp = mjm.opt.ls_iterations  # TODO(team): how to set nlsp?
-
   # dof lower triangle row and column indices (used in solver)
   dof_tri_row, dof_tri_col = np.tril_indices(mjm.nv)
 
@@ -446,6 +443,12 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     if np.any(active_geom):
       body_fluid_ellipsoid[mjm.geom_bodyid[active_geom]] = True
 
+  ls_parallel_id = mujoco.mj_name2id(mjm, mujoco.mjtObj.mjOBJ_NUMERIC, "ls_parallel")
+  if (ls_parallel_id > -1) and (mjm.numeric_data[mjm.numeric_adr[ls_parallel_id]] == 1):
+    ls_parallel = True
+  else:
+    ls_parallel = False
+
   m = types.Model(
     nq=mjm.nq,
     nv=mjm.nv,
@@ -504,7 +507,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       enableflags=mjm.opt.enableflags,
       impratio=create_nmodel_batched_array(np.array(mjm.opt.impratio), dtype=float, expand_dim=False),
       is_sparse=bool(is_sparse),
-      ls_parallel=False,
+      ls_parallel=ls_parallel,
       ls_parallel_min_step=1.0e-6,  # TODO(team): determine good default setting
       ccd_iterations=mjm.opt.ccd_iterations,
       broadphase=int(broadphase),
@@ -738,7 +741,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     M_colind=wp.array(mjm.M_colind, dtype=int),
     mapM2M=wp.array(mjm.mapM2M, dtype=int),
     # warp only fields:
-    nlsp=nlsp,
     nsensortaxel=sum(mjm.mesh_vertnum[mjm.sensor_objid[mjm.sensor_type == mujoco.mjtSensor.mjSENS_TACTILE]]),
     condim_max=condim_max,  # TODO(team): get max after filtering,
     nmaxpolygon=np.append(mjm.mesh_polyvertnum, 4).max(),
@@ -1101,8 +1103,6 @@ def make_data(
       prev_Mgrad=wp.zeros((nworld, mjm.nv), dtype=float),
       beta=wp.zeros((nworld,), dtype=float),
       done=wp.zeros((nworld,), dtype=bool),
-      # linesearch
-      cost_candidate=wp.zeros((nworld, mjm.opt.ls_iterations), dtype=float),
     ),
     # warp only fields:
     nworld=nworld,
@@ -1466,7 +1466,6 @@ def put_data(
       prev_Mgrad=wp.empty(shape=(nworld, mjm.nv), dtype=float),
       beta=wp.empty(shape=(nworld,), dtype=float),
       done=wp.empty(shape=(nworld,), dtype=bool),
-      cost_candidate=wp.empty(shape=(nworld, mjm.opt.ls_iterations), dtype=float),
     ),
     # warp only fields:
     nworld=nworld,
