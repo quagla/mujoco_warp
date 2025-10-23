@@ -1117,13 +1117,6 @@ def make_data(
     subtree_bodyvel=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),
     geom_skip=wp.zeros(mjm.ngeom, dtype=bool),
     fluid_applied=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),
-    # RK4
-    qpos_t0=wp.zeros((nworld, mjm.nq), dtype=float),
-    qvel_t0=wp.zeros((nworld, mjm.nv), dtype=float),
-    act_t0=wp.zeros((nworld, mjm.na), dtype=float),
-    qvel_rk=wp.zeros((nworld, mjm.nv), dtype=float),
-    qacc_rk=wp.zeros((nworld, mjm.nv), dtype=float),
-    act_dot_rk=wp.zeros((nworld, mjm.na), dtype=float),
     # euler + implicit integration
     qfrc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     qacc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
@@ -1479,13 +1472,6 @@ def put_data(
     subtree_bodyvel=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),
     geom_skip=wp.zeros(mjm.ngeom, dtype=bool),  # warp only
     fluid_applied=wp.zeros((nworld, mjm.nbody), dtype=wp.spatial_vector),
-    # TODO(team): skip allocation if integrator != RK4
-    qpos_t0=wp.empty((nworld, mjm.nq), dtype=float),
-    qvel_t0=wp.empty((nworld, mjm.nv), dtype=float),
-    act_t0=wp.empty((nworld, mjm.na), dtype=float),
-    qvel_rk=wp.empty((nworld, mjm.nv), dtype=float),
-    qacc_rk=wp.empty((nworld, mjm.nv), dtype=float),
-    act_dot_rk=wp.empty((nworld, mjm.na), dtype=float),
     # TODO(team): skip allocation if integrator != euler | implicit
     qfrc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
     qacc_integration=wp.zeros((nworld, mjm.nv), dtype=float),
