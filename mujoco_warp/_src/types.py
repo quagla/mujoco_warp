@@ -1600,10 +1600,6 @@ class Data:
     collision_pairid: ids from broadphase                       (naconmax, 2)
     collision_worldid: collision world ids from broadphase      (naconmax,)
     ncollision: collision count from broadphase
-    ten_Jdot: time derivative of tendon Jacobian                (nworld, ntendon, nv)
-    ten_bias_coef: tendon bias force coefficient                (nworld, ntendon)
-    ten_actfrc: total actuator force at tendon                  (nworld, ntendon)
-    wrap_geom_xpos: Cartesian 3D points for geom wrap points    (nworld, <=nwrap, 6)
   """
 
   solver_niter: wp.array(dtype=int)
@@ -1709,9 +1705,3 @@ class Data:
   collision_pairid: wp.array(dtype=wp.vec2i)
   collision_worldid: wp.array(dtype=int)
   ncollision: wp.array(dtype=int)
-
-  # warp only: tendon
-  ten_Jdot: wp.array3d(dtype=float)
-  ten_bias_coef: wp.array2d(dtype=float)
-  ten_actfrc: wp.array2d(dtype=float)
-  wrap_geom_xpos: wp.array2d(dtype=wp.spatial_vector)

@@ -1166,11 +1166,6 @@ def make_data(
     collision_pairid=wp.zeros((naconmax,), dtype=wp.vec2i),
     collision_worldid=wp.zeros((naconmax,), dtype=int),
     ncollision=wp.zeros((1,), dtype=int),
-    # tendon
-    ten_Jdot=wp.zeros((nworld, mjm.ntendon, mjm.nv), dtype=float),
-    ten_bias_coef=wp.zeros((nworld, mjm.ntendon), dtype=float),
-    ten_actfrc=wp.zeros((nworld, mjm.ntendon), dtype=float),
-    wrap_geom_xpos=wp.zeros((nworld, mjm.nwrap), dtype=wp.spatial_vector),
   )
 
 
@@ -1494,11 +1489,6 @@ def put_data(
     collision_pairid=wp.empty(naconmax, dtype=wp.vec2i),
     collision_worldid=wp.empty(naconmax, dtype=int),
     ncollision=wp.zeros(1, dtype=int),
-    # tendon
-    ten_Jdot=wp.zeros((nworld, mjm.ntendon, mjm.nv), dtype=float),
-    ten_bias_coef=wp.zeros((nworld, mjm.ntendon), dtype=float),
-    ten_actfrc=wp.zeros((nworld, mjm.ntendon), dtype=float),
-    wrap_geom_xpos=wp.zeros((nworld, mjm.nwrap), dtype=wp.spatial_vector),
   )
 
 
