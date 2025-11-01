@@ -1213,6 +1213,10 @@ def put_data(
   if mjd.nefc > njmax:
     raise ValueError(f"njmax overflow (njmax must be >= {mjd.nefc})")
 
+  # ensure static geom positions are computed
+  # TODO: remove once MjData creation semantics are fixed
+  mujoco.mj_kinematics(mjm, mjd)
+
   # calculate some fields that cannot be easily computed inline:
   if mujoco.mj_isSparse(mjm):
     qM = np.expand_dims(mjd.qM, axis=0)
