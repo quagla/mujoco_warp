@@ -145,15 +145,14 @@ def plane_convex(plane_normal: wp.vec3, plane_pos: wp.vec3, convex: Geom) -> Tup
   """Core contact geometry calculation for plane-convex collision.
 
   Args:
-    plane_normal: Normal vector of the plane
-    plane_pos: Position point on the plane
-    convex: Convex geometry object containing position, rotation, and mesh data
+    plane_normal: Normal vector of the plane.
+    plane_pos: Position point on the plane.
+    convex: Convex geometry object containing position, rotation, and mesh data.
 
   Returns:
-    Tuple containing:
-      contact_dist: Vector of contact distances (wp.inf for unpopulated contacts)
-      contact_pos: Matrix of contact positions (one per row)
-      contact_normal: Matrix of contact normal vectors (one per row)
+    - Vector of contact distances (wp.inf for unpopulated contacts).
+    - Matrix of contact positions (one per row).
+    - Matrix of contact normal vectors (one per row).
   """
   _HUGE_VAL = 1e6
 
@@ -1754,9 +1753,9 @@ def primitive_narrowphase(m: Model, d: Data):
   identified during the broadphase stage. It computes detailed contact information
   such as distance, position, and frame, and populates the `d.contact` array.
 
-  The primitive geom types handled are PLANE, SPHERE, CAPSULE, CYLINDER, BOX.
+  The primitive geom types: `PLANE`, `SPHERE`, `CAPSULE`, `CYLINDER`, and `BOX`.
 
-  It also handles collisions between planes and convex hulls.
+  Additionally, collisions between planes and convex hulls.
 
   To improve performance, it dynamically builds and launches a kernel tailored to
   the specific primitive collision types present in the model, avoiding
