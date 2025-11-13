@@ -22,7 +22,7 @@ import warp as wp
 
 from . import types
 from . import warp_util
-from .warp_util import kernel as nested_kernel
+from .warp_util import nested_kernel
 
 
 def _create_array(data: Any, spec: wp.array, sizes: dict[str, int]) -> Union[wp.array, None]:
