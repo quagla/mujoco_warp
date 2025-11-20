@@ -24,7 +24,6 @@ class AlohaCloth(benchmark.BenchmarkSuite):
   batch_size = 256
   nconmax = 512
   njmax = 600
-  replay = "lift_pot"
 
 
 class AlohaPot(benchmark.BenchmarkSuite):
