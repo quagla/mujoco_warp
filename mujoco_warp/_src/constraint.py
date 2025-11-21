@@ -501,8 +501,8 @@ def _efc_equality_flex(
   qvel_in: wp.array2d(dtype=float),
   flexedge_J_in: wp.array3d(dtype=float),
   flexedge_length_in: wp.array2d(dtype=float),
-  # In:
   njmax_in: int,
+  # In:
   refsafe_in: int,
   # Data out:
   nefc_out: wp.array(dtype=int),
