@@ -1235,6 +1235,7 @@ class Model:
   flex_elem: array("nflexelemdata", int)
   flex_elemedge: array("nflexelemedge", int)
   flexedge_length0: array("nflexedge", float)
+  flexedge_invweight0: array("nflexedge", float)
   flex_stiffness: array("nflexelem", 21, float)
   flex_bending: array("nflexedge", 17, float)
   flex_damping: array("nflex", float)

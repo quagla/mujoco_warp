@@ -491,9 +491,12 @@ def _efc_equality_tendon(
 def _efc_equality_flex(
   # Model:
   opt_timestep: wp.array(dtype=float),
+  flexedge_invweight0: wp.array(dtype=float),
+  flexedge_length0: wp.array(dtype=float),
   eq_flex_adr: wp.array(dtype=int),
   # Data in:
   njmax_in: int,
+  flexedge_length_in: wp.array(dtype=float),
   # In:
   refsafe_in: int,
   # Data out:
@@ -518,6 +521,8 @@ def _efc_equality_flex(
   if efcid >= njmax_in:
     return
 
+  pos = flexedge_length_in[worldid, edgeid] - flexedge_length0[edgeid]
+
   _update_efc_row(
     worldid,
     opt_timestep[worldid % opt_timestep.shape[0]],
@@ -525,7 +530,7 @@ def _efc_equality_flex(
     efcid,
     pos,
     pos,
-    invweight,
+    flexedge_invweight0[edgeid],
     solref,
     solimp,
     0.0,
@@ -1728,8 +1733,12 @@ def make_constraint(m: types.Model, d: types.Data):
         dim=(d.nworld, m.eq_flex_adr.size, m.nflexedge),
         inputs=[
           m.opt.timestep,
+          m.flexedge_invweight0,
+          m.flexedge_length0,
           m.eq_flex_adr,
-          refsafe
+          d.njmax,
+          d.flexedge_length,
+          refsafe,
         ],
         outputs=[
           d.nefc,
