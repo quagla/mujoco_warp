@@ -1682,6 +1682,7 @@ class Data:
   cdof: array("nworld", "nv", wp.spatial_vector)
   cinert: array("nworld", "nbody", vec10)
   flexvert_xpos: array("nworld", "nflexvert", wp.vec3)
+  flexedge_J: array("nworld", "nflexedge", "nv", float)
   flexedge_length: array("nworld", "nflexedge", float)
   ten_wrapadr: array("nworld", "ntendon", int)
   ten_wrapnum: array("nworld", "ntendon", int)

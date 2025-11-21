@@ -490,13 +490,18 @@ def _efc_equality_tendon(
 @wp.kernel
 def _efc_equality_flex(
   # Model:
+  nv: int,
   opt_timestep: wp.array(dtype=float),
+  flex_solref: wp.array2d(dtype=wp.vec2),
+  flex_solimp: wp.array2d(dtype=vec5),
   flexedge_invweight0: wp.array(dtype=float),
   flexedge_length0: wp.array(dtype=float),
   eq_flex_adr: wp.array(dtype=int),
   # Data in:
   njmax_in: int,
-  flexedge_length_in: wp.array(dtype=float),
+  qvel_in: wp.array2d(dtype=float),
+  flexedge_J_in: wp.array3d(dtype=float),
+  flexedge_length_in: wp.array2d(dtype=float),
   # In:
   refsafe_in: int,
   # Data out:
@@ -522,6 +527,14 @@ def _efc_equality_flex(
     return
 
   pos = flexedge_length_in[worldid, edgeid] - flexedge_length0[edgeid]
+  solref = flex_solref[worldid % flex_solref.shape[0], eqid]
+  solimp = flex_solimp[worldid % flex_solimp.shape[0], eqid]
+
+  Jqvel = float(0.0)
+  for i in range(nv):
+    J = flexedge_J_in[worldid, edgeid, i]
+    efc_J_out[worldid, efcid, i] = J
+    Jqvel += J * qvel_in[worldid, i]
 
   _update_efc_row(
     worldid,
@@ -1732,11 +1745,16 @@ def make_constraint(m: types.Model, d: types.Data):
         _efc_equality_flex,
         dim=(d.nworld, m.eq_flex_adr.size, m.nflexedge),
         inputs=[
+          m.nv,
           m.opt.timestep,
+          m.flex_solref,
+          m.flex_solimp,
           m.flexedge_invweight0,
           m.flexedge_length0,
           m.eq_flex_adr,
           d.njmax,
+          d.qvel,
+          d.flexedge_J,
           d.flexedge_length,
           refsafe,
         ],
