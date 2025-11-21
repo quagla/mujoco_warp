@@ -527,8 +527,8 @@ def _efc_equality_flex(
     return
 
   pos = flexedge_length_in[worldid, edgeid] - flexedge_length0[edgeid]
-  solref = eq_solref[worldid % eq_solref.shape[0], eqid]
-  solimp = eq_solimp[worldid % eq_solimp.shape[0], eqid]
+  solref = eq_solref[worldid % eq_solref.shape[0], 0]
+  solimp = eq_solimp[worldid % eq_solimp.shape[0], 0]
 
   Jqvel = float(0.0)
   for i in range(nv):
