@@ -1370,7 +1370,7 @@ class Model:
   eq_wld_adr: wp.array(dtype=int)
   eq_jnt_adr: wp.array(dtype=int)
   eq_ten_adr: wp.array(dtype=int)
-  eq_flex_adr: wp.array(dtype=int),
+  eq_flex_adr: wp.array(dtype=int)
   tendon_jnt_adr: wp.array(dtype=int)
   tendon_site_pair_adr: wp.array(dtype=int)
   tendon_geom_adr: wp.array(dtype=int)
