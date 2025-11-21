@@ -908,6 +908,7 @@ def get_data_into(
   result.cdof[:] = d.cdof.numpy()[world_id]
   result.cinert[:] = d.cinert.numpy()[world_id]
   result.flexvert_xpos[:] = d.flexvert_xpos.numpy()[world_id]
+  result.flexedge_J[:] = d.flexedge_J.numpy()[world_id]
   result.flexedge_length[:] = d.flexedge_length.numpy()[world_id]
   result.flexedge_velocity[:] = d.flexedge_velocity.numpy()[world_id]
   result.actuator_length[:] = d.actuator_length.numpy()[world_id]
