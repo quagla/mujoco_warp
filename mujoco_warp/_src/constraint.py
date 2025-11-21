@@ -492,8 +492,8 @@ def _efc_equality_flex(
   # Model:
   nv: int,
   opt_timestep: wp.array(dtype=float),
-  flex_solref: wp.array2d(dtype=wp.vec2),
-  flex_solimp: wp.array2d(dtype=vec5),
+  eq_solref: wp.array2d(dtype=wp.vec2),
+  eq_solimp: wp.array2d(dtype=vec5),
   flexedge_invweight0: wp.array(dtype=float),
   flexedge_length0: wp.array(dtype=float),
   eq_flex_adr: wp.array(dtype=int),
@@ -527,8 +527,8 @@ def _efc_equality_flex(
     return
 
   pos = flexedge_length_in[worldid, edgeid] - flexedge_length0[edgeid]
-  solref = flex_solref[worldid % flex_solref.shape[0], eqid]
-  solimp = flex_solimp[worldid % flex_solimp.shape[0], eqid]
+  solref = eq_solref[worldid % eq_solref.shape[0], eqid]
+  solimp = eq_solimp[worldid % eq_solimp.shape[0], eqid]
 
   Jqvel = float(0.0)
   for i in range(nv):
@@ -1747,8 +1747,8 @@ def make_constraint(m: types.Model, d: types.Data):
         inputs=[
           m.nv,
           m.opt.timestep,
-          m.flex_solref,
-          m.flex_solimp,
+          m.eq_solref,
+          m.eq_solimp,
           m.flexedge_invweight0,
           m.flexedge_length0,
           m.eq_flex_adr,
