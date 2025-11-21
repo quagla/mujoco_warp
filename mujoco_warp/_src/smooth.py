@@ -233,9 +233,9 @@ def _flex_vertices(
 def _flex_edges(
   # Model:
   nv: int,
-  body_dofadr: wp.array(dtype=int),
   body_parentid: wp.array(dtype=int),
   body_rootid: wp.array(dtype=int),
+  body_dofadr: wp.array(dtype=int),
   dof_bodyid: wp.array(dtype=int),
   flex_vertadr: wp.array(dtype=int),
   flex_vertbodyid: wp.array(dtype=int),
@@ -335,9 +335,9 @@ def kinematics(m: Model, d: Data):
     dim=(d.nworld, m.nflexedge),
     inputs=[
       m.nv,
-      m.body_dofadr,
       m.body_parentid,
       m.body_rootid,
+      m.body_dofadr,
       m.dof_bodyid,
       m.flex_vertadr,
       m.flex_vertbodyid,
@@ -345,13 +345,9 @@ def kinematics(m: Model, d: Data):
       d.qvel,
       d.subtree_com,
       d.cdof,
-      d.flexvert_xpos
+      d.flexvert_xpos,
     ],
-    outputs=[
-      d.flexedge_J,
-      d.flexedge_length,
-      d.flexedge_velocity
-    ],
+    outputs=[d.flexedge_J, d.flexedge_length, d.flexedge_velocity],
   )
 
 

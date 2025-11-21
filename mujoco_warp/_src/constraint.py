@@ -492,17 +492,17 @@ def _efc_equality_flex(
   # Model:
   nv: int,
   opt_timestep: wp.array(dtype=float),
+  flexedge_length0: wp.array(dtype=float),
+  flexedge_invweight0: wp.array(dtype=float),
   eq_solref: wp.array2d(dtype=wp.vec2),
   eq_solimp: wp.array2d(dtype=vec5),
-  flexedge_invweight0: wp.array(dtype=float),
-  flexedge_length0: wp.array(dtype=float),
   eq_flex_adr: wp.array(dtype=int),
   # Data in:
-  njmax_in: int,
   qvel_in: wp.array2d(dtype=float),
   flexedge_J_in: wp.array3d(dtype=float),
   flexedge_length_in: wp.array2d(dtype=float),
   # In:
+  njmax_in: int,
   refsafe_in: int,
   # Data out:
   nefc_out: wp.array(dtype=int),
@@ -1747,15 +1747,15 @@ def make_constraint(m: types.Model, d: types.Data):
         inputs=[
           m.nv,
           m.opt.timestep,
+          m.flexedge_length0,
+          m.flexedge_invweight0,
           m.eq_solref,
           m.eq_solimp,
-          m.flexedge_invweight0,
-          m.flexedge_length0,
           m.eq_flex_adr,
-          d.njmax,
           d.qvel,
           d.flexedge_J,
           d.flexedge_length,
+          d.njmax,
           refsafe,
         ],
         outputs=[
