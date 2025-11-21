@@ -502,13 +502,15 @@ class EqType(enum.IntEnum):
     JOINT: couple the values of two scalar joints with cubic
     WELD: fix relative position and orientation of two bodies
     TENDON: couple the lengths of two tendons with cubic
+    FLEX: couple the edge lengths of a flex
   """
 
   CONNECT = mujoco.mjtEq.mjEQ_CONNECT
   WELD = mujoco.mjtEq.mjEQ_WELD
   JOINT = mujoco.mjtEq.mjEQ_JOINT
   TENDON = mujoco.mjtEq.mjEQ_TENDON
-  # unsupported: FLEX, DISTANCE
+  FLEX = mujoco.mjtEq.mjEQ_FLEX
+  # unsupported: DISTANCE
 
 
 class WrapType(enum.IntEnum):
@@ -1031,6 +1033,7 @@ class Model:
     eq_wld_adr: eq_* addresses of type `WELD`
     eq_jnt_adr: eq_* addresses of type `JOINT`
     eq_ten_adr: eq_* addresses of type `TENDON`
+    eq_flex_adr: eq * addresses of type `FLEX
     tendon_jnt_adr: joint tendon address
     tendon_site_pair_adr: site pair tendon address
     tendon_geom_adr: geom tendon address
@@ -1367,6 +1370,7 @@ class Model:
   eq_wld_adr: wp.array(dtype=int)
   eq_jnt_adr: wp.array(dtype=int)
   eq_ten_adr: wp.array(dtype=int)
+  eq_flex_adr: wp.array(dtype=int),
   tendon_jnt_adr: wp.array(dtype=int)
   tendon_site_pair_adr: wp.array(dtype=int)
   tendon_geom_adr: wp.array(dtype=int)

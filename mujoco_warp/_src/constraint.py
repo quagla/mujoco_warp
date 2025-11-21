@@ -491,7 +491,9 @@ def _efc_equality_tendon(
 def _efc_equality_flex(
   # Model:
   opt_timestep: wp.array(dtype=float),
+  eq_flex_adr: wp.array(dtype=int),
   # Data in:
+  njmax_in: int,
   # In:
   refsafe_in: int,
   # Data out:
@@ -507,7 +509,14 @@ def _efc_equality_flex(
   efc_frictionloss_out: wp.array2d(dtype=float),
   ne_flex_out: wp.array(dtype=int),
 ):
-  worldid, edgeid = wp.tid()
+  worldid, eqflexid, edgeid = wp.tid()
+  eqid = eq_flex_adr[eqflexid]
+
+  wp.atomic_add(ne_flex_out, worldid, 1)
+  efcid = wp.atomic_add(nefc_out, worldid, 1)
+
+  if efcid >= njmax_in:
+    return
 
   _update_efc_row(
     worldid,
@@ -1716,8 +1725,12 @@ def make_constraint(m: types.Model, d: types.Data):
 
       wp.launch(
         _efc_equality_flex,
-        dim=(d.nworld, m.nflexedge),
-        inputs=[],
+        dim=(d.nworld, m.eq_flex_adr.size, m.nflexedge),
+        inputs=[
+          m.opt.timestep,
+          m.eq_flex_adr,
+          refsafe
+        ],
         outputs=[
           d.nefc,
           d.efc.type,

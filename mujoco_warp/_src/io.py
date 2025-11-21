@@ -363,6 +363,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   m.eq_wld_adr = np.nonzero(mjm.eq_type == types.EqType.WELD)[0]
   m.eq_jnt_adr = np.nonzero(mjm.eq_type == types.EqType.JOINT)[0]
   m.eq_ten_adr = np.nonzero(mjm.eq_type == types.EqType.TENDON)[0]
+  m.eq_flex_adr = np.nonzero(mjm.eq_type == types.EqType.FLEX)[0]
 
   # fixed tendon
   m.tendon_jnt_adr, m.wrap_jnt_adr = [], []
