@@ -892,6 +892,7 @@ class Model:
     flex_elem: element vertex ids (dim+1 per elem)           (nflexelemdata,)
     flex_elemedge: element edge ids                          (nflexelemedge,)
     flexedge_length0: edge lengths in qpos0                  (nflexedge,)
+    flexedge_invweight0: inv. inertia for the edge           (nflexedge,)
     flex_stiffness: finite element stiffness matrix          (nflexelem, 21)
     flex_bending: bending stiffness                          (nflexedge, 17)
     flex_damping: Rayleigh's damping coefficient             (nflex,)
