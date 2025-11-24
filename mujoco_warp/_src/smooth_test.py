@@ -478,7 +478,13 @@ class SmoothTest(parameterized.TestCase):
     mujoco.mj_comPos(mjm, mjd)
     mujoco.mj_flex(mjm, mjd)
 
+    _assert_eq(m.dof_bodyid.numpy(), mjm.dof_bodyid, "flexedge_invweight0")
+    _assert_eq(d.cdof.numpy()[0], mjd.cdof, "cdof")
+    _assert_eq(d.qvel.numpy()[0], mjd.qvel, "qvel")
+    _assert_eq(d.subtree_com.numpy()[0], mjd.subtree_com, "subtree_com")
+    _assert_eq(d.flexvert_xpos.numpy()[0], mjd.flexvert_xpos, "flexvert_xpos")
     _assert_eq(d.flexedge_length.numpy()[0], mjd.flexedge_length, "flexedge_length")
+    _assert_eq(d.flexedge_velocity.numpy()[0], mjd.flexedge_velocity, "flexedge_velocity")
     _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")
 
 
