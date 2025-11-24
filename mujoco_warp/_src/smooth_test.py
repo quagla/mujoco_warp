@@ -468,6 +468,15 @@ class SmoothTest(parameterized.TestCase):
     mjw._src.smooth.tendon_bias(m, d, d.qfrc_bias)
     _assert_eq(d.qfrc_bias.numpy()[0], mjd.qfrc_bias, "qfrc_bias")
 
+  def test_flex(self):
+    mjm, mjd, m, d = test_data.fixture("flex/floppy.xml")
+
+    mjw._src.smooth.kinematics(m, d)
+    mujoco.mj_kinematics(mjm, mjd)
+
+    _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")
+
+
 
 if __name__ == "__main__":
   wp.init()
