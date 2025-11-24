@@ -477,7 +477,6 @@ class SmoothTest(parameterized.TestCase):
     _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")
 
 
-
 if __name__ == "__main__":
   wp.init()
   absltest.main()
