@@ -474,7 +474,9 @@ class SmoothTest(parameterized.TestCase):
     mjw._src.smooth.kinematics(m, d)
     mjw._src.smooth.com_pos(m, d)
     mjw._src.smooth.flex(m, d)
-    mujoco.mj_forward(mjm, mjd)
+    mujoco.mj_kinematics(mjm, mjd)
+    mujoco.mj_comPos(mjm, mjd)
+    mujoco.mj_flex(mjm, mjd)
 
     _assert_eq(d.flexedge_length.numpy()[0], mjd.flexedge_length, "flexedge_length")
     _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")

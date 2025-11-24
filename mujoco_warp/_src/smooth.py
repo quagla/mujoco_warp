@@ -266,13 +266,14 @@ def _flex_edges(
   j = body_dofadr[b2]
   vel1 = wp.vec3(qvel_in[worldid, i], qvel_in[worldid, i + 1], qvel_in[worldid, i + 2])
   vel2 = wp.vec3(qvel_in[worldid, j], qvel_in[worldid, j + 1], qvel_in[worldid, j + 2])
-  flexedge_velocity_out[worldid, edgeid] = math.safe_div(wp.dot(vel2 - vel1, vec), vecnorm)
+  edge = wp.normalize(vec)
+  flexedge_velocity_out[worldid, edgeid] = wp.dot(vel2 - vel1, edge)
   # Edge jacobian
   for k in range(nv):
     jacp1, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos1, b1, k, worldid)
     jacp2, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos2, b2, k, worldid)
     jacdif = jacp2 - jacp1
-    flexedge_J_out[worldid, edgeid, k] = wp.dot(jacdif, vec)
+    flexedge_J_out[worldid, edgeid, k] = wp.dot(jacdif, edge)
 
 
 @event_scope
