@@ -478,6 +478,14 @@ class SmoothTest(parameterized.TestCase):
     mujoco.mj_comPos(mjm, mjd)
     mujoco.mj_flex(mjm, mjd)
 
+    if mujoco.mj_isSparse(mjm):
+      flexedge_J = np.zeros((mjm.nflexedge, mjm.nv), dtype=float)
+      mujoco.mju_sparse2dense(
+        flexedge_J, mjd.flexedge_J.ravel(), mjd.flexedge_J_rownnz, mjd.flexedge_J_rowadr, mjd.flexedge_J_colind.ravel()
+      )
+    else:
+      flexedge_J = mjd.flexedge_J
+
     _assert_eq(m.dof_bodyid.numpy(), mjm.dof_bodyid, "flexedge_invweight0")
     _assert_eq(d.cdof.numpy()[0], mjd.cdof, "cdof")
     _assert_eq(d.qvel.numpy()[0], mjd.qvel, "qvel")
@@ -485,7 +493,7 @@ class SmoothTest(parameterized.TestCase):
     _assert_eq(d.flexvert_xpos.numpy()[0], mjd.flexvert_xpos, "flexvert_xpos")
     _assert_eq(d.flexedge_length.numpy()[0], mjd.flexedge_length, "flexedge_length")
     _assert_eq(d.flexedge_velocity.numpy()[0], mjd.flexedge_velocity, "flexedge_velocity")
-    _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")
+    _assert_eq(d.flexedge_J.numpy()[0], flexedge_J, "flexedge_J")
 
 
 if __name__ == "__main__":
