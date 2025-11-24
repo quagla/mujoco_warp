@@ -470,26 +470,23 @@ class SmoothTest(parameterized.TestCase):
 
   def test_flex(self):
     mjm, mjd, m, d = test_data.fixture("flex/floppy.xml")
+    d.flexvert_xpos.fill_(wp.inf)
+    d.flexedge_length.fill_(wp.inf)
+    d.flexedge_velocity.fill_(wp.inf)
+    d.flexedge_J.fill_(wp.inf)
 
-    mjw._src.smooth.kinematics(m, d)
-    mjw._src.smooth.com_pos(m, d)
-    mjw._src.smooth.flex(m, d)
+    mjw.kinematics(m, d)
+    mjw.com_pos(m, d)
+    mjw.flex(m, d)
     mujoco.mj_kinematics(mjm, mjd)
     mujoco.mj_comPos(mjm, mjd)
     mujoco.mj_flex(mjm, mjd)
 
-    if mujoco.mj_isSparse(mjm):
-      flexedge_J = np.zeros((mjm.nflexedge, mjm.nv), dtype=float)
-      mujoco.mju_sparse2dense(
-        flexedge_J, mjd.flexedge_J.ravel(), mjd.flexedge_J_rownnz, mjd.flexedge_J_rowadr, mjd.flexedge_J_colind.ravel()
-      )
-    else:
-      flexedge_J = mjd.flexedge_J
+    flexedge_J = np.zeros((mjm.nflexedge, mjm.nv), dtype=float)
+    mujoco.mju_sparse2dense(
+      flexedge_J, mjd.flexedge_J.ravel(), mjd.flexedge_J_rownnz, mjd.flexedge_J_rowadr, mjd.flexedge_J_colind.ravel()
+    )
 
-    _assert_eq(m.dof_bodyid.numpy(), mjm.dof_bodyid, "flexedge_invweight0")
-    _assert_eq(d.cdof.numpy()[0], mjd.cdof, "cdof")
-    _assert_eq(d.qvel.numpy()[0], mjd.qvel, "qvel")
-    _assert_eq(d.subtree_com.numpy()[0], mjd.subtree_com, "subtree_com")
     _assert_eq(d.flexvert_xpos.numpy()[0], mjd.flexvert_xpos, "flexvert_xpos")
     _assert_eq(d.flexedge_length.numpy()[0], mjd.flexedge_length, "flexedge_length")
     _assert_eq(d.flexedge_velocity.numpy()[0], mjd.flexedge_velocity, "flexedge_velocity")
