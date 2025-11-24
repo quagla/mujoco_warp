@@ -369,6 +369,7 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   m.eq_wld_adr = np.nonzero(mjm.eq_type == types.EqType.WELD)[0]
   m.eq_jnt_adr = np.nonzero(mjm.eq_type == types.EqType.JOINT)[0]
   m.eq_ten_adr = np.nonzero(mjm.eq_type == types.EqType.TENDON)[0]
+  m.eq_flex_adr = np.nonzero(mjm.eq_type == types.EqType.FLEX)[0]
 
   # fixed tendon
   m.tendon_jnt_adr, m.wrap_jnt_adr = [], []
@@ -772,11 +773,13 @@ def put_data(
     "qLD": None,
     "ten_J": None,
     "actuator_moment": None,
+    "flexedge_J": None,
     "nacon": None,
     "ne_connect": None,
     "ne_weld": None,
     "ne_jnt": None,
     "ne_ten": None,
+    "ne_flex": None,
     "nsolving": None,
   }
   for f in dataclasses.fields(types.Data):
@@ -807,9 +810,16 @@ def put_data(
     ten_J = np.zeros((mjm.ntendon, mjm.nv))
     mujoco.mju_sparse2dense(ten_J, mjd.ten_J.reshape(-1), mjd.ten_J_rownnz, mjd.ten_J_rowadr, mjd.ten_J_colind.reshape(-1))
     d.ten_J = wp.array(np.full((nworld, mjm.ntendon, mjm.nv), ten_J), dtype=float)
+    flexedge_J = np.zeros((mjm.nflexedge, mjm.nv))
+    mujoco.mju_sparse2dense(
+      flexedge_J, mjd.flexedge_J.reshape(-1), mjd.flexedge_J_rownnz, mjd.flexedge_J_rowadr, mjd.flexedge_J_colind.reshape(-1)
+    )
+    d.flexedge_J = wp.array(np.full((nworld, mjm.nflexedge, mjm.nv), flexedge_J), dtype=float)
   else:
     ten_J = mjd.ten_J.reshape((mjm.ntendon, mjm.nv))
     d.ten_J = wp.array(np.full((nworld, mjm.ntendon, mjm.nv), ten_J), dtype=float)
+    flexedge_J = mjd.flexedge_J.reshape((mjm.nflexedge, mjm.nv))
+    d.flexedge_J = wp.array(np.full((nworld, mjm.nflexedge, mjm.nv), flexedge_J), dtype=float)
 
   # TODO(taylorhowell): sparse actuator_moment
   actuator_moment = np.zeros((mjm.nu, mjm.nv))
@@ -821,6 +831,7 @@ def put_data(
   d.ne_weld = wp.full(nworld, 6 * np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_WELD) & mjd.eq_active), dtype=int)
   d.ne_jnt = wp.full(nworld, np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_JOINT) & mjd.eq_active), dtype=int)
   d.ne_ten = wp.full(nworld, np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_TENDON) & mjd.eq_active), dtype=int)
+  d.ne_flex = wp.full(nworld, np.sum((mjm.eq_type == mujoco.mjtEq.mjEQ_FLEX) & mjd.eq_active), dtype=int)
   d.nsolving = wp.array([nworld], dtype=int)
 
   return d
@@ -922,6 +933,7 @@ def get_data_into(
   result.cdof[:] = d.cdof.numpy()[world_id]
   result.cinert[:] = d.cinert.numpy()[world_id]
   result.flexvert_xpos[:] = d.flexvert_xpos.numpy()[world_id]
+  result.flexedge_J[:] = d.flexedge_J.numpy()[world_id]
   result.flexedge_length[:] = d.flexedge_length.numpy()[world_id]
   result.flexedge_velocity[:] = d.flexedge_velocity.numpy()[world_id]
   result.actuator_length[:] = d.actuator_length.numpy()[world_id]
@@ -1083,6 +1095,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
     ne_weld_out: wp.array(dtype=int),
     ne_jnt_out: wp.array(dtype=int),
     ne_ten_out: wp.array(dtype=int),
+    ne_flex_out: wp.array(dtype=int),
     nsolving_out: wp.array(dtype=int),
   ):
     worldid = wp.tid()
@@ -1099,6 +1112,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
     ne_weld_out[worldid] = 0
     ne_jnt_out[worldid] = 0
     ne_ten_out[worldid] = 0
+    ne_flex_out[worldid] = 0
     nf_out[worldid] = 0
     nl_out[worldid] = 0
     nefc_out[worldid] = 0
@@ -1265,6 +1279,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
       d.ne_weld,
       d.ne_jnt,
       d.ne_ten,
+      d.ne_flex,
       d.nsolving,
     ],
   )
