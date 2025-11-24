@@ -268,11 +268,11 @@ def _flex_edges(
   vel2 = wp.vec3(qvel_in[worldid, j], qvel_in[worldid, j + 1], qvel_in[worldid, j + 2])
   flexedge_velocity_out[worldid, edgeid] = math.safe_div(wp.dot(vel2 - vel1, vec), vecnorm)
   # Edge jacobian
-  for i in range(nv):
-    jacp1, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos1, b1, i, worldid)
-    jacp2, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos2, b2, i, worldid)
+  for k in range(nv):
+    jacp1, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos1, b1, k, worldid)
+    jacp2, _ = support.jac(body_parentid, body_rootid, dof_bodyid, subtree_com_in, cdof_in, pos2, b2, k, worldid)
     jacdif = jacp2 - jacp1
-    flexedge_J_out[worldid, edgeid, i] = wp.dot(jacdif, vec)
+    flexedge_J_out[worldid, edgeid, k] = wp.dot(jacdif, vec)
 
 
 @event_scope
@@ -329,6 +329,9 @@ def kinematics(m: Model, d: Data):
     outputs=[d.site_xpos, d.site_xmat],
   )
 
+
+@event_scope
+def flex(m: Model, d: Data):
   wp.launch(_flex_vertices, dim=(d.nworld, m.nflexvert), inputs=[m.flex_vertbodyid, d.xpos], outputs=[d.flexvert_xpos])
   wp.launch(
     _flex_edges,

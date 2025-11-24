@@ -472,8 +472,11 @@ class SmoothTest(parameterized.TestCase):
     mjm, mjd, m, d = test_data.fixture("flex/floppy.xml")
 
     mjw._src.smooth.kinematics(m, d)
-    mujoco.mj_kinematics(mjm, mjd)
+    mjw._src.smooth.com_pos(m, d)
+    mjw._src.smooth.flex(m, d)
+    mujoco.mj_forward(mjm, mjd)
 
+    _assert_eq(d.flexedge_length.numpy()[0], mjd.flexedge_length, "flexedge_length")
     _assert_eq(d.flexedge_J.numpy()[0], mjd.flexedge_J, "flexedge_J")
 
 
