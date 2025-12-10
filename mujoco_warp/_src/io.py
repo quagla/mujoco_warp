@@ -614,6 +614,14 @@ def make_data(
   contact = types.Contact(**{f.name: _create_array(None, f.type, sizes) for f in dataclasses.fields(types.Contact)})
   efc = types.Constraint(**{f.name: _create_array(None, f.type, sizes) for f in dataclasses.fields(types.Constraint)})
 
+  # world body (body 0): zero position, identity orientation
+  xquat = np.zeros((nworld, mjm.nbody, 4))
+  xquat[:, 0] = (1, 0, 0, 0)
+  xmat = np.zeros((nworld, mjm.nbody, 3, 3))
+  xmat[:, 0] = np.eye(3)
+  ximat = np.zeros((nworld, mjm.nbody, 3, 3))
+  ximat[:, 0] = np.eye(3)
+
   d_kwargs = {
     "contact": contact,
     "efc": efc,
@@ -624,6 +632,9 @@ def make_data(
     "qLD": None,
     "geom_xpos": None,
     "geom_xmat": None,
+    "xquat": wp.array(xquat, dtype=wp.quat),
+    "xmat": wp.array(xmat, dtype=wp.mat33),
+    "ximat": wp.array(ximat, dtype=wp.mat33),
   }
   for f in dataclasses.fields(types.Data):
     if f.name in d_kwargs:
