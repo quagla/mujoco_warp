@@ -58,6 +58,7 @@ class BlockDim:
   cholesky_factorize_solve: int = 32
   # solver
   update_gradient_cholesky: int = 64
+  update_gradient_cholesky_blocked: int = 32
   update_gradient_JTDAJ_sparse: int = 64
   update_gradient_JTDAJ_dense: int = 96
   # support
@@ -640,7 +641,6 @@ class Option:
 
   Attributes:
     timestep: simulation timestep
-    impratio: ratio of friction-to-normal contact impedance
     tolerance: main solver tolerance
     ls_tolerance: CG/Newton linesearch tolerance
     ccd_tolerance: convex collision detection tolerance
@@ -661,6 +661,7 @@ class Option:
     sdf_iterations: max number of iterations for gradient descent
 
   warp only fields:
+    impratio_invsqrt: ratio of friction-to-normal contact impedance (stored as inverse square root)
     is_sparse: whether to use sparse representations
     ls_parallel: evaluate engine solver step sizes in parallel
     ls_parallel_min_step: minimum step size for solver linesearch
@@ -676,7 +677,6 @@ class Option:
   """
 
   timestep: array("*", float)
-  impratio: array("*", float)
   tolerance: array("*", float)
   ls_tolerance: array("*", float)
   ccd_tolerance: array("*", float)
@@ -696,6 +696,7 @@ class Option:
   sdf_initpoints: int
   sdf_iterations: int
   # warp only fields:
+  impratio_invsqrt: array("*", float)
   is_sparse: bool
   ls_parallel: bool
   ls_parallel_min_step: float
@@ -1001,6 +1002,7 @@ class Model:
     mapM2M: index mapping from M (legacy) to M (CSR)         (nC)
 
   warp only fields:
+    nv_pad: number of degrees of freedom + padding
     nacttrnbody: number of actuators with body transmission
     nsensorcollision: number of unique collisions for
                       geom distance sensors
@@ -1344,6 +1346,7 @@ class Model:
   M_colind: array("nC", int)
   mapM2M: array("nC", int)
   # warp only fields:
+  nv_pad: int
   nacttrnbody: int
   nsensorcollision: int
   nsensortaxel: int
@@ -1482,11 +1485,9 @@ class Constraint:
     force: constraint force in constraint space       (nworld, njmax)
     Jaref: Jac*qacc - aref                            (nworld, njmax)
     Ma: M*qacc                                        (nworld, nv)
-    grad: gradient of master cost                     (nworld, nv)
-    cholesky_L_tmp: temporary for Cholesky factor     (nworld, nv, nv)
-    cholesky_y_tmp: temporary for Cholesky solve      (nworld, nv
+    grad: gradient of master cost                     (nworld, nv_pad)
     grad_dot: dot(grad, grad)                         (nworld,)
-    Mgrad: M / grad                                   (nworld, nv)
+    Mgrad: M / grad                                   (nworld, nv_pad)
     search: linesearch vector                         (nworld, nv)
     search_dot: dot(search, search)                   (nworld,)
     gauss: Gauss Cost                                 (nworld,)
@@ -1497,7 +1498,6 @@ class Constraint:
     jv: efc_J @ search                                (nworld, njmax)
     quad: quadratic cost coefficients                 (nworld, njmax, 3)
     quad_gauss: quadratic cost Gauss coefficients     (nworld, 3)
-    h: Hessian                                        (nworld, nv_pad, nv_pad)
     alpha: line search step size                      (nworld,)
     prev_grad: previous grad                          (nworld, nv)
     prev_Mgrad: previous Mgrad                        (nworld, nv)
@@ -1517,11 +1517,9 @@ class Constraint:
   force: array("nworld", "njmax", float)
   Jaref: array("nworld", "njmax", float)
   Ma: array("nworld", "nv", float)
-  grad: array("nworld", "nv", float)
-  cholesky_L_tmp: array("nworld", "nv", "nv", float)
-  cholesky_y_tmp: array("nworld", "nv", float)
+  grad: array("nworld", "nv_pad", float)
   grad_dot: array("nworld", float)
-  Mgrad: array("nworld", "nv", float)
+  Mgrad: array("nworld", "nv_pad", float)
   search: array("nworld", "nv", float)
   search_dot: array("nworld", float)
   gauss: array("nworld", float)
@@ -1532,7 +1530,6 @@ class Constraint:
   jv: array("nworld", "njmax", float)
   quad: array("nworld", "njmax", wp.vec3)
   quad_gauss: array("nworld", wp.vec3)
-  h: array("nworld", "nv_pad", "nv_pad", float)
   alpha: array("nworld", float)
   prev_grad: array("nworld", "nv", float)
   prev_Mgrad: array("nworld", "nv", float)

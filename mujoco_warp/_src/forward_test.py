@@ -191,7 +191,7 @@ class ForwardTest(parameterized.TestCase):
     _assert_eq(rk_step().numpy()[0], rk_step().numpy()[0], "qpos")
 
   @parameterized.product(
-    jacobian=(mujoco.mjtJacobian.mjJAC_AUTO, mujoco.mjtJacobian.mjJAC_DENSE),
+    jacobian=(mujoco.mjtJacobian.mjJAC_SPARSE, mujoco.mjtJacobian.mjJAC_DENSE),
     actuation=(0, DisableBit.ACTUATION),
     spring=(0, DisableBit.SPRING),
     damper=(0, DisableBit.DAMPER),
@@ -377,6 +377,9 @@ class ForwardTest(parameterized.TestCase):
         # leave geom_xpos and geom_xmat untouched because they have static data
         continue
       attr, _ = _getattr(arr)
+      if arr in ("xquat", "xmat", "ximat"):
+        # xquat, xmat, ximat need to retain identity for world body
+        attr = attr[:, 1:]
       if attr.dtype == float:
         attr.fill_(wp.nan)
       elif attr.dtype == int:
