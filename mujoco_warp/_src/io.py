@@ -560,6 +560,32 @@ def _get_padded_sizes(nv: int, njmax: int, is_sparse: bool, tile_size: int):
   return njmax_padded, nv_padded
 
 
+def _default_nconmax(mjm: mujoco.MjModel, mjd: Optional[mujoco.MjData] = None) -> int:
+  """Returns a default guess for an ideal nconmax given a Model and optional Data.
+
+  This guess is based off a very simple heuristic, and may need to be manually raised if MJWarp
+  reports ncon overflow, or lowered in order to get the very best performance.
+  """
+  valid_sizes = (2 + (np.arange(19) % 2)) * (2 ** (np.arange(19) // 2 + 3))  # 16, 24, 32, 48, ... 8192
+  has_sdf = (mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF).any()
+  has_flex = mjm.nflex > 0
+  nconmax = max(mjm.nv * 0.35 * (mjm.nhfield > 0) * 10 + 45, 256 * has_flex, 64 * has_sdf, mjd.ncon if mjd else 0)
+  return int(valid_sizes[np.searchsorted(valid_sizes, nconmax)])
+
+
+def _default_njmax(mjm: mujoco.MjModel, mjd: Optional[mujoco.MjData] = None) -> int:
+  """Returns a default guess for an ideal njmax given a Model and optional Data.
+
+  This guess is based off a very simple heuristic, and may need to be manually raised if MJWarp
+  reports ncon overflow, or lowered in order to get the very best performance.
+  """
+  valid_sizes = (2 + (np.arange(19) % 2)) * (2 ** (np.arange(19) // 2 + 3))  # 16, 24, 32, 48, ... 8192
+  has_sdf = (mjm.geom_type == mujoco.mjtGeom.mjGEOM_SDF).any()
+  has_flex = mjm.nflex > 0
+  njmax = max(mjm.nv * 2.26 * (mjm.nhfield > 0) * 18 + 53, 512 * has_flex, 256 * has_sdf, mjd.nefc if mjd else 0)
+  return int(valid_sizes[np.searchsorted(valid_sizes, njmax)])
+
+
 def make_data(
   mjm: mujoco.MjModel,
   nworld: int = 1,
@@ -582,9 +608,11 @@ def make_data(
     The data object containing the current state and output arrays (device).
   """
   # TODO(team): move nconmax, njmax to Model?
-  # TODO(team): improve heuristic for nconmax and njmax
-  nconmax = nconmax or 20
-  njmax = njmax or nconmax * 6
+  if nconmax is None:
+    nconmax = _default_nconmax(mjm)
+
+  if njmax is None:
+    njmax = _default_njmax(mjm)
 
   if nworld < 1:
     raise ValueError(f"nworld must be >= 1")
@@ -592,7 +620,7 @@ def make_data(
   if naconmax is None:
     if nconmax < 0:
       raise ValueError("nconmax must be >= 0")
-    naconmax = max(512, nworld * nconmax)
+    naconmax = nworld * nconmax
   elif naconmax < 0:
     raise ValueError("naconmax must be >= 0")
 
@@ -689,9 +717,11 @@ def put_data(
   # TODO(team): decide what to do about uninitialized warp-only fields created by put_data
   #             we need to ensure these are only workspace fields and don't carry state
 
-  # TODO(team): better heuristic for nconmax and njmax
-  nconmax = nconmax or max(5, 4 * mjd.ncon)
-  njmax = njmax or max(5, 4 * mjd.nefc)
+  if nconmax is None:
+    nconmax = _default_nconmax(mjm, mjd)
+
+  if njmax is None:
+    njmax = _default_njmax(mjm, mjd)
 
   if nworld < 1:
     raise ValueError(f"nworld must be >= 1")
@@ -699,11 +729,9 @@ def put_data(
   if naconmax is None:
     if nconmax < 0:
       raise ValueError("nconmax must be >= 0")
-
     if mjd.ncon > nconmax:
       raise ValueError(f"nconmax overflow (nconmax must be >= {mjd.ncon})")
-
-    naconmax = max(512, nworld * nconmax)
+    naconmax = nworld * nconmax
   elif naconmax < mjd.ncon * nworld:
     raise ValueError(f"naconmax overflow (naconmax must be >= {mjd.ncon * nworld})")
 
