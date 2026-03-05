@@ -2093,6 +2093,8 @@ def _sensor_tactile(
   mesh_vertadr: wp.array(dtype=int),
   mesh_octadr: wp.array(dtype=int),
   mesh_normaladr: wp.array(dtype=int),
+  mesh_normalnum: wp.array(dtype=int),
+  mesh_vertnum: wp.array(dtype=int),
   mesh_vert: wp.array(dtype=wp.vec3),
   mesh_normal: wp.array(dtype=wp.vec3),
   mesh_quat: wp.array(dtype=wp.quat),
@@ -2116,12 +2118,7 @@ def _sensor_tactile(
   # Data out:
   sensordata_out: wp.array2d(dtype=float),
 ):
-  conid, taxelid = wp.tid()
-
-  if conid >= nacon_in[0]:
-    return
-
-  worldid = contact_worldid_in[conid]
+  worldid, taxelid = wp.tid()
 
   # get sensor_id
   sensor_id = taxel_sensorid[taxelid]
@@ -2132,15 +2129,24 @@ def _sensor_tactile(
   parent_body = geom_bodyid[geom_id]
   parent_weld = body_weldid[parent_body]
 
-  # contact geom
-  body1 = body_weldid[geom_bodyid[contact_geom_in[conid][0]]]
-  body2 = body_weldid[geom_bodyid[contact_geom_in[conid][1]]]
-  if body1 == parent_weld:
-    geom = contact_geom_in[conid][1]
-  elif body2 == parent_weld:
-    geom = contact_geom_in[conid][0]
-  else:
+  # search through contacts to find a matching geom
+  geom = int(-1)
+  ncon = nacon_in[0]
+  for conid in range(ncon):
+    if contact_worldid_in[conid] != worldid:
+      continue
+    body1 = body_weldid[geom_bodyid[contact_geom_in[conid][0]]]
+    body2 = body_weldid[geom_bodyid[contact_geom_in[conid][1]]]
+    if body1 == parent_weld:
+      geom = contact_geom_in[conid][1]
+      break
+    elif body2 == parent_weld:
+      geom = contact_geom_in[conid][0]
+      break
+
+  if geom < 0:
     return
+
   body = geom_bodyid[geom]
 
   # vertex local position
@@ -2183,11 +2189,19 @@ def _sensor_tactile(
   )
   vel_rel = vel_sensor - vel_other
 
+  # check if mesh has tangent frame normals (9 floats per vertex) or just normals (3 floats)
+  has_tangent_normals = mesh_normalnum[mesh_id] == 3 * mesh_vertnum[mesh_id]
+  normal_stride = 3 if has_tangent_normals else 1
+
   # get contact force/torque, rotate into node frame
-  offset = mesh_normaladr[mesh_id] + 3 * vertid
+  offset = mesh_normaladr[mesh_id] + normal_stride * vertid
   normal = math.rot_vec_quat(mesh_normal[offset], mesh_quat[mesh_id])
-  tang1 = math.rot_vec_quat(mesh_normal[offset + 1], mesh_quat[mesh_id])
-  tang2 = math.rot_vec_quat(mesh_normal[offset + 2], mesh_quat[mesh_id])
+  if has_tangent_normals:
+    tang1 = math.rot_vec_quat(mesh_normal[offset + 1], mesh_quat[mesh_id])
+    tang2 = math.rot_vec_quat(mesh_normal[offset + 2], mesh_quat[mesh_id])
+  else:
+    tang1 = wp.vec3(0.0, 0.0, 0.0)
+    tang2 = wp.vec3(0.0, 0.0, 0.0)
   kMaxDepth = 0.05
   pressure = depth / wp.max(kMaxDepth - depth, MJ_MINVAL)
   force = wp.mul(normal, pressure)
@@ -2195,8 +2209,12 @@ def _sensor_tactile(
   # one row of mat^T * force
   forceT = wp.vec3()
   forceT[0] = wp.dot(force, normal)
-  forceT[1] = wp.abs(wp.dot(vel_rel, tang1))
-  forceT[2] = wp.abs(wp.dot(vel_rel, tang2))
+  if has_tangent_normals:
+    forceT[1] = wp.abs(wp.dot(vel_rel, tang1))
+    forceT[2] = wp.abs(wp.dot(vel_rel, tang2))
+  else:
+    forceT[1] = 0.0
+    forceT[2] = 0.0
 
   # add to sensor output
   dim = sensor_dim[sensor_id] / 3
@@ -2432,7 +2450,7 @@ def sensor_acc(m: Model, d: Data):
 
   wp.launch(
     _sensor_tactile,
-    dim=(d.naconmax, m.nsensortaxel),
+    dim=(d.nworld, m.nsensortaxel),
     inputs=[
       m.body_rootid,
       m.body_weldid,
@@ -2445,6 +2463,8 @@ def sensor_acc(m: Model, d: Data):
       m.mesh_vertadr,
       m.mesh_octadr,
       m.mesh_normaladr,
+      m.mesh_normalnum,
+      m.mesh_vertnum,
       m.mesh_vert,
       m.mesh_normal,
       m.mesh_quat,
