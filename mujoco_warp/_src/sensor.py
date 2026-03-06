@@ -2216,7 +2216,7 @@ def _sensor_tactile(
       plugin,
       plugin_attr,
       contact_type,
-      geom_size[worldid % geom_size.shape[0], geom],
+      wp.vec3(geom_size[worldid % geom_size.shape[0], geom]),
       plugin_id,
       mesh_id,
     )
