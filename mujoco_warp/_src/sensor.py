@@ -2179,12 +2179,11 @@ def _sensor_tactile(
   normal_stride = 3 if has_frame else 1
   offset = mesh_normaladr[mesh_id] + normal_stride * vertid
   normal = math.rot_vec_quat(mesh_normal[offset], mesh_quat[mesh_id])
+  tang1 = wp.vec3(0.0, 0.0, 0.0)
+  tang2 = wp.vec3(0.0, 0.0, 0.0)
   if has_frame:
     tang1 = math.rot_vec_quat(mesh_normal[offset + 1], mesh_quat[mesh_id])
     tang2 = math.rot_vec_quat(mesh_normal[offset + 2], mesh_quat[mesh_id])
-  else:
-    tang1 = wp.vec3(0.0, 0.0, 0.0)
-    tang2 = wp.vec3(0.0, 0.0, 0.0)
 
   for g in range(MJ_MAXCONPAIR):
     if g >= geom_count:
