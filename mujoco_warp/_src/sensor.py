@@ -2082,11 +2082,14 @@ def _transform_spatial(vec: wp.spatial_vector, dif: wp.vec3) -> wp.vec3:
 
 @wp.kernel
 def _preprocess_tactile_contacts(
+  # Model:
   body_weldid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  # Data in:
   contact_geom_in: wp.array(dtype=wp.vec2i),
   contact_worldid_in: wp.array(dtype=int),
   nacon_in: wp.array(dtype=int),
+  # Out:
   weld_geom_count_out: wp.array2d(dtype=int),
   weld_geom_list_out: wp.array3d(dtype=int),
 ):
@@ -2146,6 +2149,7 @@ def _sensor_tactile(
   geom_xmat_in: wp.array2d(dtype=wp.mat33),
   subtree_com_in: wp.array2d(dtype=wp.vec3),
   cvel_in: wp.array2d(dtype=wp.spatial_vector),
+  # In:
   weld_geom_count_in: wp.array2d(dtype=int),
   weld_geom_list_in: wp.array3d(dtype=int),
   # Data out:
