@@ -96,7 +96,7 @@ def get_sdf_params(
   volume_data = VolumeData()
 
   if g_type == GeomType.SDF and plugin_id != -1:
-    attributes = plugin_attr[plugin_id]
+    attributes = wp.vec3(plugin_attr[plugin_id])
     plugin_index = plugin[plugin_id]
 
   elif g_type == GeomType.SDF and mesh_id != -1:
