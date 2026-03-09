@@ -28,6 +28,7 @@ from mujoco_warp import test_data
 from mujoco_warp._src.collision_core import create_collision_context
 from mujoco_warp._src.collision_driver import MJ_COLLISION_TABLE
 from mujoco_warp._src.types import CollisionType
+from mujoco_warp._src.util_pkg import check_version
 
 # tolerance for difference between MuJoCo and MJWarp calculations - mostly
 # due to float precision
@@ -914,29 +915,31 @@ class SensorTest(parameterized.TestCase):
             <geom name="sensor_geom" type="mesh" mesh="sensor_mesh"/>
           </body>
           <body>
-            <geom name="contact_box" type="box" size=".7 .7 .3"/>
+            <geom type="box" size=".7 .7 .3"/>
           </body>
         </worldbody>
         <sensor>
           <tactile geom="sensor_geom" mesh="sensor_mesh"/>
         </sensor>
+        <keyframe>
+          <key qpos="0 0 1 1 0 0 0"/>
+        </keyframe>
       </mujoco>
       """,
+      keyframe=0,
     )
-
-    # Simulate until contact occurs (like the working C++ test)
-    while mjd.time < 1.0 and mjd.ncon == 0:
-      mujoco.mj_step(mjm, mjd)
-      mjw.step(m, d)
 
     d.sensordata.zero_()
     mjw.sensor_acc(m, d)
 
     warp_sensordata = d.sensordata.numpy()[0]
 
-    _assert_eq(warp_sensordata, mjd.sensordata, "tactile_sensordata")
-    # Verify sensor is actually triggered (not all zeros)
-    self.assertTrue(mjd.sensordata.any(), "MuJoCo sensordata should not be all zeros")
+    # Check Warp output matches MuJoCo output, if available
+    if check_version("mujoco>=3.5.1.dev879036130"):
+      _assert_eq(warp_sensordata, mjd.sensordata, "tactile_sensordata")
+
+    # Verify Warp sensor is triggered regardless of MuJoCo version
+    self.assertTrue(warp_sensordata.any(), "Warp sensordata should not be all zeros")
 
 
 if __name__ == "__main__":
