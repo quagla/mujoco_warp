@@ -43,7 +43,6 @@ def _assert_eq(a, b, name):
 
 
 class ForwardTest(parameterized.TestCase):
-  # TODO(team): test sparse when actuator_moment and/or ten_J have sparse representation
   @parameterized.product(xml=["humanoid/humanoid.xml", "pendula.xml"])
   def test_fwd_velocity(self, xml):
     _, mjd, m, d = test_data.fixture(xml, qvel_noise=0.01, ctrl_noise=0.1)
@@ -439,11 +438,22 @@ class ForwardTest(parameterized.TestCase):
         actuator_moment = np.zeros((mjm.nu, mjm.nv))
         mujoco.mju_sparse2dense(actuator_moment, mjd.actuator_moment, mjd.moment_rownnz, mjd.moment_rowadr, mjd.moment_colind)
         mjd_arr = actuator_moment
+        d_arr = np.zeros((mjm.nu, mjm.nv))
+        mujoco.mju_sparse2dense(
+          d_arr,
+          d.actuator_moment.numpy()[0],
+          d.moment_rownnz.numpy()[0],
+          d.moment_rowadr.numpy()[0],
+          d.moment_colind.numpy()[0],
+        )
       elif arr == "ten_J":
         if check_version("mujoco>=3.5.1.dev872479828"):
           ten_J = np.zeros((mjm.ntendon, mjm.nv))
           if mjm.ntendon:
-            mujoco.mju_sparse2dense(ten_J, mjd.ten_J, mjd.ten_J_rownnz, mjd.ten_J_rowadr, mjd.ten_J_colind)
+            if check_version("mujoco>=3.5.1.dev875093374"):
+              mujoco.mju_sparse2dense(ten_J, mjd.ten_J, mjm.ten_J_rownnz, mjm.ten_J_rowadr, mjm.ten_J_colind)
+            else:
+              mujoco.mju_sparse2dense(ten_J, mjd.ten_J, mjd.ten_J_rownnz, mjd.ten_J_rowadr, mjd.ten_J_colind)
           mjd_arr = ten_J
         else:
           mjd_arr = mjd.ten_J.reshape((mjm.ntendon, mjm.nv))

@@ -841,6 +841,7 @@ class Model:
     nflexelem: number of elements in all flexes
     nflexelemdata: number of element vertex ids in all flexes
     nflexelemedge: number of element edge ids in all flexes
+    nJfe: number of non-zeros in sparse flexedge Jacobian
     nmesh: number of meshes
     nmeshvert: number of vertices for all meshes
     nmeshnormal: number of normals in all meshes
@@ -860,6 +861,7 @@ class Model:
     nsensor: number of sensors
     nmocap: number of mocap bodies
     nplugin: number of plugin instances
+    nJmom: number of non-zeros in actuator_moment
     ngravcomp: number of bodies with nonzero gravcomp
     nsensordata: number of elements in sensor data vector
     opt: physics options
@@ -1207,6 +1209,7 @@ class Model:
   nflexelem: int
   nflexelemdata: int
   nflexelemedge: int
+  nJfe: int
   nmesh: int
   nmeshvert: int
   nmeshnormal: int
@@ -1226,6 +1229,7 @@ class Model:
   nsensor: int
   nmocap: int
   nplugin: int
+  nJmom: int
   ngravcomp: int
   nsensordata: int
   opt: Option
@@ -1357,7 +1361,7 @@ class Model:
   flex_damping: array("nflex", float)
   flexedge_J_rownnz: array("nflexedge", int)
   flexedge_J_rowadr: array("nflexedge", int)
-  flexedge_J_colind: wp.array(dtype=int)
+  flexedge_J_colind: array("nJfe", int)
   mesh_vertadr: array("nmesh", int)
   mesh_vertnum: array("nmesh", int)
   mesh_faceadr: array("nmesh", int)
@@ -1682,7 +1686,7 @@ class Data:
     cdof: com-based motion axis of each dof (rot:lin)           (nworld, nv, 6)
     cinert: com-based body inertia and mass                     (nworld, nbody, 10)
     flexvert_xpos: cartesian flex vertex positions              (nworld, nflexvert, 3)
-    flexedge_J: edge length Jacobian                            (nworld, 1, nflexedge*6)
+    flexedge_J: edge length Jacobian                            (nworld, nJfe)
     flexedge_length: flex edge lengths                          (nworld, nflexedge, 1)
     ten_wrapadr: start address of tendon's path                 (nworld, ntendon)
     ten_wrapnum: number of wrap points in path                  (nworld, ntendon)
@@ -1691,7 +1695,10 @@ class Data:
     wrap_obj: geomid; -1: site; -2: pulley                      (nworld, nwrap, 2)
     wrap_xpos: Cartesian 3D points in all paths                 (nworld, nwrap, 6)
     actuator_length: actuator lengths                           (nworld, nu)
-    actuator_moment: actuator moments                           (nworld, nu, nv)
+    moment_rownnz: number of non-zeros in actuator_moment row   (nworld, nu)
+    moment_rowadr: row start address in actuator_moment         (nworld, nu)
+    moment_colind: column indices in sparse actuator_moment     (nworld, nJmom)
+    actuator_moment: actuator moments                           (nworld, nJmom)
     crb: com-based composite inertia and mass                   (nworld, nbody, 10)
     qM: total inertia                                           (nworld, nv, nv) if dense
                                                                 (nworld, 1, nM) if sparse
@@ -1776,7 +1783,7 @@ class Data:
   cdof: array("nworld", "nv", wp.spatial_vector)
   cinert: array("nworld", "nbody", vec10)
   flexvert_xpos: array("nworld", "nflexvert", wp.vec3)
-  flexedge_J: wp.array3d(dtype=float)
+  flexedge_J: array("nworld", "nJfe", float)
   flexedge_length: array("nworld", "nflexedge", float)
   ten_wrapadr: array("nworld", "ntendon", int)
   ten_wrapnum: array("nworld", "ntendon", int)
@@ -1785,7 +1792,10 @@ class Data:
   wrap_obj: array("nworld", "nwrap", wp.vec2i)
   wrap_xpos: array("nworld", "nwrap", wp.spatial_vector)
   actuator_length: array("nworld", "nu", float)
-  actuator_moment: array("nworld", "nu", "nv", float)
+  moment_rownnz: array("nworld", "nu", int)
+  moment_rowadr: array("nworld", "nu", int)
+  moment_colind: array("nworld", "nJmom", int)
+  actuator_moment: array("nworld", "nJmom", float)
   crb: array("nworld", "nbody", vec10)
   qM: wp.array3d(dtype=float)
   qLD: wp.array3d(dtype=float)
