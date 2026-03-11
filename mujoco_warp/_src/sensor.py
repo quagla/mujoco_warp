@@ -2222,7 +2222,7 @@ def _sensor_tactile(
       contact_type,
       geom_size[worldid % geom_size.shape[0], geom],
       plugin_id,
-      geom_data[geom],
+      geom_dataid[geom],
     )
 
     depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data, mesh_data), 0.0)
