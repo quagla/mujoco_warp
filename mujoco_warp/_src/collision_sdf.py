@@ -99,15 +99,16 @@ def get_sdf_params(
     attributes = plugin_attr[plugin_id]
     plugin_index = plugin[plugin_id]
 
-  elif g_type == GeomType.SDF and mesh_id != -1:
+  elif (g_type == GeomType.SDF or g_type == GeomType.MESH) and mesh_id != -1:
     octadr = mesh_octadr[mesh_id]
-    volume_data.center = oct_aabb[octadr, 0]
-    volume_data.half_size = oct_aabb[octadr, 1]
-    volume_data.root = octadr
-    volume_data.oct_aabb = oct_aabb
-    volume_data.oct_child = oct_child
-    volume_data.oct_coeff = oct_coeff
-    volume_data.valid = True
+    if octadr != -1:
+      volume_data.center = oct_aabb[octadr, 0]
+      volume_data.half_size = oct_aabb[octadr, 1]
+      volume_data.root = octadr
+      volume_data.oct_aabb = oct_aabb
+      volume_data.oct_child = oct_child
+      volume_data.oct_coeff = oct_coeff
+      volume_data.valid = True
 
   return attributes, plugin_index, volume_data, MeshData()
 
@@ -410,6 +411,8 @@ def sdf(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: Volume
       return sample_volume_sdf(p, volume_data)
     else:
       return user_sdf(p, attr, sdf_type)
+  elif type == GeomType.MESH and volume_data.valid:
+    return sample_volume_sdf(p, volume_data)
   wp.printf("ERROR: SDF type not implemented\n")
   return 0.0
 
@@ -451,6 +454,8 @@ def sdf_grad(type: int, p: wp.vec3, attr: wp.vec3, sdf_type: int, volume_data: V
       return sample_volume_grad(p, volume_data)
     else:
       return user_sdf_grad(p, attr, sdf_type)
+  elif type == GeomType.MESH and volume_data.valid:
+    return sample_volume_sdf(p, volume_data)
   wp.printf("ERROR: SDF grad type not implemented\n")
   return wp.vec3(0.0)
 

@@ -2127,6 +2127,7 @@ def _sensor_tactile(
   oct_coeff: wp.array(dtype=vec8),
   geom_type: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  geom_dataid: wp.array(dtype=int),
   geom_size: wp.array2d(dtype=wp.vec3),
   mesh_vertadr: wp.array(dtype=int),
   mesh_vertnum: wp.array(dtype=int),
@@ -2221,7 +2222,7 @@ def _sensor_tactile(
       contact_type,
       geom_size[worldid % geom_size.shape[0], geom],
       plugin_id,
-      mesh_id,
+      geom_data[geom],
     )
 
     depth = wp.min(sdf(contact_type, lpos, plugin_attributes, plugin_index, volume_data, mesh_data), 0.0)
@@ -2504,6 +2505,7 @@ def sensor_acc(m: Model, d: Data):
       m.oct_coeff,
       m.geom_type,
       m.geom_bodyid,
+      m.geom_dataid,
       m.geom_size,
       m.mesh_vertadr,
       m.mesh_vertnum,
