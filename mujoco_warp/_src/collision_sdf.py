@@ -99,7 +99,17 @@ def get_sdf_params(
     attributes = plugin_attr[plugin_id]
     plugin_index = plugin[plugin_id]
 
-  elif (g_type == GeomType.SDF or g_type == GeomType.MESH) and mesh_id != -1:
+  elif g_type == GeomType.SDF and mesh_id != -1:
+    octadr = mesh_octadr[mesh_id]
+    volume_data.center = oct_aabb[octadr, 0]
+    volume_data.half_size = oct_aabb[octadr, 1]
+    volume_data.root = octadr
+    volume_data.oct_aabb = oct_aabb
+    volume_data.oct_child = oct_child
+    volume_data.oct_coeff = oct_coeff
+    volume_data.valid = True
+
+  elif g_type == GeomType.MESH and mesh_id != -1:
     octadr = mesh_octadr[mesh_id]
     if octadr != -1:
       volume_data.center = oct_aabb[octadr, 0]
