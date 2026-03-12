@@ -37,6 +37,8 @@ def _zero_constraint_counts(
   nf_out: wp.array(dtype=int),
   nl_out: wp.array(dtype=int),
   nefc_out: wp.array(dtype=int),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid = wp.tid()
 
@@ -45,6 +47,7 @@ def _zero_constraint_counts(
   nf_out[worldid] = 0
   nl_out[worldid] = 0
   nefc_out[worldid] = 0
+  efc_nnz_out[worldid] = 0
 
 
 @wp.func
@@ -167,6 +170,8 @@ def _equality_connect(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   """Calculates constraint rows for connect equality constraints."""
   worldid, eqconnectid = wp.tid()
@@ -180,6 +185,10 @@ def _equality_connect(
 
   if efcid >= njmax_in - 3:
     return
+
+  efcid0 = efcid + 0
+  efcid1 = efcid + 1
+  efcid2 = efcid + 2
 
   data = eq_data[worldid % eq_data.shape[0], eqid]
   anchor1 = wp.vec3f(data[0], data[1], data[2])
@@ -206,26 +215,36 @@ def _equality_connect(
   Jqvel = wp.vec3f(0.0, 0.0, 0.0)
 
   if is_sparse:
+    # TODO(team): pre-compute number of non-zeros
     body1 = body_weldid[body1]
     body2 = body_weldid[body2]
 
     da1 = int(body_dofadr[body1] + body_dofnum[body1] - 1)
     da2 = int(body_dofadr[body2] + body_dofnum[body2] - 1)
 
-    efcid0 = efcid + 0
-    efcid1 = efcid + 1
-    efcid2 = efcid + 2
-
-    rowadr0 = efcid0 * nv
-    rowadr1 = efcid1 * nv
-    rowadr2 = efcid2 * nv
-
-    efc_J_rowadr_out[worldid, efcid0] = rowadr0
-    efc_J_rowadr_out[worldid, efcid1] = rowadr1
-    efc_J_rowadr_out[worldid, efcid2] = rowadr2
-
+    # count non-zeros
+    pda1, pda2 = da1, da2
     rownnz = int(0)
+    while pda1 >= 0 or pda2 >= 0:
+      da = wp.max(pda1, pda2)
+      if pda1 == da:
+        pda1 = dof_parentid[pda1]
+      if pda2 == da:
+        pda2 = dof_parentid[pda2]
+      rownnz += 1
 
+    # get rowadr
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, 3 * rownnz)
+    efc_J_rowadr_out[worldid, efcid0] = rowadr
+    efc_J_rowadr_out[worldid, efcid1] = rowadr + rownnz
+    efc_J_rowadr_out[worldid, efcid2] = rowadr + 2 * rownnz
+
+    efc_J_rownnz_out[worldid, efcid0] = rownnz
+    efc_J_rownnz_out[worldid, efcid1] = rownnz
+    efc_J_rownnz_out[worldid, efcid2] = rownnz
+
+    # compute J and colind
+    nnz = int(0)
     while da1 >= 0 or da2 >= 0:
       da = wp.max(da1, da2)
       if da1 == da:
@@ -257,9 +276,9 @@ def _equality_connect(
       )
       j1mj2 = jacp1 - jacp2
 
-      sparseid0 = rowadr0 + rownnz
-      sparseid1 = rowadr1 + rownnz
-      sparseid2 = rowadr2 + rownnz
+      sparseid0 = rowadr + nnz
+      sparseid1 = rowadr + rownnz + nnz
+      sparseid2 = rowadr + 2 * rownnz + nnz
 
       efc_J_colind_out[worldid, 0, sparseid0] = da
       efc_J_colind_out[worldid, 0, sparseid1] = da
@@ -271,11 +290,7 @@ def _equality_connect(
 
       Jqvel += j1mj2 * qvel_in[worldid, da]
 
-      rownnz += 1
-
-    efc_J_rownnz_out[worldid, efcid0] = rownnz
-    efc_J_rownnz_out[worldid, efcid1] = rownnz
-    efc_J_rownnz_out[worldid, efcid2] = rownnz
+      nnz += 1
   else:
     # TODO(team): dof tree traversal
     for dofid in range(nv):
@@ -303,9 +318,9 @@ def _equality_connect(
       )
       j1mj2 = jacp1 - jacp2
 
-      efc_J_out[worldid, efcid + 0, dofid] = j1mj2[0]
-      efc_J_out[worldid, efcid + 1, dofid] = j1mj2[1]
-      efc_J_out[worldid, efcid + 2, dofid] = j1mj2[2]
+      efc_J_out[worldid, efcid0, dofid] = j1mj2[0]
+      efc_J_out[worldid, efcid1, dofid] = j1mj2[1]
+      efc_J_out[worldid, efcid2, dofid] = j1mj2[2]
 
       Jqvel += j1mj2 * qvel_in[worldid, dofid]
 
@@ -383,6 +398,8 @@ def _equality_joint(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, eqjntid = wp.tid()
   eqid = eq_jnt_adr[eqjntid]
@@ -410,7 +427,7 @@ def _equality_joint(
     else:
       rownnz = 1
     efc_J_rownnz_out[worldid, efcid] = rownnz
-    rowadr = efcid * nv
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz)
     efc_J_rowadr_out[worldid, efcid] = rowadr
     efc_J_colind_out[worldid, 0, rowadr] = dofadr1
     efc_J_out[worldid, 0, rowadr] = 1.0
@@ -511,6 +528,8 @@ def _equality_tendon(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, eqtenid = wp.tid()
   eqid = eq_ten_adr[eqtenid]
@@ -560,15 +579,31 @@ def _equality_tendon(
     rownnz2 = ten_J_rownnz[obj2id]
     rowadr2 = ten_J_rowadr[obj2id]
 
+  if is_sparse:
+    # TODO(team): pre-compute rownnz
+    # count unique dofs
+    p1, p2 = int(0), int(0)
+    rownnz = int(0)
+    while p1 < rownnz1 or p2 < rownnz2:
+      col1 = nv
+      col2 = nv
+      if p1 < rownnz1:
+        col1 = ten_J_colind[rowadr1 + p1]
+      if p2 < rownnz2:
+        col2 = ten_J_colind[rowadr2 + p2]
+      if col1 <= col2:
+        p1 += 1
+      if col2 <= col1:
+        p2 += 1
+      rownnz += 1
+
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz)
+    efc_J_rowadr_out[worldid, efcid] = rowadr
+
   ptr1 = int(0)
   ptr2 = int(0)
 
   Jqvel = float(0.0)
-
-  # TODO(team): sparse tendon jacobian
-  if is_sparse:
-    rowadr = efcid * nv
-    efc_J_rowadr_out[worldid, efcid] = rowadr
 
   nnz = int(0)
   for i in range(nv):
@@ -665,6 +700,8 @@ def _equality_flex(is_sparse: bool):
     efc_vel_out: wp.array2d(dtype=float),
     efc_aref_out: wp.array2d(dtype=float),
     efc_frictionloss_out: wp.array2d(dtype=float),
+    # Out:
+    efc_nnz_out: wp.array(dtype=int),
   ):
     worldid, eqflexid, edgeid = wp.tid()
     eqid = eq_flex_adr[eqflexid]
@@ -686,7 +723,7 @@ def _equality_flex(is_sparse: bool):
 
     if wp.static(is_sparse):
       efc_J_rownnz_out[worldid, efcid] = rownnz
-      efc_rowadr = efcid * nv
+      efc_rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz)
       efc_J_rowadr_out[worldid, efcid] = efc_rowadr
       for i in range(rownnz):
         flex_sparseid = flex_rowadr + i
@@ -784,6 +821,8 @@ def _equality_weld(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, eqweldid = wp.tid()
   eqid = eq_wld_adr[eqweldid]
@@ -796,6 +835,13 @@ def _equality_weld(
 
   if efcid >= njmax_in - 6:
     return
+
+  efcid0 = efcid + 0
+  efcid1 = efcid + 1
+  efcid2 = efcid + 2
+  efcid3 = efcid + 3
+  efcid4 = efcid + 4
+  efcid5 = efcid + 5
 
   is_site = eq_objtype[eqid] == types.ObjType.SITE and nsite > 0
 
@@ -832,35 +878,42 @@ def _equality_weld(
   Jqvelr = wp.vec3f(0.0, 0.0, 0.0)
 
   if is_sparse:
+    # TODO(team): pre-compute number of non-zeros
     body1 = body_weldid[body1]
     body2 = body_weldid[body2]
 
     da1 = int(body_dofadr[body1] + body_dofnum[body1] - 1)
     da2 = int(body_dofadr[body2] + body_dofnum[body2] - 1)
 
-    efcid0 = efcid + 0
-    efcid1 = efcid + 1
-    efcid2 = efcid + 2
-    efcid3 = efcid + 3
-    efcid4 = efcid + 4
-    efcid5 = efcid + 5
-
-    rowadr0 = efcid0 * nv
-    rowadr1 = efcid1 * nv
-    rowadr2 = efcid2 * nv
-    rowadr3 = efcid3 * nv
-    rowadr4 = efcid4 * nv
-    rowadr5 = efcid5 * nv
-
-    efc_J_rowadr_out[worldid, efcid0] = rowadr0
-    efc_J_rowadr_out[worldid, efcid1] = rowadr1
-    efc_J_rowadr_out[worldid, efcid2] = rowadr2
-    efc_J_rowadr_out[worldid, efcid3] = rowadr3
-    efc_J_rowadr_out[worldid, efcid4] = rowadr4
-    efc_J_rowadr_out[worldid, efcid5] = rowadr5
-
+    # count non-zeros
+    pda1, pda2 = da1, da2
     rownnz = int(0)
+    while pda1 >= 0 or pda2 >= 0:
+      da = wp.max(pda1, pda2)
+      if pda1 == da:
+        pda1 = dof_parentid[da]
+      if pda2 == da:
+        pda2 = dof_parentid[da]
+      rownnz += 1
 
+    # get rowadr
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, 6 * rownnz)
+    efc_J_rowadr_out[worldid, efcid0] = rowadr
+    efc_J_rowadr_out[worldid, efcid1] = rowadr + rownnz
+    efc_J_rowadr_out[worldid, efcid2] = rowadr + 2 * rownnz
+    efc_J_rowadr_out[worldid, efcid3] = rowadr + 3 * rownnz
+    efc_J_rowadr_out[worldid, efcid4] = rowadr + 4 * rownnz
+    efc_J_rowadr_out[worldid, efcid5] = rowadr + 5 * rownnz
+
+    efc_J_rownnz_out[worldid, efcid0] = rownnz
+    efc_J_rownnz_out[worldid, efcid1] = rownnz
+    efc_J_rownnz_out[worldid, efcid2] = rownnz
+    efc_J_rownnz_out[worldid, efcid3] = rownnz
+    efc_J_rownnz_out[worldid, efcid4] = rownnz
+    efc_J_rownnz_out[worldid, efcid5] = rownnz
+
+    # compute J and colind
+    nnz = int(0)
     while da1 >= 0 or da2 >= 0:
       da = wp.max(da1, da2)
       if da1 == da:
@@ -897,12 +950,12 @@ def _equality_weld(
       jacdifrq = math.mul_quat(math.quat_mul_axis(quat1, jacdifr), quat)
       jacdifr = 0.5 * wp.vec3(jacdifrq[1], jacdifrq[2], jacdifrq[3])
 
-      sparseid0 = rowadr0 + rownnz
-      sparseid1 = rowadr1 + rownnz
-      sparseid2 = rowadr2 + rownnz
-      sparseid3 = rowadr3 + rownnz
-      sparseid4 = rowadr4 + rownnz
-      sparseid5 = rowadr5 + rownnz
+      sparseid0 = rowadr + nnz
+      sparseid1 = rowadr + rownnz + nnz
+      sparseid2 = rowadr + 2 * rownnz + nnz
+      sparseid3 = rowadr + 3 * rownnz + nnz
+      sparseid4 = rowadr + 4 * rownnz + nnz
+      sparseid5 = rowadr + 5 * rownnz + nnz
 
       efc_J_colind_out[worldid, 0, sparseid0] = da
       efc_J_colind_out[worldid, 0, sparseid1] = da
@@ -921,14 +974,7 @@ def _equality_weld(
       Jqvelp += jacdifp * qvel_in[worldid, da]
       Jqvelr += jacdifr * qvel_in[worldid, da]
 
-      rownnz += 1
-
-    efc_J_rownnz_out[worldid, efcid0] = rownnz
-    efc_J_rownnz_out[worldid, efcid1] = rownnz
-    efc_J_rownnz_out[worldid, efcid2] = rownnz
-    efc_J_rownnz_out[worldid, efcid3] = rownnz
-    efc_J_rownnz_out[worldid, efcid4] = rownnz
-    efc_J_rownnz_out[worldid, efcid5] = rownnz
+      nnz += 1
   else:
     for dofid in range(nv):
       jacp1, jacr1 = support.jac_dof(
@@ -956,15 +1002,17 @@ def _equality_weld(
 
       jacdifp = jacp1 - jacp2
 
-      for i in range(3):
-        efc_J_out[worldid, efcid + i, dofid] = jacdifp[i]
+      efc_J_out[worldid, efcid0, dofid] = jacdifp[0]
+      efc_J_out[worldid, efcid1, dofid] = jacdifp[1]
+      efc_J_out[worldid, efcid2, dofid] = jacdifp[2]
 
       jacdifr = (jacr1 - jacr2) * torquescale
       jacdifrq = math.mul_quat(math.quat_mul_axis(quat1, jacdifr), quat)
       jacdifr = 0.5 * wp.vec3(jacdifrq[1], jacdifrq[2], jacdifrq[3])
 
-      for i in range(3):
-        efc_J_out[worldid, efcid + 3 + i, dofid] = jacdifr[i]
+      efc_J_out[worldid, efcid3, dofid] = jacdifr[0]
+      efc_J_out[worldid, efcid4, dofid] = jacdifr[1]
+      efc_J_out[worldid, efcid5, dofid] = jacdifr[2]
 
       Jqvelp += jacdifp * qvel_in[worldid, dofid]
       Jqvelr += jacdifr * qvel_in[worldid, dofid]
@@ -1069,6 +1117,8 @@ def _friction_dof(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, dofid = wp.tid()
 
@@ -1085,7 +1135,7 @@ def _friction_dof(
 
   if is_sparse:
     efc_J_rownnz_out[worldid, efcid] = 1
-    rowadr = efcid * nv
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, 1)
     efc_J_rowadr_out[worldid, efcid] = rowadr
     efc_J_colind_out[worldid, 0, rowadr] = dofid
     efc_J_out[worldid, 0, rowadr] = 1.0
@@ -1158,6 +1208,8 @@ def _friction_tendon(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, tenid = wp.tid()
 
@@ -1181,23 +1233,32 @@ def _friction_tendon(
 
   rownnz_tenJ = ten_J_rownnz[tenid]
   rowadr_tenJ = ten_J_rowadr[tenid]
-  nnz = int(0)
-  for i in range(nv):
-    if nnz < rownnz_tenJ and i == ten_J_colind[rowadr_tenJ + nnz]:
-      J = ten_J_in[worldid, rowadr_tenJ + nnz]
-      if is_sparse:
-        efc_J_colind_out[worldid, 0, rowadr_efc + nnz] = i
-        efc_J_out[worldid, 0, rowadr_efc + nnz] = J
-      else:
-        efc_J_out[worldid, efcid, i] = J
-      Jqvel += J * qvel_in[worldid, i]
-      nnz += 1
-    else:
-      if not is_sparse:
-        efc_J_out[worldid, efcid, i] = 0.0
-
   if is_sparse:
-    efc_J_rownnz_out[worldid, efcid] = nnz
+    efc_J_rownnz_out[worldid, efcid] = rownnz_tenJ
+    rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz_tenJ)
+    efc_J_rowadr_out[worldid, efcid] = rowadr
+
+    for i in range(rownnz_tenJ):
+      sparseid_ten = rowadr_tenJ + i
+      sparseid_efc = rowadr_efc + i
+      colind = ten_J_colind[sparseid_ten]
+      J = ten_J_in[worldid, sparseid_ten]
+      efc_J_colind_out[worldid, 0, sparseid_efc] = colind
+      efc_J_out[worldid, 0, sparseid_efc] = J
+      Jqvel += J * qvel_in[worldid, colind]
+  else:
+    nnz = int(0)
+    colind = ten_J_colind[rowadr_tenJ]
+    for i in range(nv):
+      if nnz < rownnz_tenJ and i == colind:
+        J = ten_J_in[worldid, rowadr_tenJ + nnz]
+        efc_J_out[worldid, efcid, i] = J
+        Jqvel += J * qvel_in[worldid, i]
+        nnz += 1
+        if nnz < rownnz_tenJ:
+          colind = ten_J_colind[rowadr_tenJ + nnz]
+      else:
+        efc_J_out[worldid, efcid, i] = 0.0
 
   tendon_invweight0_id = worldid % tendon_invweight0.shape[0]
   tendon_solref_fri_id = worldid % tendon_solref_fri.shape[0]
@@ -1262,6 +1323,8 @@ def _limit_slide_hinge(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, jntlimitedid = wp.tid()
   jntid = jnt_limited_slide_hinge_adr[jntlimitedid]
@@ -1288,7 +1351,7 @@ def _limit_slide_hinge(
 
     if is_sparse:
       efc_J_rownnz_out[worldid, efcid] = 1
-      rowadr = efcid * nv
+      rowadr = wp.atomic_add(efc_nnz_out, worldid, 1)
       efc_J_rowadr_out[worldid, efcid] = rowadr
       efc_J_colind_out[worldid, 0, rowadr] = dofadr
       efc_J_out[worldid, 0, rowadr] = J
@@ -1362,6 +1425,8 @@ def _limit_ball(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, jntlimitedid = wp.tid()
   jntid = jnt_limited_ball_adr[jntlimitedid]
@@ -1394,7 +1459,7 @@ def _limit_ball(
 
     if is_sparse:
       efc_J_rownnz_out[worldid, efcid] = 3
-      rowadr = efcid * nv
+      rowadr = wp.atomic_add(efc_nnz_out, worldid, 3)
       efc_J_rowadr_out[worldid, efcid] = rowadr
 
       sparseid0 = rowadr + 0
@@ -1454,9 +1519,6 @@ def _limit_tendon(
   nv: int,
   opt_timestep: wp.array(dtype=float),
   opt_disableflags: int,
-  jnt_dofadr: wp.array(dtype=int),
-  tendon_adr: wp.array(dtype=int),
-  tendon_num: wp.array(dtype=int),
   ten_J_rownnz: wp.array(dtype=int),
   ten_J_rowadr: wp.array(dtype=int),
   ten_J_colind: wp.array(dtype=int),
@@ -1465,8 +1527,6 @@ def _limit_tendon(
   tendon_range: wp.array2d(dtype=wp.vec2),
   tendon_margin: wp.array2d(dtype=float),
   tendon_invweight0: wp.array2d(dtype=float),
-  wrap_type: wp.array(dtype=int),
-  wrap_objid: wp.array(dtype=int),
   is_sparse: bool,
   tendon_limited_adr: wp.array(dtype=int),
   # Data in:
@@ -1489,6 +1549,8 @@ def _limit_tendon(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   worldid, tenlimitedid = wp.tid()
   tenid = tendon_limited_adr[tenlimitedid]
@@ -1512,55 +1574,34 @@ def _limit_tendon(
     Jqvel = float(0.0)
     scl = float(dist_min < dist_max) * 2.0 - 1.0
 
-    if is_sparse:
-      rowadr_efc = efcid * nv
-      efc_J_rowadr_out[worldid, efcid] = rowadr_efc
-    else:
-      for i in range(nv):
-        efc_J_out[worldid, efcid, i] = 0.0
-
-    adr_tenJ = tendon_adr[tenid]
     rownnz_tenJ = ten_J_rownnz[tenid]
     rowadr_tenJ = ten_J_rowadr[tenid]
-    nnz = int(0)
-    if wrap_type[adr_tenJ] == types.WrapType.JOINT:
-      ten_num = tendon_num[tenid]
-      for i in range(ten_num):
-        dofadr = jnt_dofadr[wrap_objid[adr_tenJ + i]]
-        for k in range(rownnz_tenJ):
-          sparseid_tenJ = rowadr_tenJ + k
-          colind = ten_J_colind[sparseid_tenJ]
-          if colind == dofadr:
-            J = scl * ten_J_in[worldid, sparseid_tenJ]
-            if is_sparse:
-              sparseid_efc = rowadr_efc + nnz
-              efc_J_colind_out[worldid, 0, sparseid_efc] = dofadr
-              efc_J_out[worldid, 0, sparseid_efc] = J
-            else:
-              efc_J_out[worldid, efcid, dofadr] = J
-            Jqvel += J * qvel_in[worldid, dofadr]
-            nnz += 1
-            break
+    if is_sparse:
+      efc_J_rownnz_out[worldid, efcid] = rownnz_tenJ
+      rowadr_efc = wp.atomic_add(efc_nnz_out, worldid, rownnz_tenJ)
+      efc_J_rowadr_out[worldid, efcid] = rowadr_efc
+
+      for i in range(rownnz_tenJ):
+        sparseid_ten = rowadr_tenJ + i
+        sparseid_efc = rowadr_efc + i
+        colind = ten_J_colind[sparseid_ten]
+        J = scl * ten_J_in[worldid, sparseid_ten]
+        efc_J_colind_out[worldid, 0, sparseid_efc] = colind
+        efc_J_out[worldid, 0, sparseid_efc] = J
+        Jqvel += J * qvel_in[worldid, colind]
     else:
+      nnz = int(0)
+      colind = ten_J_colind[rowadr_tenJ]
       for i in range(nv):
-        if nnz < rownnz_tenJ:
-          sparseid_tenJ = rowadr_tenJ + nnz
-          colind = ten_J_colind[sparseid_tenJ]
-          if colind == i:
-            J = scl * ten_J_in[worldid, sparseid_tenJ]
-            if is_sparse:
-              sparseid_efc = rowadr_efc + nnz
-              efc_J_colind_out[worldid, 0, sparseid_efc] = colind
-              efc_J_out[worldid, 0, sparseid_efc] = J
-            else:
-              efc_J_out[worldid, efcid, i] = J
-            Jqvel += J * qvel_in[worldid, colind]
-            nnz += 1
+        if nnz < rownnz_tenJ and i == colind:
+          J = scl * ten_J_in[worldid, rowadr_tenJ + nnz]
+          efc_J_out[worldid, efcid, i] = J
+          Jqvel += J * qvel_in[worldid, i]
+          nnz += 1
+          if nnz < rownnz_tenJ:
+            colind = ten_J_colind[rowadr_tenJ + nnz]
         else:
           efc_J_out[worldid, efcid, i] = 0.0
-
-    if is_sparse:
-      efc_J_rownnz_out[worldid, efcid] = nnz
 
     tendon_invweight0_id = worldid % tendon_invweight0.shape[0]
     tendon_solref_lim_id = worldid % tendon_solref_lim.shape[0]
@@ -1641,6 +1682,8 @@ def _contact_pyramidal(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   conid, dimid = wp.tid()
 
@@ -1693,22 +1736,36 @@ def _contact_pyramidal(
       invweight = invweight + fri0 * fri0 * invweight
       invweight = invweight * 2.0 * fri0 * fri0 * impratio_invsqrt * impratio_invsqrt
 
-    if is_sparse:
-      rowadr = efcid * nv
-      efc_J_rowadr_out[worldid, efcid] = rowadr
-
     Jqvel = float(0.0)
 
     # skip fixed bodies
     body1 = body_weldid[body1]
     body2 = body_weldid[body2]
 
-    da1 = body_dofadr[body1] + body_dofnum[body1] - 1
-    da2 = body_dofadr[body2] + body_dofnum[body2] - 1
+    da1 = int(body_dofadr[body1] + body_dofnum[body1] - 1)
+    da2 = int(body_dofadr[body2] + body_dofnum[body2] - 1)
+
+    if is_sparse:
+      # count non-zeros
+      pda1, pda2 = da1, da2
+      rownnz = int(0)
+      while pda1 >= 0 or pda2 >= 0:
+        da = wp.max(pda1, pda2)
+        if pda1 == da:
+          pda1 = dof_parentid[pda1]
+        if pda2 == da:
+          pda2 = dof_parentid[pda2]
+        rownnz += 1
+
+      # get rowadr
+      rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz)
+      efc_J_rowadr_out[worldid, efcid] = rowadr
+      efc_J_rownnz_out[worldid, efcid] = rownnz
+
     da = wp.max(da1, da2)
 
     if is_sparse:
-      rownnz = int(0)
+      nnz = int(0)
       dofid = int(da)
     else:
       dofid = int(nv - 1)
@@ -1768,10 +1825,10 @@ def _contact_pyramidal(
             J -= Ji * frii
 
         if is_sparse:
-          sparseid = rowadr + rownnz
+          sparseid = rowadr + nnz
           efc_J_colind_out[worldid, 0, sparseid] = dofid
           efc_J_out[worldid, 0, sparseid] = J
-          rownnz += 1
+          nnz += 1
         else:
           efc_J_out[worldid, efcid, dofid] = J
         Jqvel += J * qvel_in[worldid, dofid]
@@ -1790,9 +1847,6 @@ def _contact_pyramidal(
         if not is_sparse:
           efc_J_out[worldid, efcid, dofid] = 0.0
           dofid -= 1
-
-    if is_sparse:
-      efc_J_rownnz_out[worldid, efcid] = rownnz
 
     if condim == 1:
       efc_type = ConstraintType.CONTACT_FRICTIONLESS
@@ -1876,6 +1930,8 @@ def _contact_elliptic(
   efc_vel_out: wp.array2d(dtype=float),
   efc_aref_out: wp.array2d(dtype=float),
   efc_frictionloss_out: wp.array2d(dtype=float),
+  # Out:
+  efc_nnz_out: wp.array(dtype=int),
 ):
   conid, dimid = wp.tid()
 
@@ -1913,22 +1969,36 @@ def _contact_elliptic(
     con_pos = pos_in[conid]
     frame = frame_in[conid]
 
-    if is_sparse:
-      rowadr = efcid * nv
-      efc_J_rowadr_out[worldid, efcid] = rowadr
-
     Jqvel = float(0.0)
 
     # skip fixed bodies
     body1 = body_weldid[body1]
     body2 = body_weldid[body2]
 
-    da1 = body_dofadr[body1] + body_dofnum[body1] - 1
-    da2 = body_dofadr[body2] + body_dofnum[body2] - 1
+    da1 = int(body_dofadr[body1] + body_dofnum[body1] - 1)
+    da2 = int(body_dofadr[body2] + body_dofnum[body2] - 1)
+
+    if is_sparse:
+      # count non-zeros
+      pda1, pda2 = da1, da2
+      rownnz = int(0)
+      while pda1 >= 0 or pda2 >= 0:
+        da = wp.max(pda1, pda2)
+        if pda1 == da:
+          pda1 = dof_parentid[pda1]
+        if pda2 == da:
+          pda2 = dof_parentid[pda2]
+        rownnz += 1
+
+      # get rowadr
+      rowadr = wp.atomic_add(efc_nnz_out, worldid, rownnz)
+      efc_J_rowadr_out[worldid, efcid] = rowadr
+      efc_J_rownnz_out[worldid, efcid] = rownnz
+
     da = wp.max(da1, da2)
 
     if is_sparse:
-      rownnz = int(0)
+      nnz = int(0)
       dofid = int(da)
     else:
       dofid = int(nv - 1)
@@ -1976,10 +2046,10 @@ def _contact_elliptic(
             J += frame[dimid - 3, xyz] * jac_dif
 
         if is_sparse:
-          sparseid = rowadr + rownnz
+          sparseid = rowadr + nnz
           efc_J_colind_out[worldid, 0, sparseid] = dofid
           efc_J_out[worldid, 0, sparseid] = J
-          rownnz += 1
+          nnz += 1
         else:
           efc_J_out[worldid, efcid, dofid] = J
         Jqvel += J * qvel_in[worldid, dofid]
@@ -1998,9 +2068,6 @@ def _contact_elliptic(
         if not is_sparse:
           efc_J_out[worldid, efcid, dofid] = 0.0
           dofid -= 1
-
-    if is_sparse:
-      efc_J_rownnz_out[worldid, efcid] = rownnz
 
     body_invweight0_id = worldid % body_invweight0.shape[0]
     invweight = body_invweight0[body_invweight0_id, body1][0] + body_invweight0[body_invweight0_id, body2][0]
@@ -2060,10 +2127,12 @@ def _contact_elliptic(
 @event_scope
 def make_constraint(m: types.Model, d: types.Data):
   """Creates constraint jacobians and other supporting data."""
+  efc_nnz = wp.empty((d.nworld,), dtype=int)
+
   wp.launch(
     _zero_constraint_counts,
     dim=d.nworld,
-    inputs=[d.ne, d.nf, d.nl, d.nefc],
+    inputs=[d.ne, d.nf, d.nl, d.nefc, efc_nnz],
   )
 
   if types.SPARSE_CONSTRAINT_JACOBIAN:
@@ -2120,6 +2189,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
       wp.launch(
@@ -2173,6 +2243,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
       wp.launch(
@@ -2213,6 +2284,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
       wp.launch(
@@ -2255,6 +2327,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2293,6 +2366,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2327,6 +2401,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2364,6 +2439,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2404,6 +2480,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2442,6 +2519,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2452,9 +2530,6 @@ def make_constraint(m: types.Model, d: types.Data):
           m.nv,
           m.opt.timestep,
           m.opt.disableflags,
-          m.jnt_dofadr,
-          m.tendon_adr,
-          m.tendon_num,
           m.ten_J_rownnz,
           m.ten_J_rowadr,
           m.ten_J_colind,
@@ -2463,8 +2538,6 @@ def make_constraint(m: types.Model, d: types.Data):
           m.tendon_range,
           m.tendon_margin,
           m.tendon_invweight0,
-          m.wrap_type,
-          m.wrap_objid,
           SPARSE_CONSTRAINT_JACOBIAN,
           m.tendon_limited_adr,
           d.qvel,
@@ -2487,6 +2560,7 @@ def make_constraint(m: types.Model, d: types.Data):
           d.efc.vel,
           d.efc.aref,
           d.efc.frictionloss,
+          efc_nnz,
         ],
       )
 
@@ -2543,6 +2617,7 @@ def make_constraint(m: types.Model, d: types.Data):
             d.efc.vel,
             d.efc.aref,
             d.efc.frictionloss,
+            efc_nnz,
           ],
         )
       elif m.opt.cone == types.ConeType.ELLIPTIC:
@@ -2597,5 +2672,6 @@ def make_constraint(m: types.Model, d: types.Data):
             d.efc.vel,
             d.efc.aref,
             d.efc.frictionloss,
+            efc_nnz,
           ],
         )
