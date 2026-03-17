@@ -1646,6 +1646,8 @@ def _contact_pyramidal(
   dof_bodyid: wp.array(dtype=int),
   dof_parentid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  flex_vertadr: wp.array(dtype=int),
+  flex_vertbodyid: wp.array(dtype=int),
   is_sparse: bool,
   # Data in:
   qvel_in: wp.array2d(dtype=float),
@@ -1659,6 +1661,8 @@ def _contact_pyramidal(
   includemargin_in: wp.array(dtype=float),
   worldid_in: wp.array(dtype=int),
   geom_in: wp.array(dtype=wp.vec2i),
+  flex_in: wp.array(dtype=wp.vec2i),
+  vert_in: wp.array(dtype=wp.vec2i),
   pos_in: wp.array(dtype=wp.vec3),
   frame_in: wp.array(dtype=wp.mat33),
   friction_in: wp.array(dtype=vec5),
@@ -1715,8 +1719,20 @@ def _contact_pyramidal(
     contact_efc_address_out[conid, dimid] = efcid
 
     geom = geom_in[conid]
-    body1 = geom_bodyid[geom[0]]
-    body2 = geom_bodyid[geom[1]]
+
+    if geom[0] >= 0:
+      body1 = geom_bodyid[geom[0]]
+    else:
+      flex = flex_in[conid]
+      vert = vert_in[conid]
+      body1 = flex_vertbodyid[flex_vertadr[flex[0]] + vert[0]]
+
+    if geom[1] >= 0:
+      body2 = geom_bodyid[geom[1]]
+    else:
+      flex = flex_in[conid]
+      vert = vert_in[conid]
+      body2 = flex_vertbodyid[flex_vertadr[flex[1]] + vert[1]]
 
     con_pos = pos_in[conid]
     frame = frame_in[conid]
@@ -1894,6 +1910,8 @@ def _contact_elliptic(
   dof_bodyid: wp.array(dtype=int),
   dof_parentid: wp.array(dtype=int),
   geom_bodyid: wp.array(dtype=int),
+  flex_vertadr: wp.array(dtype=int),
+  flex_vertbodyid: wp.array(dtype=int),
   is_sparse: bool,
   # Data in:
   qvel_in: wp.array2d(dtype=float),
@@ -1907,6 +1925,8 @@ def _contact_elliptic(
   includemargin_in: wp.array(dtype=float),
   worldid_in: wp.array(dtype=int),
   geom_in: wp.array(dtype=wp.vec2i),
+  flex_in: wp.array(dtype=wp.vec2i),
+  vert_in: wp.array(dtype=wp.vec2i),
   pos_in: wp.array(dtype=wp.vec3),
   frame_in: wp.array(dtype=wp.mat33),
   friction_in: wp.array(dtype=vec5),
@@ -1962,8 +1982,20 @@ def _contact_elliptic(
     contact_efc_address_out[conid, dimid] = efcid
 
     geom = geom_in[conid]
-    body1 = geom_bodyid[geom[0]]
-    body2 = geom_bodyid[geom[1]]
+
+    if geom[0] >= 0:
+      body1 = geom_bodyid[geom[0]]
+    else:
+      flex = flex_in[conid]
+      vert = vert_in[conid]
+      body1 = flex_vertbodyid[flex_vertadr[flex[0]] + vert[0]]
+
+    if geom[1] >= 0:
+      body2 = geom_bodyid[geom[1]]
+    else:
+      flex = flex_in[conid]
+      vert = vert_in[conid]
+      body2 = flex_vertbodyid[flex_vertadr[flex[1]] + vert[1]]
 
     con_pos = pos_in[conid]
     frame = frame_in[conid]
@@ -2581,6 +2613,8 @@ def make_constraint(m: types.Model, d: types.Data):
             m.dof_bodyid,
             m.dof_parentid,
             m.geom_bodyid,
+            m.flex_vertadr,
+            m.flex_vertbodyid,
             SPARSE_CONSTRAINT_JACOBIAN,
             d.qvel,
             d.subtree_com,
@@ -2592,6 +2626,8 @@ def make_constraint(m: types.Model, d: types.Data):
             d.contact.includemargin,
             d.contact.worldid,
             d.contact.geom,
+            d.contact.flex,
+            d.contact.vert,
             d.contact.pos,
             d.contact.frame,
             d.contact.friction,
@@ -2635,6 +2671,8 @@ def make_constraint(m: types.Model, d: types.Data):
             m.dof_bodyid,
             m.dof_parentid,
             m.geom_bodyid,
+            m.flex_vertadr,
+            m.flex_vertbodyid,
             SPARSE_CONSTRAINT_JACOBIAN,
             d.qvel,
             d.subtree_com,
@@ -2646,6 +2684,8 @@ def make_constraint(m: types.Model, d: types.Data):
             d.contact.includemargin,
             d.contact.worldid,
             d.contact.geom,
+            d.contact.flex,
+            d.contact.vert,
             d.contact.pos,
             d.contact.frame,
             d.contact.friction,

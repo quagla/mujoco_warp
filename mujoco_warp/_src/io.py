@@ -114,9 +114,6 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
     if unsupported:
       raise NotImplementedError(f"{mj_type(unsupported).name} is unsupported.")
 
-  if ((mjm.flex_contype != 0) | (mjm.flex_conaffinity != 0)).any():
-    raise NotImplementedError("Flex collisions are not implemented.")
-
   if mjm.opt.noslip_iterations > 0:
     raise NotImplementedError(f"noslip solver not implemented.")
 
@@ -764,6 +761,11 @@ def make_data(
     efc.J_colind = wp.zeros((nworld, 0, 0), dtype=int)
     efc.J = wp.zeros((nworld, sizes["njmax_pad"], sizes["nv_pad"]), dtype=float)
 
+  contact_kwargs = {}
+  for f in dataclasses.fields(types.Contact):
+    contact_kwargs[f.name] = _create_array(None, f.type, sizes)
+  contact = types.Contact(**contact_kwargs)
+
   # world body and static geom (attached to the world) poses are precomputed
   # this speeds up scenes with many static geoms (e.g. terrains)
   # TODO(team): remove this when we introduce dof islands + sleeping
@@ -1391,6 +1393,8 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
     contact_solimp_out: wp.array(dtype=types.vec5),
     contact_dim_out: wp.array(dtype=int),
     contact_geom_out: wp.array(dtype=wp.vec2i),
+    contact_flex_out: wp.array(dtype=wp.vec2i),
+    contact_vert_out: wp.array(dtype=wp.vec2i),
     contact_efc_address_out: wp.array2d(dtype=int),
     contact_worldid_out: wp.array(dtype=int),
     contact_type_out: wp.array(dtype=int),
@@ -1417,6 +1421,8 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
     contact_solimp_out[conid] = types.vec5(0.0, 0.0, 0.0, 0.0, 0.0)
     contact_dim_out[conid] = 0
     contact_geom_out[conid] = wp.vec2i(0, 0)
+    contact_flex_out[conid] = wp.vec2i(0, 0)
+    contact_vert_out[conid] = wp.vec2i(0, 0)
     for i in range(nefcaddress):
       contact_efc_address_out[conid, i] = -1
     contact_worldid_out[conid] = 0
@@ -1457,6 +1463,8 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
       d.contact.solimp,
       d.contact.dim,
       d.contact.geom,
+      d.contact.flex,
+      d.contact.vert,
       d.contact.efc_address,
       d.contact.worldid,
       d.contact.type,
@@ -2516,6 +2524,7 @@ def create_render_context(
   flex_faceadr = None
   flex_nface = 0
   flex_radius = None
+  flex_vertflexid = None
   flex_workadr = None
   flex_worknum = None
   flex_nwork = 0
@@ -2539,6 +2548,14 @@ def create_render_context(
     flex_shelldataadr = wp.array(mjm.flex_shelldataadr, dtype=int)
     flex_faceadr = wp.array(flex_faceadr_data, dtype=int)
     flex_radius = wp.array(mjm.flex_radius, dtype=float)
+
+    # Compute flex_vertflexid: maps each flex vertex to its flex index
+    flex_vertflexid_data = np.zeros(mjm.nflexvert, dtype=np.int32)
+    for flexid in range(mjm.nflex):
+      vert_start = mjm.flex_vertadr[flexid]
+      vert_end = vert_start + mjm.flex_vertnum[flexid]
+      flex_vertflexid_data[vert_start:vert_end] = flexid
+    flex_vertflexid = wp.array(flex_vertflexid_data, dtype=int)
 
     # precompute work item layout for unified refit kernel
     nflex = mjm.nflex
