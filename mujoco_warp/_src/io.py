@@ -28,7 +28,6 @@ from mujoco_warp._src import smooth
 from mujoco_warp._src import types
 from mujoco_warp._src import warp_util
 from mujoco_warp._src.types import MJ_MINVAL
-from mujoco_warp._src.types import SPARSE_CONSTRAINT_JACOBIAN
 from mujoco_warp._src.types import BiasType
 from mujoco_warp._src.types import TrnType
 from mujoco_warp._src.types import vec10
@@ -749,14 +748,14 @@ def make_data(
   sizes["njmax"] = njmax
 
   # TODO(team): heuristic for constraint Jacobian number of non-zeros
-  if njmax_nnz is None or not SPARSE_CONSTRAINT_JACOBIAN:
+  if njmax_nnz is None or not is_sparse(mjm):
     njmax_nnz = njmax * mjm.nv
 
   contact = types.Contact(**{f.name: _create_array(None, f.type, sizes) for f in dataclasses.fields(types.Contact)})
   contact.efc_address = wp.array(np.full((naconmax, sizes["nmaxpyramid"]), -1, dtype=int), dtype=int)
   efc = types.Constraint(**{f.name: _create_array(None, f.type, sizes) for f in dataclasses.fields(types.Constraint)})
 
-  if SPARSE_CONSTRAINT_JACOBIAN:
+  if is_sparse(mjm):
     efc.J_rownnz = wp.zeros((nworld, njmax), dtype=int)
     efc.J_rowadr = wp.zeros((nworld, njmax), dtype=int)
     efc.J_colind = wp.zeros((nworld, 1, njmax_nnz), dtype=int)
@@ -919,7 +918,7 @@ def put_data(
   sizes["njmax"] = njmax
 
   # TODO(team): heuristic for constraint Jacobian number of non-zeros
-  if njmax_nnz is None or not SPARSE_CONSTRAINT_JACOBIAN:
+  if njmax_nnz is None or not is_sparse(mjm):
     njmax_nnz = njmax * mjm.nv
 
   # ensure static geom positions are computed
@@ -969,7 +968,7 @@ def put_data(
 
   efc = types.Constraint(**efc_kwargs)
 
-  if SPARSE_CONSTRAINT_JACOBIAN:
+  if is_sparse(mjm):
     # TODO(team): process efc_J sparsity structure for nv row shift
     efc.J_rownnz = wp.array(np.full((nworld, njmax), mjm.nv, dtype=int), dtype=int)
     efc.J_rowadr = wp.array(
@@ -1209,7 +1208,7 @@ def get_data_into(
     mujoco.mj_factorM(mjm, result)
 
   if nefc > 0:
-    if SPARSE_CONSTRAINT_JACOBIAN:
+    if is_sparse(mjm):
       efc_J = np.zeros((nefc, mjm.nv))
       mujoco.mju_sparse2dense(
         efc_J,

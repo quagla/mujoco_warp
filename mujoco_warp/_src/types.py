@@ -33,9 +33,6 @@ MJ_MAX_EPAFACES = 5
 TILE_SIZE_JTDAJ_SPARSE = 16
 TILE_SIZE_JTDAJ_DENSE = 16
 
-# TODO(team): remove after improving performance for sparse constraint jacobian
-SPARSE_CONSTRAINT_JACOBIAN = False
-
 
 # TODO(team): add check that all wp.launch_tiled 'block_dim' settings are configurable
 @dataclasses.dataclass
