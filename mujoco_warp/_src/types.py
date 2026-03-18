@@ -1926,6 +1926,9 @@ class RenderContext:
     depth_size: per-camera depth buffer sizes
     render_rgb: per-camera RGB render flags
     render_depth: per-camera depth render flags
+    seg_data: segmentation data (per-pixel geom IDs)
+    seg_adr: segmentation addresses
+    render_seg: per-camera segmentation render flags
     znear: near plane distance
     total_rays: total number of rays
   """
@@ -1978,5 +1981,8 @@ class RenderContext:
   depth_adr: array("ncam", int)
   render_rgb: array("ncam", bool)
   render_depth: array("ncam", bool)
+  seg_data: array("*", int)
+  seg_adr: array("ncam", int)
+  render_seg: array("ncam", bool)
   znear: float
   total_rays: int

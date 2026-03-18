@@ -2460,6 +2460,7 @@ def create_render_context(
   cam_res: list[tuple[int, int]] | tuple[int, int] | None = None,
   render_rgb: list[bool] | bool | None = None,
   render_depth: list[bool] | bool | None = None,
+  render_seg: list[bool] | bool | None = None,
   use_textures: bool = True,
   use_shadows: bool = False,
   enabled_geom_groups: list[int] = [0, 1, 2],
@@ -2476,6 +2477,8 @@ def create_render_context(
              MuJoCo model values.
     render_rgb: Whether to render RGB images. If None, uses the MuJoCo model values.
     render_depth: Whether to render depth images. If None, uses the MuJoCo model values.
+    render_seg: Whether to render segmentation (per-pixel geom IDs). If None,
+      uses the MuJoCo model values.
     use_textures: Whether to use textures.
     use_shadows: Whether to use shadows.
     enabled_geom_groups: The geom groups to render.
@@ -2624,15 +2627,22 @@ def create_render_context(
   if isinstance(render_depth, bool):
     render_depth = [render_depth] * ncam
 
-  assert len(render_rgb) == ncam and len(render_depth) == ncam, (
-    f"render_rgb and render_depth must be a bool or a list of bools with length {ncam}"
+  if render_seg is None:
+    render_seg = [mjm.cam_output[i] & mujoco.mjtCamOutBit.mjCAMOUT_SEG for i in active_cam_indices]
+  elif isinstance(render_seg, bool):
+    render_seg = [render_seg] * ncam
+
+  assert len(render_rgb) == ncam and len(render_depth) == ncam and len(render_seg) == ncam, (
+    f"render_rgb, render_depth, and render_seg must be a bool or a list of bools with length {ncam}"
   )
 
   rgb_adr = -1 * np.ones(ncam, dtype=int)
   depth_adr = -1 * np.ones(ncam, dtype=int)
+  seg_adr = -1 * np.ones(ncam, dtype=int)
   cam_res_np = cam_res_arr.numpy()
   ri = 0
   di = 0
+  si = 0
   total = 0
 
   for idx in range(ncam):
@@ -2642,6 +2652,9 @@ def create_render_context(
     if render_depth[idx]:
       depth_adr[idx] = di
       di += cam_res_np[idx][0] * cam_res_np[idx][1]
+    if render_seg[idx]:
+      seg_adr[idx] = si
+      si += cam_res_np[idx][0] * cam_res_np[idx][1]
 
     total += cam_res_np[idx][0] * cam_res_np[idx][1]
 
@@ -2723,6 +2736,9 @@ def create_render_context(
     depth_adr=wp.array(depth_adr, dtype=int),
     render_rgb=wp.array(render_rgb, dtype=bool),
     render_depth=wp.array(render_depth, dtype=bool),
+    seg_data=wp.zeros((nworld, max(si, 1)), dtype=int),
+    seg_adr=wp.array(seg_adr, dtype=int),
+    render_seg=wp.array(render_seg, dtype=bool),
     znear=znear,
     total_rays=int(total),
   )
