@@ -322,14 +322,17 @@ def _flex_edges(
 
 @wp.kernel
 def _compute_flexelem_aabb(
+  # Model:
   nflex: int,
   flex_dim: wp.array(dtype=int),
+  flex_vertadr: wp.array(dtype=int),
   flex_elemadr: wp.array(dtype=int),
   flex_elemnum: wp.array(dtype=int),
   flex_elem: wp.array(dtype=int),
-  flex_vertadr: wp.array(dtype=int),
   flex_radius: wp.array(dtype=float),
+  # Data in:
   flexvert_xpos_in: wp.array2d(dtype=wp.vec3),
+  # Data out:
   flexelem_aabb_out: wp.array3d(dtype=float),
 ):
   worldid, elemid = wp.tid()
@@ -462,10 +465,10 @@ def flex(m: Model, d: Data):
       inputs=[
         m.nflex,
         m.flex_dim,
+        m.flex_vertadr,
         m.flex_elemadr,
         m.flex_elemnum,
         m.flex_elem,
-        m.flex_vertadr,
         m.flex_radius,
         d.flexvert_xpos,
       ],

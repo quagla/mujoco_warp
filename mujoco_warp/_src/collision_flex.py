@@ -683,7 +683,9 @@ def _flex_narrowphase_dim3(
 
 @wp.func
 def _share_vertex_inline(
+  # Model:
   flex_elem: wp.array(dtype=int),
+  # In:
   e1_global: int,
   e2_global: int,
   dim: int,
@@ -699,6 +701,7 @@ def _share_vertex_inline(
 
 @wp.func
 def _aabb_overlap_3d(
+  # In:
   aabb: wp.array3d(dtype=float),
   worldid: int,
   e1: int,
@@ -716,21 +719,24 @@ def _aabb_overlap_3d(
 
 @wp.kernel
 def _flex_self_narrow(
+  # Model:
   nflex: int,
-  flex_selfcollide: wp.array(dtype=int),
   flex_condim: wp.array(dtype=int),
   flex_friction: wp.array(dtype=wp.vec3),
+  flex_solref: wp.array(dtype=wp.vec2),
+  flex_solimp: wp.array(dtype=vec5),
+  flex_selfcollide: wp.array(dtype=int),
   flex_dim: wp.array(dtype=int),
+  flex_vertadr: wp.array(dtype=int),
   flex_elemadr: wp.array(dtype=int),
   flex_elemnum: wp.array(dtype=int),
   flex_elem: wp.array(dtype=int),
-  flex_vertadr: wp.array(dtype=int),
   flex_radius: wp.array(dtype=float),
-  flex_solref: wp.array(dtype=wp.vec2),
-  flex_solimp: wp.array(dtype=vec5),
-  flexelem_aabb_in: wp.array3d(dtype=float),
+  # Data in:
   flexvert_xpos_in: wp.array2d(dtype=wp.vec3),
+  flexelem_aabb_in: wp.array3d(dtype=float),
   naconmax_in: int,
+  # Data out:
   contact_dist_out: wp.array(dtype=float),
   contact_pos_out: wp.array(dtype=wp.vec3),
   contact_frame_out: wp.array(dtype=wp.mat33),
@@ -1037,19 +1043,19 @@ def flex_narrowphase(m: Model, d: Data):
         dim=(d.nworld, max_pairs),
         inputs=[
           m.nflex,
-          m.flex_selfcollide,
           m.flex_condim,
           m.flex_friction,
+          m.flex_solref,
+          m.flex_solimp,
+          m.flex_selfcollide,
           m.flex_dim,
+          m.flex_vertadr,
           m.flex_elemadr,
           m.flex_elemnum,
           m.flex_elem,
-          m.flex_vertadr,
           m.flex_radius,
-          m.flex_solref,
-          m.flex_solimp,
-          d.flexelem_aabb,
           d.flexvert_xpos,
+          d.flexelem_aabb,
           d.naconmax,
         ],
         outputs=[
