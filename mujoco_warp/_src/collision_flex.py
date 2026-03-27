@@ -722,9 +722,9 @@ def _flex_self_narrow(
   # Model:
   nflex: int,
   flex_condim: wp.array(dtype=int),
-  flex_friction: wp.array(dtype=wp.vec3),
   flex_solref: wp.array(dtype=wp.vec2),
   flex_solimp: wp.array(dtype=vec5),
+  flex_friction: wp.array(dtype=wp.vec3),
   flex_selfcollide: wp.array(dtype=int),
   flex_dim: wp.array(dtype=int),
   flex_vertadr: wp.array(dtype=int),
@@ -1044,9 +1044,9 @@ def flex_narrowphase(m: Model, d: Data):
         inputs=[
           m.nflex,
           m.flex_condim,
-          m.flex_friction,
           m.flex_solref,
           m.flex_solimp,
+          m.flex_friction,
           m.flex_selfcollide,
           m.flex_dim,
           m.flex_vertadr,
