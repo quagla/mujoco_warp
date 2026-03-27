@@ -2671,14 +2671,6 @@ def create_render_context(
   mjd = mujoco.MjData(mjm)
   mujoco.mj_forward(mjm, mjd)
 
-  constructor = "sah"
-  if check_version("warp>=1.13.0.dev20260325"):
-    # TODO: The cubql constructor and is_cubql_available exist only in
-    # recent Warp 1.13+ builds, modify this after warp is updated to 1.13+.
-    _cubql_avail = getattr(wp, "is_cubql_available", None)
-    if callable(_cubql_avail) and _cubql_avail():
-      constructor = "cubql"
-
   # Mesh BVHs
   nmesh = mjm.nmesh
   geom_enabled_mask = np.isin(mjm.geom_group, list(enabled_geom_groups))
@@ -2691,7 +2683,7 @@ def create_render_context(
   mesh_bounds_size = [wp.vec3(0.0, 0.0, 0.0) for _ in range(nmesh)]
 
   for mid in used_mesh_id:
-    mesh, half = bvh.build_mesh_bvh(mjm, mid, constructor=constructor)
+    mesh, half = bvh.build_mesh_bvh(mjm, mid)
     mesh_registry[mesh.id] = mesh
     mesh_bvh_id[mid] = mesh.id
     mesh_bounds_size[mid] = half
@@ -2708,7 +2700,7 @@ def create_render_context(
   hfield_bounds_size = [wp.vec3(0.0, 0.0, 0.0) for _ in range(nhfield)]
 
   for hid in used_hfield_id:
-    hmesh, hhalf = bvh.build_hfield_bvh(mjm, hid, constructor=constructor)
+    hmesh, hhalf = bvh.build_hfield_bvh(mjm, hid)
     hfield_registry[hmesh.id] = hmesh
     hfield_bvh_id[hid] = hmesh.id
     hfield_bounds_size[hid] = hhalf
