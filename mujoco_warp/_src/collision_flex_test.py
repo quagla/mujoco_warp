@@ -13,10 +13,10 @@
 # limitations under the License.
 """Tests for flex element collision."""
 
-from absl.testing import absltest
 import mujoco
 import numpy as np
 import warp as wp
+from absl.testing import absltest
 
 import mujoco_warp as mjwarp
 from mujoco_warp import test_data
@@ -97,7 +97,7 @@ class FlexCollisionTest(absltest.TestCase):
     # Fold the right half of the cloth over the left half.
     nvert = mjm.flex_vertnum[0]
     vertadr = mjm.flex_vertadr[0]
-    verts = mjd.flexvert_xpos[vertadr:vertadr + nvert].copy()
+    verts = mjd.flexvert_xpos[vertadr : vertadr + nvert].copy()
     mid_x = (verts[:, 0].min() + verts[:, 0].max()) / 2.0
 
     for i in range(nvert):
@@ -133,20 +133,12 @@ class FlexCollisionTest(absltest.TestCase):
     nacon = int(d.nacon.numpy()[0])
     if nacon > 0:
       flex_arr = d.contact.flex.numpy()[:nacon]
-      warp_self = int(np.sum(
-          (flex_arr[:, 0] >= 0) & (flex_arr[:, 0] == flex_arr[:, 1])
-      ))
+      warp_self = int(np.sum((flex_arr[:, 0] >= 0) & (flex_arr[:, 0] == flex_arr[:, 1])))
     else:
       warp_self = 0
 
-    self.assertGreater(
-        warp_self, 0,
-        f"Warp should produce self-contacts (nacon={nacon})"
-    )
-    self.assertGreaterEqual(
-        warp_self, c_self,
-        f"Warp={warp_self} should be >= C={c_self} self-contacts"
-    )
+    self.assertGreater(warp_self, 0, f"Warp should produce self-contacts (nacon={nacon})")
+    self.assertGreaterEqual(warp_self, c_self, f"Warp={warp_self} should be >= C={c_self} self-contacts")
 
   def test_flat_cloth_self_contacts_match_c(self):
     """Flat cloth (no fold) self-contacts should match C MuJoCo."""
@@ -186,16 +178,11 @@ class FlexCollisionTest(absltest.TestCase):
     nacon = int(d.nacon.numpy()[0])
     if nacon > 0:
       flex_arr = d.contact.flex.numpy()[:nacon]
-      warp_self = int(np.sum(
-          (flex_arr[:, 0] >= 0) & (flex_arr[:, 0] == flex_arr[:, 1])
-      ))
+      warp_self = int(np.sum((flex_arr[:, 0] >= 0) & (flex_arr[:, 0] == flex_arr[:, 1])))
     else:
       warp_self = 0
 
-    self.assertGreaterEqual(
-        warp_self, c_self,
-        f"Warp={warp_self} should be >= C={c_self} self-contacts"
-    )
+    self.assertGreaterEqual(warp_self, c_self, f"Warp={warp_self} should be >= C={c_self} self-contacts")
 
   def test_unsupported_selfcollide_raises(self):
     """Verify unsupported selfcollide modes raise NotImplementedError."""

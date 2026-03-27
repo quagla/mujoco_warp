@@ -24,21 +24,19 @@ from mujoco_warp._src.collision_primitive_core import sphere_triangle
 
 @wp.kernel
 def sphere_triangle_kernel(
-    # In:
-    sphere_pos: wp.vec3,
-    sphere_radius: float,
-    t1: wp.vec3,
-    t2: wp.vec3,
-    t3: wp.vec3,
-    tri_radius: float,
-    # Out:
-    dist_out: wp.array(dtype=float),
-    pos_out: wp.array(dtype=wp.vec3),
-    normal_out: wp.array(dtype=wp.vec3),
+  # In:
+  sphere_pos: wp.vec3,
+  sphere_radius: float,
+  t1: wp.vec3,
+  t2: wp.vec3,
+  t3: wp.vec3,
+  tri_radius: float,
+  # Out:
+  dist_out: wp.array(dtype=float),
+  pos_out: wp.array(dtype=wp.vec3),
+  normal_out: wp.array(dtype=wp.vec3),
 ):
-  dist, pos, normal = sphere_triangle(
-      sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-  )
+  dist, pos, normal = sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
   dist_out[0] = dist
   pos_out[0] = pos
   normal_out[0] = normal
@@ -48,13 +46,13 @@ class SphereTriangleTest(parameterized.TestCase):
   """Tests for sphere_triangle collision."""
 
   def _run_sphere_triangle(
-      self,
-      sphere_pos: np.ndarray,
-      sphere_radius: float,
-      t1: np.ndarray,
-      t2: np.ndarray,
-      t3: np.ndarray,
-      tri_radius: float,
+    self,
+    sphere_pos: np.ndarray,
+    sphere_radius: float,
+    t1: np.ndarray,
+    t2: np.ndarray,
+    t3: np.ndarray,
+    tri_radius: float,
   ):
     """Helper to run the sphere_triangle kernel and return results."""
     dist = wp.zeros(1, dtype=float)
@@ -62,17 +60,17 @@ class SphereTriangleTest(parameterized.TestCase):
     normal = wp.zeros(1, dtype=wp.vec3)
 
     wp.launch(
-        sphere_triangle_kernel,
-        dim=1,
-        inputs=[
-            wp.vec3(sphere_pos),
-            sphere_radius,
-            wp.vec3(t1),
-            wp.vec3(t2),
-            wp.vec3(t3),
-            tri_radius,
-        ],
-        outputs=[dist, pos, normal],
+      sphere_triangle_kernel,
+      dim=1,
+      inputs=[
+        wp.vec3(sphere_pos),
+        sphere_radius,
+        wp.vec3(t1),
+        wp.vec3(t2),
+        wp.vec3(t3),
+        tri_radius,
+      ],
+      outputs=[dist, pos, normal],
     )
 
     return dist.numpy()[0], pos.numpy()[0], normal.numpy()[0]
@@ -86,9 +84,7 @@ class SphereTriangleTest(parameterized.TestCase):
     sphere_radius = 0.2
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_sphere_triangle(
-        sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
 
     expected_dist = 0.5 - sphere_radius
     np.testing.assert_allclose(dist, expected_dist, atol=1e-5)
@@ -103,9 +99,7 @@ class SphereTriangleTest(parameterized.TestCase):
     sphere_radius = 0.2
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_sphere_triangle(
-        sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
 
     expected_dist = 0.1 - sphere_radius
     self.assertLess(dist, 0)
@@ -121,9 +115,7 @@ class SphereTriangleTest(parameterized.TestCase):
     sphere_radius = 0.2
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_sphere_triangle(
-        sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
 
     self.assertGreater(dist, 0)
 
@@ -136,9 +128,7 @@ class SphereTriangleTest(parameterized.TestCase):
     sphere_radius = 0.2
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_sphere_triangle(
-        sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
 
     expected_vec = sphere_pos - t1
     expected_length = np.linalg.norm(expected_vec)
@@ -154,9 +144,7 @@ class SphereTriangleTest(parameterized.TestCase):
     sphere_radius = 0.2
     tri_radius = 0.1
 
-    dist, pos, normal = self._run_sphere_triangle(
-        sphere_pos, sphere_radius, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_sphere_triangle(sphere_pos, sphere_radius, t1, t2, t3, tri_radius)
 
     expected_dist = 0.5 - sphere_radius - tri_radius
     np.testing.assert_allclose(dist, expected_dist, atol=1e-5)
@@ -164,22 +152,20 @@ class SphereTriangleTest(parameterized.TestCase):
 
 @wp.kernel
 def box_triangle_kernel(
-    # In:
-    box_pos: wp.vec3,
-    box_rot: wp.mat33,
-    box_size: wp.vec3,
-    t1: wp.vec3,
-    t2: wp.vec3,
-    t3: wp.vec3,
-    tri_radius: float,
-    # Out:
-    dist_out: wp.array(dtype=wp.vec2),
-    pos_out: wp.array(dtype=collision_primitive_core.mat23f),
-    normal_out: wp.array(dtype=collision_primitive_core.mat23f),
+  # In:
+  box_pos: wp.vec3,
+  box_rot: wp.mat33,
+  box_size: wp.vec3,
+  t1: wp.vec3,
+  t2: wp.vec3,
+  t3: wp.vec3,
+  tri_radius: float,
+  # Out:
+  dist_out: wp.array(dtype=wp.vec2),
+  pos_out: wp.array(dtype=collision_primitive_core.mat23f),
+  normal_out: wp.array(dtype=collision_primitive_core.mat23f),
 ):
-  dist, pos, normal = collision_primitive_core.box_triangle(
-      box_pos, box_rot, box_size, t1, t2, t3, tri_radius
-  )
+  dist, pos, normal = collision_primitive_core.box_triangle(box_pos, box_rot, box_size, t1, t2, t3, tri_radius)
   dist_out[0] = dist
   pos_out[0] = pos
   normal_out[0] = normal
@@ -189,14 +175,14 @@ class BoxTriangleTest(parameterized.TestCase):
   """Tests for box_triangle collision."""
 
   def _run_box_triangle(
-      self,
-      box_pos: np.ndarray,
-      box_rot: np.ndarray,
-      box_size: np.ndarray,
-      t1: np.ndarray,
-      t2: np.ndarray,
-      t3: np.ndarray,
-      tri_radius: float,
+    self,
+    box_pos: np.ndarray,
+    box_rot: np.ndarray,
+    box_size: np.ndarray,
+    t1: np.ndarray,
+    t2: np.ndarray,
+    t3: np.ndarray,
+    tri_radius: float,
   ):
     """Helper to run the box_triangle kernel and return results."""
     dist = wp.zeros(1, dtype=wp.vec2)
@@ -204,20 +190,28 @@ class BoxTriangleTest(parameterized.TestCase):
     normal = wp.zeros(1, dtype=collision_primitive_core.mat23f)
 
     wp.launch(
-        box_triangle_kernel,
-        dim=1,
-        inputs=[
-            wp.vec3(box_pos),
-            wp.mat33(box_rot[0, 0], box_rot[0, 1], box_rot[0, 2],
-                     box_rot[1, 0], box_rot[1, 1], box_rot[1, 2],
-                     box_rot[2, 0], box_rot[2, 1], box_rot[2, 2]),
-            wp.vec3(box_size),
-            wp.vec3(t1),
-            wp.vec3(t2),
-            wp.vec3(t3),
-            tri_radius,
-        ],
-        outputs=[dist, pos, normal],
+      box_triangle_kernel,
+      dim=1,
+      inputs=[
+        wp.vec3(box_pos),
+        wp.mat33(
+          box_rot[0, 0],
+          box_rot[0, 1],
+          box_rot[0, 2],
+          box_rot[1, 0],
+          box_rot[1, 1],
+          box_rot[1, 2],
+          box_rot[2, 0],
+          box_rot[2, 1],
+          box_rot[2, 2],
+        ),
+        wp.vec3(box_size),
+        wp.vec3(t1),
+        wp.vec3(t2),
+        wp.vec3(t3),
+        tri_radius,
+      ],
+      outputs=[dist, pos, normal],
     )
 
     return dist.numpy()[0], pos.numpy()[0], normal.numpy()[0]
@@ -232,9 +226,7 @@ class BoxTriangleTest(parameterized.TestCase):
     box_size = np.array([0.1, 0.1, 0.1])
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_box_triangle(
-        box_pos, box_rot, box_size, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_box_triangle(box_pos, box_rot, box_size, t1, t2, t3, tri_radius)
 
     self.assertLess(dist[0], collision_primitive_core.MJ_MAXVAL)
 
@@ -249,9 +241,7 @@ class BoxTriangleTest(parameterized.TestCase):
     box_size = np.array([0.2, 0.2, 0.2])
     tri_radius = 0.0
 
-    dist, pos, normal = self._run_box_triangle(
-        box_pos, box_rot, box_size, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_box_triangle(box_pos, box_rot, box_size, t1, t2, t3, tri_radius)
 
     # Vertex t1 is inside the box, so we should get a contact
     self.assertLess(dist[0], collision_primitive_core.MJ_MAXVAL)
@@ -266,32 +256,29 @@ class BoxTriangleTest(parameterized.TestCase):
     box_size = np.array([0.1, 0.1, 0.1])
     tri_radius = 0.05
 
-    dist, pos, normal = self._run_box_triangle(
-        box_pos, box_rot, box_size, t1, t2, t3, tri_radius
-    )
+    dist, pos, normal = self._run_box_triangle(box_pos, box_rot, box_size, t1, t2, t3, tri_radius)
 
     self.assertLess(dist[0], collision_primitive_core.MJ_MAXVAL)
 
 
 @wp.kernel
 def capsule_triangle_kernel(
-    # In:
-    capsule_pos: wp.vec3,
-    capsule_axis: wp.vec3,
-    capsule_radius: float,
-    capsule_half_length: float,
-    t1: wp.vec3,
-    t2: wp.vec3,
-    t3: wp.vec3,
-    tri_radius: float,
-    # Out:
-    dist_out: wp.array(dtype=wp.vec2),
-    pos_out: wp.array(dtype=collision_primitive_core.mat23f),
-    normal_out: wp.array(dtype=collision_primitive_core.mat23f),
+  # In:
+  capsule_pos: wp.vec3,
+  capsule_axis: wp.vec3,
+  capsule_radius: float,
+  capsule_half_length: float,
+  t1: wp.vec3,
+  t2: wp.vec3,
+  t3: wp.vec3,
+  tri_radius: float,
+  # Out:
+  dist_out: wp.array(dtype=wp.vec2),
+  pos_out: wp.array(dtype=collision_primitive_core.mat23f),
+  normal_out: wp.array(dtype=collision_primitive_core.mat23f),
 ):
   dist, pos, normal = collision_primitive_core.capsule_triangle(
-      capsule_pos, capsule_axis, capsule_radius, capsule_half_length,
-      t1, t2, t3, tri_radius
+    capsule_pos, capsule_axis, capsule_radius, capsule_half_length, t1, t2, t3, tri_radius
   )
   dist_out[0] = dist
   pos_out[0] = pos
@@ -302,15 +289,15 @@ class CapsuleTriangleTest(parameterized.TestCase):
   """Tests for capsule_triangle collision."""
 
   def _run_capsule_triangle(
-      self,
-      capsule_pos: np.ndarray,
-      capsule_axis: np.ndarray,
-      capsule_radius: float,
-      capsule_half_length: float,
-      t1: np.ndarray,
-      t2: np.ndarray,
-      t3: np.ndarray,
-      tri_radius: float,
+    self,
+    capsule_pos: np.ndarray,
+    capsule_axis: np.ndarray,
+    capsule_radius: float,
+    capsule_half_length: float,
+    t1: np.ndarray,
+    t2: np.ndarray,
+    t3: np.ndarray,
+    tri_radius: float,
   ):
     """Helper to run the capsule_triangle kernel and return results."""
     dist = wp.zeros(1, dtype=wp.vec2)
@@ -318,19 +305,19 @@ class CapsuleTriangleTest(parameterized.TestCase):
     normal = wp.zeros(1, dtype=collision_primitive_core.mat23f)
 
     wp.launch(
-        capsule_triangle_kernel,
-        dim=1,
-        inputs=[
-            wp.vec3(capsule_pos),
-            wp.vec3(capsule_axis),
-            capsule_radius,
-            capsule_half_length,
-            wp.vec3(t1),
-            wp.vec3(t2),
-            wp.vec3(t3),
-            tri_radius,
-        ],
-        outputs=[dist, pos, normal],
+      capsule_triangle_kernel,
+      dim=1,
+      inputs=[
+        wp.vec3(capsule_pos),
+        wp.vec3(capsule_axis),
+        capsule_radius,
+        capsule_half_length,
+        wp.vec3(t1),
+        wp.vec3(t2),
+        wp.vec3(t3),
+        tri_radius,
+      ],
+      outputs=[dist, pos, normal],
     )
 
     return dist.numpy()[0], pos.numpy()[0], normal.numpy()[0]
@@ -347,8 +334,7 @@ class CapsuleTriangleTest(parameterized.TestCase):
     tri_radius = 0.0
 
     dist, pos, normal = self._run_capsule_triangle(
-        capsule_pos, capsule_axis, capsule_radius, capsule_half_length,
-        t1, t2, t3, tri_radius
+      capsule_pos, capsule_axis, capsule_radius, capsule_half_length, t1, t2, t3, tri_radius
     )
 
     expected_dist = 0.5 - capsule_half_length - capsule_radius
@@ -366,8 +352,7 @@ class CapsuleTriangleTest(parameterized.TestCase):
     tri_radius = 0.0
 
     dist, pos, normal = self._run_capsule_triangle(
-        capsule_pos, capsule_axis, capsule_radius, capsule_half_length,
-        t1, t2, t3, tri_radius
+      capsule_pos, capsule_axis, capsule_radius, capsule_half_length, t1, t2, t3, tri_radius
     )
 
     self.assertLess(dist[0], 0)
@@ -384,8 +369,7 @@ class CapsuleTriangleTest(parameterized.TestCase):
     tri_radius = 0.0
 
     dist, pos, normal = self._run_capsule_triangle(
-        capsule_pos, capsule_axis, capsule_radius, capsule_half_length,
-        t1, t2, t3, tri_radius
+      capsule_pos, capsule_axis, capsule_radius, capsule_half_length, t1, t2, t3, tri_radius
     )
 
     expected_dist = 0.2 - capsule_radius
@@ -403,8 +387,7 @@ class CapsuleTriangleTest(parameterized.TestCase):
     tri_radius = 0.05
 
     dist, pos, normal = self._run_capsule_triangle(
-        capsule_pos, capsule_axis, capsule_radius, capsule_half_length,
-        t1, t2, t3, tri_radius
+      capsule_pos, capsule_axis, capsule_radius, capsule_half_length, t1, t2, t3, tri_radius
     )
 
     expected_dist = 0.5 - capsule_half_length - capsule_radius - tri_radius
@@ -413,23 +396,22 @@ class CapsuleTriangleTest(parameterized.TestCase):
 
 @wp.kernel
 def cylinder_triangle_kernel(
-    # In:
-    cylinder_pos: wp.vec3,
-    cylinder_axis: wp.vec3,
-    cylinder_radius: float,
-    cylinder_half_height: float,
-    t1: wp.vec3,
-    t2: wp.vec3,
-    t3: wp.vec3,
-    tri_radius: float,
-    # Out:
-    dist_out: wp.array(dtype=wp.vec2),
-    pos_out: wp.array(dtype=collision_primitive_core.mat23f),
-    normal_out: wp.array(dtype=collision_primitive_core.mat23f),
+  # In:
+  cylinder_pos: wp.vec3,
+  cylinder_axis: wp.vec3,
+  cylinder_radius: float,
+  cylinder_half_height: float,
+  t1: wp.vec3,
+  t2: wp.vec3,
+  t3: wp.vec3,
+  tri_radius: float,
+  # Out:
+  dist_out: wp.array(dtype=wp.vec2),
+  pos_out: wp.array(dtype=collision_primitive_core.mat23f),
+  normal_out: wp.array(dtype=collision_primitive_core.mat23f),
 ):
   dist, pos, normal = collision_primitive_core.cylinder_triangle(
-      cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height,
-      t1, t2, t3, tri_radius
+    cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height, t1, t2, t3, tri_radius
   )
   dist_out[0] = dist
   pos_out[0] = pos
@@ -440,15 +422,15 @@ class CylinderTriangleTest(parameterized.TestCase):
   """Tests for cylinder_triangle collision."""
 
   def _run_cylinder_triangle(
-      self,
-      cylinder_pos: np.ndarray,
-      cylinder_axis: np.ndarray,
-      cylinder_radius: float,
-      cylinder_half_height: float,
-      t1: np.ndarray,
-      t2: np.ndarray,
-      t3: np.ndarray,
-      tri_radius: float,
+    self,
+    cylinder_pos: np.ndarray,
+    cylinder_axis: np.ndarray,
+    cylinder_radius: float,
+    cylinder_half_height: float,
+    t1: np.ndarray,
+    t2: np.ndarray,
+    t3: np.ndarray,
+    tri_radius: float,
   ):
     """Helper to run the cylinder_triangle kernel and return results."""
     dist = wp.zeros(1, dtype=wp.vec2)
@@ -456,19 +438,19 @@ class CylinderTriangleTest(parameterized.TestCase):
     normal = wp.zeros(1, dtype=collision_primitive_core.mat23f)
 
     wp.launch(
-        cylinder_triangle_kernel,
-        dim=1,
-        inputs=[
-            wp.vec3(cylinder_pos),
-            wp.vec3(cylinder_axis),
-            cylinder_radius,
-            cylinder_half_height,
-            wp.vec3(t1),
-            wp.vec3(t2),
-            wp.vec3(t3),
-            tri_radius,
-        ],
-        outputs=[dist, pos, normal],
+      cylinder_triangle_kernel,
+      dim=1,
+      inputs=[
+        wp.vec3(cylinder_pos),
+        wp.vec3(cylinder_axis),
+        cylinder_radius,
+        cylinder_half_height,
+        wp.vec3(t1),
+        wp.vec3(t2),
+        wp.vec3(t3),
+        tri_radius,
+      ],
+      outputs=[dist, pos, normal],
     )
 
     return dist.numpy()[0], pos.numpy()[0], normal.numpy()[0]
@@ -485,8 +467,7 @@ class CylinderTriangleTest(parameterized.TestCase):
     tri_radius = 0.0
 
     dist, pos, normal = self._run_cylinder_triangle(
-        cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height,
-        t1, t2, t3, tri_radius
+      cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height, t1, t2, t3, tri_radius
     )
 
     self.assertLess(dist[0], collision_primitive_core.MJ_MAXVAL)
@@ -506,8 +487,7 @@ class CylinderTriangleTest(parameterized.TestCase):
     tri_radius = 0.0
 
     dist, _, _ = self._run_cylinder_triangle(
-        cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height,
-        t1, t2, t3, tri_radius
+      cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height, t1, t2, t3, tri_radius
     )
 
     # Triangle overlaps with cylinder cap, should get contact
@@ -527,8 +507,7 @@ class CylinderTriangleTest(parameterized.TestCase):
     tri_radius = 0.05
 
     dist, pos, normal = self._run_cylinder_triangle(
-        cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height,
-        t1, t2, t3, tri_radius
+      cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height, t1, t2, t3, tri_radius
     )
 
     # Vertex is on the cylinder axis, should get contact with tri_radius
@@ -546,8 +525,7 @@ class CylinderTriangleTest(parameterized.TestCase):
     tri_radius = 0.05
 
     dist, pos, normal = self._run_cylinder_triangle(
-        cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height,
-        t1, t2, t3, tri_radius
+      cylinder_pos, cylinder_axis, cylinder_radius, cylinder_half_height, t1, t2, t3, tri_radius
     )
 
     self.assertLess(dist[0], collision_primitive_core.MJ_MAXVAL)
@@ -555,40 +533,43 @@ class CylinderTriangleTest(parameterized.TestCase):
 
 @wp.kernel
 def triangle_triangle_kernel(
-    a1: wp.vec3,
-    a2: wp.vec3,
-    a3: wp.vec3,
-    a_radius: float,
-    b1: wp.vec3,
-    b2: wp.vec3,
-    b3: wp.vec3,
-    b_radius: float,
-    dist_out: wp.array(dtype=float),
-    pos_out: wp.array(dtype=wp.vec3),
-    normal_out: wp.array(dtype=wp.vec3),
+  a1: wp.vec3,
+  a2: wp.vec3,
+  a3: wp.vec3,
+  a_radius: float,
+  b1: wp.vec3,
+  b2: wp.vec3,
+  b3: wp.vec3,
+  b_radius: float,
+  dist_out: wp.array(dtype=float),
+  pos_out: wp.array(dtype=wp.vec3),
+  normal_out: wp.array(dtype=wp.vec3),
 ):
-  dist, pos, normal = collision_primitive_core.triangle_triangle(
-      a1, a2, a3, a_radius, b1, b2, b3, b_radius
-  )
+  dist, pos, normal = collision_primitive_core.triangle_triangle(a1, a2, a3, a_radius, b1, b2, b3, b_radius)
   dist_out[0] = dist
   pos_out[0] = pos
   normal_out[0] = normal
 
 
 class TriangleTriangleTest(parameterized.TestCase):
-
   def _run(self, a1, a2, a3, a_r, b1, b2, b3, b_r):
     dist = wp.zeros(1, dtype=float)
     pos = wp.zeros(1, dtype=wp.vec3)
     normal = wp.zeros(1, dtype=wp.vec3)
     wp.launch(
-        triangle_triangle_kernel,
-        dim=1,
-        inputs=[
-            wp.vec3(a1), wp.vec3(a2), wp.vec3(a3), a_r,
-            wp.vec3(b1), wp.vec3(b2), wp.vec3(b3), b_r,
-        ],
-        outputs=[dist, pos, normal],
+      triangle_triangle_kernel,
+      dim=1,
+      inputs=[
+        wp.vec3(a1),
+        wp.vec3(a2),
+        wp.vec3(a3),
+        a_r,
+        wp.vec3(b1),
+        wp.vec3(b2),
+        wp.vec3(b3),
+        b_r,
+      ],
+      outputs=[dist, pos, normal],
     )
     return dist.numpy()[0], pos.numpy()[0], normal.numpy()[0]
 
