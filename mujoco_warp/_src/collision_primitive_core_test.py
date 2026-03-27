@@ -533,6 +533,7 @@ class CylinderTriangleTest(parameterized.TestCase):
 
 @wp.kernel
 def triangle_triangle_kernel(
+  # In:
   a1: wp.vec3,
   a2: wp.vec3,
   a3: wp.vec3,
@@ -541,6 +542,7 @@ def triangle_triangle_kernel(
   b2: wp.vec3,
   b3: wp.vec3,
   b_radius: float,
+  # Out:
   dist_out: wp.array(dtype=float),
   pos_out: wp.array(dtype=wp.vec3),
   normal_out: wp.array(dtype=wp.vec3),

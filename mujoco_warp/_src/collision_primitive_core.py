@@ -1649,6 +1649,7 @@ def _seg_seg_dist(
 
 @wp.func
 def triangle_triangle(
+  # In:
   a1: wp.vec3,
   a2: wp.vec3,
   a3: wp.vec3,
