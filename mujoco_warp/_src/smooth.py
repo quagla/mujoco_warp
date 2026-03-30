@@ -386,13 +386,24 @@ def _compute_flexelem_aabb(
   vertadr = flex_vertadr[flexid]
   radius = flex_radius[flexid]
 
+  # Compute element data offset by accumulating elem counts for preceding
+  # flexes, since elements of different dims are packed contiguously in
+  # flex_elem with strides of (dim+1).
+  elem_data_base = int(0)
+  for i in range(flexid):
+    elem_data_base += flex_elemnum[i] * (flex_dim[i] + 1)
+  local_elem = elemid - flex_elemadr[flexid]
+  elem_data_idx = elem_data_base + local_elem * (dim + 1)
+
+  v0 = flex_elem[elem_data_idx]
+
   v0 = flex_elem[elemid * (dim + 1)]
   p0 = flexvert_xpos_in[worldid, vertadr + v0]
   xmin = wp.vec3(p0[0], p0[1], p0[2])
   xmax = wp.vec3(p0[0], p0[1], p0[2])
 
   for i in range(1, dim + 1):
-    vi = flex_elem[elemid * (dim + 1) + i]
+    vi = flex_elem[elem_data_idx + i]
     pi = flexvert_xpos_in[worldid, vertadr + vi]
     xmin = wp.vec3(wp.min(xmin[0], pi[0]), wp.min(xmin[1], pi[1]), wp.min(xmin[2], pi[2]))
     xmax = wp.vec3(wp.max(xmax[0], pi[0]), wp.max(xmax[1], pi[1]), wp.max(xmax[2], pi[2]))

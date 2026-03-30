@@ -1171,6 +1171,7 @@ class Model:
     geom_pair_type_count: count of max number of each
                           potential collision
     geom_plugin_index: geom index in plugin array            (ngeom,)
+    flex_self_max_pairs: max number of flex self contact pairs
     eq_connect_adr: eq_* addresses of type `CONNECT`
     eq_wld_adr: eq_* addresses of type `WELD`
     eq_jnt_adr: eq_* addresses of type `JOINT`
@@ -1555,6 +1556,7 @@ class Model:
   nxn_pairid_filtered: wp.array(dtype=wp.vec2i)
   geom_pair_type_count: tuple[int, ...]
   geom_plugin_index: array("ngeom", int)
+  flex_self_max_pairs: int
   eq_connect_adr: wp.array(dtype=int)
   eq_wld_adr: wp.array(dtype=int)
   eq_jnt_adr: wp.array(dtype=int)

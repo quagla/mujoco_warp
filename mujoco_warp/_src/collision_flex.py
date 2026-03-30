@@ -1036,55 +1036,44 @@ def flex_narrowphase(m: Model, d: Data):
   )
 
   # Self-collision: only for dim=2 elements with selfcollide enabled.
-  if m.nflexelem > 0:
-    selfcollide = m.flex_selfcollide.numpy()
-    dim = m.flex_dim.numpy()
-    elemnum = m.flex_elemnum.numpy()
-    n_dim2_elems = 0
-    has_selfcollide = False
-    for f in range(m.nflex):
-      if selfcollide[f] != int(FlexSelfCollideType.NONE):
-        has_selfcollide = True
-      if dim[f] == 2 and selfcollide[f] != int(FlexSelfCollideType.NONE):
-        n_dim2_elems += elemnum[f]
-
-    if has_selfcollide and n_dim2_elems > 0:
-      max_pairs = n_dim2_elems * (n_dim2_elems - 1) // 2
-      wp.launch(
-        _flex_self_narrow,
-        dim=(d.nworld, max_pairs),
-        inputs=[
-          m.nflex,
-          m.flex_condim,
-          m.flex_solref,
-          m.flex_solimp,
-          m.flex_friction,
-          m.flex_selfcollide,
-          m.flex_dim,
-          m.flex_vertadr,
-          m.flex_elemadr,
-          m.flex_elemnum,
-          m.flex_elem,
-          m.flex_radius,
-          d.flexvert_xpos,
-          d.flexelem_aabb,
-          d.naconmax,
-        ],
-        outputs=[
-          d.contact.dist,
-          d.contact.pos,
-          d.contact.frame,
-          d.contact.includemargin,
-          d.contact.friction,
-          d.contact.solref,
-          d.contact.solreffriction,
-          d.contact.solimp,
-          d.contact.dim,
-          d.contact.geom,
-          d.contact.flex,
-          d.contact.vert,
-          d.contact.worldid,
-          d.contact.type,
-          d.nacon,
-        ],
-      )
+  # flex_self_max_pairs is precomputed in put_model to avoid device→host
+  # copies during CUDA graph capture.
+  if m.flex_self_max_pairs > 0:
+    wp.launch(
+      _flex_self_narrow,
+      dim=(d.nworld, m.flex_self_max_pairs),
+      inputs=[
+        m.nflex,
+        m.flex_condim,
+        m.flex_solref,
+        m.flex_solimp,
+        m.flex_friction,
+        m.flex_selfcollide,
+        m.flex_dim,
+        m.flex_vertadr,
+        m.flex_elemadr,
+        m.flex_elemnum,
+        m.flex_elem,
+        m.flex_radius,
+        d.flexvert_xpos,
+        d.flexelem_aabb,
+        d.naconmax,
+      ],
+      outputs=[
+        d.contact.dist,
+        d.contact.pos,
+        d.contact.frame,
+        d.contact.includemargin,
+        d.contact.friction,
+        d.contact.solref,
+        d.contact.solreffriction,
+        d.contact.solimp,
+        d.contact.dim,
+        d.contact.geom,
+        d.contact.flex,
+        d.contact.vert,
+        d.contact.worldid,
+        d.contact.type,
+        d.nacon,
+      ],
+    )

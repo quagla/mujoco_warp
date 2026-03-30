@@ -230,6 +230,15 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
       raise NotImplementedError(
         'flex_selfcollide modes BVH/SAP/AUTO not supported in MuJoCo-Warp. Use selfcollide="narrow" or selfcollide="none".'
       )
+    # Precompute max self-collision pairs for dim=2 elements to avoid
+    # device→host copies during CUDA graph capture.
+    n_dim2_elems = 0
+    for f in range(mjm.nflex):
+      if selfcollide[f] != 0 and mjm.flex_dim[f] == 2:
+        n_dim2_elems += mjm.flex_elemnum[f]
+    m.flex_self_max_pairs = n_dim2_elems * (n_dim2_elems - 1) // 2
+  else:
+    m.flex_self_max_pairs = 0
 
   m.max_ten_J_rownnz = int(mjm.ten_J_rownnz.max()) if mjm.ntendon else 0
 
