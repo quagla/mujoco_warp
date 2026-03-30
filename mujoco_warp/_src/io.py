@@ -1097,7 +1097,7 @@ def put_data(
 
   # ensure njmax_nnz can hold the actual data from mjd
   if is_sparse(mjm) and mjd.nefc > 0 and mujoco.mj_isSparse(mjm):
-    actual_nnz = int(mjd.efc_J_rownnz[:mjd.nefc].sum())
+    actual_nnz = int(mjd.efc_J_rownnz[: mjd.nefc].sum())
     njmax_nnz = max(njmax_nnz, actual_nnz)
 
   # ensure static geom positions are computed
