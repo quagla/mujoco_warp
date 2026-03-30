@@ -1035,9 +1035,21 @@ def flex_narrowphase(m: Model, d: Data):
     ],
   )
 
+  # Self-collision: only for dim=2 elements with selfcollide enabled.
   if m.nflexelem > 0:
-    max_pairs = m.nflexelem * (m.nflexelem - 1) // 2
-    if max_pairs > 0:
+    selfcollide = m.flex_selfcollide.numpy()
+    dim = m.flex_dim.numpy()
+    elemnum = m.flex_elemnum.numpy()
+    n_dim2_elems = 0
+    has_selfcollide = False
+    for f in range(m.nflex):
+      if selfcollide[f] != int(FlexSelfCollideType.NONE):
+        has_selfcollide = True
+      if dim[f] == 2 and selfcollide[f] != int(FlexSelfCollideType.NONE):
+        n_dim2_elems += elemnum[f]
+
+    if has_selfcollide and n_dim2_elems > 0:
+      max_pairs = n_dim2_elems * (n_dim2_elems - 1) // 2
       wp.launch(
         _flex_self_narrow,
         dim=(d.nworld, max_pairs),
