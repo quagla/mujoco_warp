@@ -112,53 +112,6 @@ def _create_island_solver_context(m: types.Model, d: types.Data) -> IslandSolver
   )
 
 
-@wp.kernel
-def _init_dof_to_block(nv: int, dof_to_block_out: wp.array[int]):
-  """Initialize dof_to_block to -1."""
-  tid = wp.tid()
-  if tid < nv:
-    dof_to_block_out[tid] = -1
-
-
-@wp.kernel
-def _build_block_mapping(
-  # Model:
-  nbody: int,
-  body_dofnum: wp.array[int],
-  body_dofadr: wp.array[int],
-  # Out:
-  block_dof_adr_out: wp.array[int],
-  block_dof_num_out: wp.array[int],
-  dof_to_block_out: wp.array[int],
-):
-  """Build block mapping on device. Single-threaded kernel.
-
-  Splits each body's DOFs into blocks of at most 3. For example,
-  a freejoint body with 6 DOFs becomes two 3-DOF blocks.
-  """
-  tid = wp.tid()
-  if tid > 0:
-    return
-
-  block_count = int(0)
-  for b in range(nbody):
-    ndof = body_dofnum[b]
-    dof0 = body_dofadr[b]
-    if ndof == 0:
-      continue
-    remaining = ndof
-    offset = int(0)
-    while remaining > 0:
-      chunk = wp.min(remaining, 3)
-      block_dof_adr_out[block_count] = dof0 + offset
-      block_dof_num_out[block_count] = chunk
-      for k in range(chunk):
-        dof_to_block_out[dof0 + offset + k] = block_count
-      offset += chunk
-      remaining -= chunk
-      block_count += 1
-
-
 def _create_solver_context(m: types.Model, d: types.Data) -> SolverContext:
   """Create a SolverContext with allocated workspace arrays.
 
@@ -176,44 +129,21 @@ def _create_solver_context(m: types.Model, d: types.Data) -> SolverContext:
 
   alloc_h = m.opt.solver == types.SolverType.NEWTON
   alloc_hfactor = alloc_h and nv > _BLOCK_CHOLESKY_DIM
-  alloc_block_jacobi = m.opt.solver == types.SolverType.CG
 
-  # Build block mapping for block Jacobi preconditioner on device.
-  # Each body with >3 DOFs is split into multiple ≤3-DOF blocks.
-  # Use max_blocks = 2 * nbody as upper bound (6-DOF freejoint -> two blocks).
-  # Unused entries stay zero and are harmlessly skipped by the kernels.
-  if alloc_block_jacobi:
-    max_blocks = 2 * m.nbody
-    block_dof_adr = wp.zeros(max_blocks, dtype=int)
-    block_dof_num = wp.zeros(max_blocks, dtype=int)
-    dof_to_block = wp.empty(nv, dtype=int)
+  # Tree IC preconditioner: compute offsets and allocate storage.
+  # _create_solver_context runs once during setup (not during graph capture),
+  # so .numpy() is safe here.
+  alloc_precond = m.opt.solver == types.SolverType.CG and m.opt.cg_preconditioner == types.CGPreconditioner.CONSTRAINT
+  if alloc_precond:
+    preconditioner = wp.zeros((nworld, m.tree_total_nnz_int), dtype=float)
 
-    wp.launch(_init_dof_to_block, dim=nv, inputs=[nv], outputs=[dof_to_block])
-    wp.launch(
-      _build_block_mapping,
-      dim=1,
-      inputs=[m.nbody, m.body_dofnum, m.body_dofadr],
-      outputs=[block_dof_adr, block_dof_num, dof_to_block],
-    )
-    nblocks = max_blocks
+    # Compute custom non-overlapping dense tree block offsets for all trees
+    ctx_precond_block_adr = m.precond_block_adr
+    ctx_precond_tiles = m.precond_tiles
   else:
-    nblocks = 0
-    block_dof_adr = wp.empty(0, dtype=int)
-    block_dof_num = wp.empty(0, dtype=int)
-    dof_to_block = wp.empty(0, dtype=int)
-
-  # IC(0) preconditioner: (M + JTDJ) factored for articulated bodies.
-  has_articulated = m.is_sparse and m.has_articulated_trees
-  alloc_ic = alloc_block_jacobi and has_articulated and m.opt.jac_preconditioner
-  if alloc_ic:
-    M_precond = wp.zeros((nworld, m.nC), dtype=float)
-    qld_total = d.qLD.shape[1]
-    qLD_precond = wp.zeros((nworld, qld_total), dtype=float)
-    qLDiagInv_precond = wp.zeros((nworld, nv), dtype=float)
-  else:
-    M_precond = wp.empty((0, 0), dtype=float)
-    qLD_precond = wp.empty((0, 0), dtype=float)
-    qLDiagInv_precond = wp.empty((0, 0), dtype=float)
+    preconditioner = wp.empty((0, 0), dtype=float)
+    ctx_precond_block_adr = wp.empty(0, dtype=int)
+    ctx_precond_tiles = ()
 
   return SolverContext(
     Jaref=wp.empty((nworld, njmax), dtype=float),
@@ -234,14 +164,9 @@ def _create_solver_context(m: types.Model, d: types.Data) -> SolverContext:
     beta_den=wp.empty((nworld,), dtype=float),
     h=wp.empty((nworld, nv_pad, nv_pad), dtype=float) if alloc_h else wp.empty((nworld, 0, 0), dtype=float),
     hfactor=wp.empty((nworld, nv_pad, nv_pad), dtype=float) if alloc_hfactor else wp.empty((nworld, 0, 0), dtype=float),
-    inv_H_blocks=wp.zeros((nworld, 6, nblocks), dtype=float) if alloc_block_jacobi else wp.empty((nworld, 0, 0), dtype=float),
-    block_dof_adr=block_dof_adr,
-    block_dof_num=block_dof_num,
-    dof_to_block=dof_to_block,
-    nblocks=nblocks,
-    M_precond=M_precond,
-    qLD_precond=qLD_precond,
-    qLDiagInv_precond=qLDiagInv_precond,
+    preconditioner=preconditioner,
+    precond_block_adr=ctx_precond_block_adr,
+    precond_tiles=ctx_precond_tiles,
     changed_efc_ids=wp.empty((nworld, njmax), dtype=int) if alloc_h else wp.empty((nworld, 0), dtype=int),
     changed_efc_count=wp.empty((nworld,), dtype=int) if alloc_h else wp.empty((0,), dtype=int),
   )
@@ -2873,8 +2798,40 @@ def _cholesky_factorize_solve(m: types.Model, d: types.Data, ctx: SolverContext,
       )
 
 
+@cache_kernel
+def _tile_copy_M_to_dense_precond(tile: types.TileSet):
+  block_size = tile.size
+  block_area = block_size * block_size
+
+  @wp.kernel(module="unique", enable_backward=False)
+  def kernel(
+    # Model:
+    qLD_block_adr: wp.array[int],
+    # Data in:
+    M_in: wp.array2d[float],
+    # In:
+    block_elemid: wp.array[int],
+    block_dof: wp.array[int],
+    # Out:
+    L_out: wp.array2d[float],
+  ):
+    worldid, blk = wp.tid()
+    start = block_dof[blk]
+
+    idx = wp.tile_load(block_elemid, shape=(block_area,), offset=(blk * block_area,), storage="shared")
+    block = wp.tile_load_indexed(M_in[worldid], idx, shape=(block_area,), storage="shared")
+    wp.tile_store(L_out[worldid], block, offset=(qLD_block_adr[start],))
+
+  return kernel
+
+
 @wp.kernel
-def _block_jacobi_JTDJ(
+def _add_JTDJ_to_precond_dense(
+  # Model:
+  dof_treeid: wp.array[int],
+  tree_dofadr: wp.array[int],
+  tree_dofnum: wp.array[int],
+  qLD_block_adr: wp.array[int],
   # Data in:
   nefc_in: wp.array[int],
   efc_J_rownnz_in: wp.array2d[int],
@@ -2884,16 +2841,11 @@ def _block_jacobi_JTDJ(
   efc_D_in: wp.array2d[float],
   efc_state_in: wp.array2d[int],
   # In:
-  dof_to_block_in: wp.array[int],
-  block_dof_adr_in: wp.array[int],
-  # In:
   ctx_done_in: wp.array[bool],
   # Out:
-  inv_H_blocks_out: wp.array3d[float],
+  preconditioner_out: wp.array2d[float],
 ):
-  """Accumulate block-diagonal of J^T D J into inv_H_blocks."""
   worldid, efcid = wp.tid()
-
   if ctx_done_in[worldid]:
     return
 
@@ -2913,304 +2865,258 @@ def _block_jacobi_JTDJ(
     sparseidi = rowadr + i
     Ji = efc_J_in[worldid, 0, sparseidi]
     colindi = efc_J_colind_in[worldid, 0, sparseidi]
-    blocki = dof_to_block_in[colindi]
-    if blocki < 0:
-      continue
-    dof0 = block_dof_adr_in[blocki]
-    local_i = colindi - dof0
+    treei = dof_treeid[colindi]
+    size = tree_dofnum[treei]
+
+    start = tree_dofadr[treei]
+    block_adr = qLD_block_adr[start]
 
     for j in range(i, rownnz):
-      if j == i:
-        sparseidj = sparseidi
-        Jj = Ji
-        colindj = colindi
-      else:
-        sparseidj = rowadr + j
-        Jj = efc_J_in[worldid, 0, sparseidj]
-        colindj = efc_J_colind_in[worldid, 0, sparseidj]
+      sparseidj = rowadr + j
+      Jj = efc_J_in[worldid, 0, sparseidj]
+      colindj = efc_J_colind_in[worldid, 0, sparseidj]
+      if colindj - start >= size:
+        break
 
-      blockj = dof_to_block_in[colindj]
-      if blocki != blockj:
+      if dof_treeid[colindj] != treei:
         continue
 
-      local_j = colindj - dof0
-
       h = Ji * Jj * efc_D
-
-      # Map to upper-triangular flat index:
-      # (0,0)->0, (0,1)->1, (0,2)->2, (1,1)->3, (1,2)->4, (2,2)->5
-      li = wp.min(local_i, local_j)
-      lj = wp.max(local_i, local_j)
-      flat_idx = li * (5 - li) / 2 + lj
-
-      wp.atomic_add(inv_H_blocks_out[worldid, flat_idx], blocki, h)
+      local_i = colindi - start
+      local_j = colindj - start
+      wp.atomic_add(preconditioner_out, worldid, block_adr + local_i * size + local_j, h)
+      if local_i != local_j:
+        wp.atomic_add(preconditioner_out, worldid, block_adr + local_j * size + local_i, h)
 
 
 @wp.kernel
-def _block_jacobi_add_M(
+def _add_JTCJ_to_precond_dense(
   # Model:
-  nv: int,
-  M_mulm_rowadr: wp.array[int],
-  M_mulm_col: wp.array[int],
-  M_mulm_madr: wp.array[int],
-  # Data in:
-  M_in: wp.array2d[float],
-  # In:
-  dof_to_block_in: wp.array[int],
-  block_dof_adr_in: wp.array[int],
-  ctx_done_in: wp.array[bool],
-  # Out:
-  inv_H_blocks_out: wp.array3d[float],
-):
-  """Add mass matrix entries within each block."""
-  worldid, di = wp.tid()
-  if di >= nv:
-    return
-  if ctx_done_in[worldid]:
-    return
-
-  bi = dof_to_block_in[di]
-  if bi < 0:
-    return
-  li = di - block_dof_adr_in[bi]
-
-  # Walk sparse M row for this DOF, accumulating entries within same block
-  start = M_mulm_rowadr[di]
-  end = M_mulm_rowadr[di + 1]
-  for k in range(start, end):
-    dj = M_mulm_col[k]
-    if di > dj:
-      continue
-    bj = dof_to_block_in[dj]
-    if bj == bi:
-      lj = dj - block_dof_adr_in[bj]
-      madr = M_mulm_madr[k]
-      M_val = M_in[worldid, madr]
-      lmin = wp.min(li, lj)
-      lmax = wp.max(li, lj)
-      offset = lmin * (5 - lmin) / 2 + lmax
-      wp.atomic_add(inv_H_blocks_out, worldid, offset, bi, M_val)
-
-
-@wp.kernel
-def _block_jacobi_invert(
-  # In:
-  nblocks: int,
-  block_dof_num_in: wp.array[int],
-  ctx_done_in: wp.array[bool],
-  # Out:
-  inv_H_blocks_out: wp.array3d[float],
-):
-  """Invert each block in-place: H_bb -> H_bb^{-1}."""
-  worldid, blockid = wp.tid()
-
-  if ctx_done_in[worldid]:
-    return
-
-  if blockid >= nblocks:
-    return
-
-  ndof = block_dof_num_in[blockid]
-
-  # Read block entries
-  H00 = inv_H_blocks_out[worldid, 0, blockid]
-  H01 = inv_H_blocks_out[worldid, 1, blockid]
-  H02 = inv_H_blocks_out[worldid, 2, blockid]
-  H11 = inv_H_blocks_out[worldid, 3, blockid]
-  H12 = inv_H_blocks_out[worldid, 4, blockid]
-  H22 = inv_H_blocks_out[worldid, 5, blockid]
-
-  # Regularization for numerical safety
-  reg = 1.0e-12
-  H00 = H00 + reg
-  H11 = H11 + reg
-  H22 = H22 + reg
-
-  if ndof == 1:
-    if H00 > 0.0:
-      inv_H_blocks_out[worldid, 0, blockid] = 1.0 / H00
-    else:
-      inv_H_blocks_out[worldid, 0, blockid] = 0.0
-  elif ndof == 2:
-    det = H00 * H11 - H01 * H01
-    if wp.abs(det) > 1.0e-30:
-      inv_det = 1.0 / det
-      inv_H_blocks_out[worldid, 0, blockid] = H11 * inv_det
-      inv_H_blocks_out[worldid, 1, blockid] = -H01 * inv_det
-      inv_H_blocks_out[worldid, 3, blockid] = H00 * inv_det
-    else:
-      inv_H_blocks_out[worldid, 0, blockid] = 0.0
-      inv_H_blocks_out[worldid, 1, blockid] = 0.0
-      inv_H_blocks_out[worldid, 3, blockid] = 0.0
-  elif ndof == 3:
-    # 3x3 symmetric matrix inversion via cofactors
-    c00 = H11 * H22 - H12 * H12
-    c01 = H02 * H12 - H01 * H22
-    c02 = H01 * H12 - H02 * H11
-    c11 = H00 * H22 - H02 * H02
-    c12 = H01 * H02 - H00 * H12
-    c22 = H00 * H11 - H01 * H01
-
-    det = H00 * c00 + H01 * c01 + H02 * c02
-    if wp.abs(det) > 1.0e-30:
-      inv_det = 1.0 / det
-      inv_H_blocks_out[worldid, 0, blockid] = c00 * inv_det
-      inv_H_blocks_out[worldid, 1, blockid] = c01 * inv_det
-      inv_H_blocks_out[worldid, 2, blockid] = c02 * inv_det
-      inv_H_blocks_out[worldid, 3, blockid] = c11 * inv_det
-      inv_H_blocks_out[worldid, 4, blockid] = c12 * inv_det
-      inv_H_blocks_out[worldid, 5, blockid] = c22 * inv_det
-    else:
-      for i in range(6):
-        inv_H_blocks_out[worldid, i, blockid] = 0.0
-
-
-@wp.kernel
-def _apply_block_preconditioner(
-  # Model:
+  opt_impratio_invsqrt: wp.array[float],
   dof_treeid: wp.array[int],
+  tree_dofadr: wp.array[int],
   tree_dofnum: wp.array[int],
-  # In:
-  flex_only: int,
-  nblocks: int,
-  block_dof_adr_in: wp.array[int],
-  block_dof_num_in: wp.array[int],
-  inv_H_blocks_in: wp.array3d[float],
-  grad_in: wp.array2d[float],
-  done_in: wp.array[bool],
-  # Out:
-  Mgrad_out: wp.array2d[float],
-):
-  """Mgrad = H_block^{-1} * grad for each block.
-
-  When flex_only=1, only applies to blocks in simple trees (nv_tree <= 6).
-  """
-  worldid, blockid = wp.tid()
-
-  if blockid >= nblocks:
-    return
-
-  if done_in[worldid]:
-    return
-
-  ndof = block_dof_num_in[blockid]
-  dof0 = block_dof_adr_in[blockid]
-
-  if ndof == 0:
-    return
-
-  # When flex_only, skip articulated trees (handled by solve_LD)
-  if flex_only:
-    treeid = dof_treeid[dof0]
-    if tree_dofnum[treeid] > 6:
-      return
-
-  # Read inverse block
-  I00 = inv_H_blocks_in[worldid, 0, blockid]
-  I01 = inv_H_blocks_in[worldid, 1, blockid]
-  I02 = inv_H_blocks_in[worldid, 2, blockid]
-  I11 = inv_H_blocks_in[worldid, 3, blockid]
-  I12 = inv_H_blocks_in[worldid, 4, blockid]
-  I22 = inv_H_blocks_in[worldid, 5, blockid]
-
-  g0 = grad_in[worldid, dof0]
-  g1 = float(0.0)
-  g2 = float(0.0)
-  if ndof >= 2:
-    g1 = grad_in[worldid, dof0 + 1]
-  if ndof >= 3:
-    g2 = grad_in[worldid, dof0 + 2]
-
-  if ndof == 1:
-    Mgrad_out[worldid, dof0] = I00 * g0
-  elif ndof == 2:
-    Mgrad_out[worldid, dof0] = I00 * g0 + I01 * g1
-    Mgrad_out[worldid, dof0 + 1] = I01 * g0 + I11 * g1
-  elif ndof == 3:
-    Mgrad_out[worldid, dof0] = I00 * g0 + I01 * g1 + I02 * g2
-    Mgrad_out[worldid, dof0 + 1] = I01 * g0 + I11 * g1 + I12 * g2
-    Mgrad_out[worldid, dof0 + 2] = I02 * g0 + I12 * g1 + I22 * g2
-
-
-# =============================================================================
-# Tree-level Incomplete Cholesky (IC) Block Jacobi Preconditioner
-# =============================================================================
-
-
-# =============================================================================
-# Per-tree IC(0) Preconditioner
-
-
-@wp.kernel
-def _add_JTDJ_to_M_sparse(
-  # Model:
-  dof_treeid: wp.array[int],
-  tree_dofnum: wp.array[int],
-  M_rownnz: wp.array[int],
-  M_rowadr: wp.array[int],
-  M_colind: wp.array[int],
+  qLD_block_adr: wp.array[int],
   # Data in:
-  nefc_in: wp.array[int],
+  contact_dist_in: wp.array[float],
+  contact_includemargin_in: wp.array[float],
+  contact_friction_in: wp.array[types.vec5],
+  contact_dim_in: wp.array[int],
+  contact_efc_address_in: wp.array2d[int],
+  contact_worldid_in: wp.array[int],
   efc_J_rownnz_in: wp.array2d[int],
   efc_J_rowadr_in: wp.array2d[int],
   efc_J_colind_in: wp.array3d[int],
   efc_J_in: wp.array3d[float],
   efc_D_in: wp.array2d[float],
   efc_state_in: wp.array2d[int],
+  naconmax_in: int,
+  nacon_in: wp.array[int],
   # In:
+  ctx_Jaref_in: wp.array2d[float],
   ctx_done_in: wp.array[bool],
+  nblocks_perblock: int,
+  dim_block: int,
   # Out:
-  H_out: wp.array2d[float],
+  preconditioner_out: wp.array2d[float],
 ):
-  """Add J^T D J at M sparsity positions for all trees."""
-  worldid, efcid = wp.tid()
-  if ctx_done_in[worldid]:
-    return
-  if efcid >= nefc_in[worldid]:
-    return
-  efc_D = efc_D_in[worldid, efcid]
-  efc_state = efc_state_in[worldid, efcid]
-  if _state_check(efc_D, efc_state) == 0.0:
-    return
-  rownnz = efc_J_rownnz_in[worldid, efcid]
-  rowadr = efc_J_rowadr_in[worldid, efcid]
-  for k1 in range(rownnz):
-    Ji = efc_J_in[worldid, 0, rowadr + k1]
-    colindi = efc_J_colind_in[worldid, 0, rowadr + k1]
-    treei = dof_treeid[colindi]
-    for k2 in range(k1 + 1):
-      Jj = efc_J_in[worldid, 0, rowadr + k2]
-      colindj = efc_J_colind_in[worldid, 0, rowadr + k2]
-      if dof_treeid[colindj] != treei:
-        continue
-      row = wp.max(colindi, colindj)
-      col = wp.min(colindi, colindj)
-      h = Ji * Jj * efc_D
-      row_start = M_rowadr[row]
-      row_nnz = M_rownnz[row]
-      for idx in range(row_nnz):
-        if M_colind[row_start + idx] == col:
-          wp.atomic_add(H_out, worldid, row_start + idx, h)
-          break
+  conid_start, pairid = wp.tid()
+
+  for i in range(nblocks_perblock):
+    conid = conid_start + i * dim_block
+
+    if conid >= min(nacon_in[0], naconmax_in):
+      return
+
+    worldid = contact_worldid_in[conid]
+    if ctx_done_in[worldid]:
+      continue
+
+    condim = contact_dim_in[conid]
+
+    if condim == 1:
+      continue
+
+    # check contact status
+    if contact_dist_in[conid] - contact_includemargin_in[conid] >= 0.0:
+      continue
+
+    efcid0 = contact_efc_address_in[conid, 0]
+    if efcid0 < 0:
+      continue
+    if efc_state_in[worldid, efcid0] != types.ConstraintState.CONE:
+      continue
+
+    rownnz = efc_J_rownnz_in[worldid, efcid0]
+    npairs = rownnz * (rownnz + 1) // 2
+    if pairid >= npairs:
+      continue
+    rowadr0 = efc_J_rowadr_in[worldid, efcid0]
+    pos1 = int(0)
+    rem = pairid
+    while rem >= rownnz - pos1:
+      rem -= rownnz - pos1
+      pos1 += 1
+    pos2 = pos1 + rem
+    dofa = efc_J_colind_in[worldid, 0, rowadr0 + pos1]
+    dofb = efc_J_colind_in[worldid, 0, rowadr0 + pos2]
+    dof1id = wp.min(dofa, dofb)
+    dof2id = wp.max(dofa, dofb)
+
+    # Check tree matching:
+    tree1 = dof_treeid[dof1id]
+    tree2 = dof_treeid[dof2id]
+    if tree1 != tree2:
+      continue
+
+    size = tree_dofnum[tree1]
+
+    start = tree_dofadr[tree1]
+    block_adr = qLD_block_adr[start]
+
+    fri = contact_friction_in[conid]
+    mu = fri[0] * opt_impratio_invsqrt[worldid % opt_impratio_invsqrt.shape[0]]
+
+    mu2 = mu * mu
+    dm = math.safe_div(efc_D_in[worldid, efcid0], mu2 * (1.0 + mu2))
+
+    if dm == 0.0:
+      continue
+
+    n = ctx_Jaref_in[worldid, efcid0] * mu
+    u = types.vec6(n, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+    tt = float(0.0)
+    for j in range(1, condim):
+      efcidj = contact_efc_address_in[conid, j]
+      if efcidj >= 0:
+        uj = ctx_Jaref_in[worldid, efcidj] * fri[j - 1]
+      else:
+        uj = 0.0
+      tt += uj * uj
+      u[j] = uj
+
+    if tt <= 0.0:
+      t = 0.0
+    else:
+      t = wp.sqrt(tt)
+    t = wp.max(t, types.MJ_MINVAL)
+    ttt = wp.max(t * t * t, types.MJ_MINVAL)
+
+    # Precompute common subexpressions.
+    mu_over_t = math.safe_div(mu, t)
+    mu_n_over_ttt = mu * math.safe_div(n, ttt)
+    mu2_minus_mu_n_over_t = mu2 - mu * math.safe_div(n, t)
+
+    h = float(0.0)
+
+    for dim1id in range(condim):
+      if dim1id == 0:
+        rowadr1 = rowadr0
+        dm_fri1 = dm * mu
+      else:
+        efcid1 = contact_efc_address_in[conid, dim1id]
+        if efcid1 < 0:
+          continue
+        rowadr1 = efc_J_rowadr_in[worldid, efcid1]
+        dm_fri1 = dm * fri[dim1id - 1]
+
+      # Direct J reads using cached sparse positions.
+      efc_J11 = efc_J_in[worldid, 0, rowadr1 + pos1]
+      efc_J12 = efc_J_in[worldid, 0, rowadr1 + pos2]
+
+      ui = u[dim1id]
+
+      for dim2id in range(0, dim1id + 1):
+        if dim2id == 0:
+          rowadr2 = rowadr0
+          dm_fri12 = dm_fri1 * mu
+        else:
+          efcid2 = contact_efc_address_in[conid, dim2id]
+          if efcid2 < 0:
+            continue
+          rowadr2 = efc_J_rowadr_in[worldid, efcid2]
+          dm_fri12 = dm_fri1 * fri[dim2id - 1]
+
+        # Direct J reads using cached sparse positions.
+        efc_J21 = efc_J_in[worldid, 0, rowadr2 + pos1]
+        efc_J22 = efc_J_in[worldid, 0, rowadr2 + pos2]
+
+        uj = u[dim2id]
+
+        # set first row/column: (1, -mu/t * u)
+        if dim1id == 0 and dim2id == 0:
+          hcone = 1.0
+        elif dim1id == 0:
+          hcone = -mu_over_t * uj
+        elif dim2id == 0:
+          hcone = -mu_over_t * ui
+        else:
+          hcone = mu_n_over_ttt * ui * uj
+
+          # add to diagonal: mu^2 - mu * n / t
+          if dim1id == dim2id:
+            hcone += mu2_minus_mu_n_over_t
+
+        hcone *= dm_fri12
+
+        if hcone != 0.0:
+          h += hcone * efc_J11 * efc_J22
+
+          if dim1id != dim2id:
+            h += hcone * efc_J12 * efc_J21
+
+    local_1 = dof1id - start
+    local_2 = dof2id - start
+    wp.atomic_add(preconditioner_out, worldid, block_adr + local_1 * size + local_2, h)
+    if local_1 != local_2:
+      wp.atomic_add(preconditioner_out, worldid, block_adr + local_2 * size + local_1, h)
 
 
-def _build_ic_preconditioner(m, d, ctx):
-  """Build hybrid preconditioner: block Jacobi for flex, (M+JTDJ)^{-1} for articulated."""
-  _build_block_jacobi_preconditioner(m, d, ctx)
-  if ctx.M_precond.shape[1] == 0:
-    return
-  # Copy M to preconditioner buffer (CSR format)
-  wp.copy(ctx.M_precond, d.M)
-  # Add J^T D J to M_precond for ALL DOFs (no tree size filter)
+@cache_kernel
+def _tile_cholesky_factorize_precond_inplace(tile: types.TileSet):
+  block_size = tile.size
+  block_area = block_size * block_size
+
+  @wp.kernel(module="unique", enable_backward=False)
+  def kernel(
+    # Model:
+    qLD_block_adr: wp.array[int],
+    # In:
+    block_dof: wp.array[int],
+    # Out:
+    L_io: wp.array2d[float],
+  ):
+    worldid, blk = wp.tid()
+    start = block_dof[blk]
+
+    block = wp.tile_load(L_io[worldid], shape=(block_area,), offset=(qLD_block_adr[start],), storage="shared")
+    L = wp.tile_cholesky(wp.tile_reshape(block, (block_size, block_size)), fill_mode="upper")
+    wp.tile_store(L_io[worldid], wp.tile_reshape(L, (block_area,)), offset=(qLD_block_adr[start],))
+
+  return kernel
+
+
+def _build_preconditioner(m: types.Model, d: types.Data, ctx: SolverContext):
+  """Build tree-level hybrid dense preconditioner."""
+  ctx.preconditioner.zero_()
+  for tile in ctx.precond_tiles:
+    wp.launch_tiled(
+      _tile_copy_M_to_dense_precond(tile),
+      dim=(d.nworld, tile.adr.size),
+      inputs=[ctx.precond_block_adr, d.M, tile.elemid, tile.adr],
+      outputs=[ctx.preconditioner],
+      block_dim=32 if tile.size <= 16 else m.block_dim.cholesky_factorize,
+    )
+
   wp.launch(
-    _add_JTDJ_to_M_sparse,
+    _add_JTDJ_to_precond_dense,
     dim=(d.nworld, d.njmax),
     inputs=[
       m.dof_treeid,
+      m.tree_dofadr,
       m.tree_dofnum,
-      m.M_rownnz,
-      m.M_rowadr,
-      m.M_colind,
+      ctx.precond_block_adr,
       d.nefc,
       d.efc.J_rownnz,
       d.efc.J_rowadr,
@@ -3220,115 +3126,72 @@ def _build_ic_preconditioner(m, d, ctx):
       d.efc.state,
       ctx.done,
     ],
-    outputs=[ctx.M_precond],
+    outputs=[ctx.preconditioner],
   )
-  # Factor (M + JTDJ) for each block type
-  if m.qLD_has_dense:
-    smooth._factor_block_dense(m, d, ctx.M_precond, ctx.qLD_precond)
-  if m.qLD_has_sparse:
-    smooth._factor_i_sparse(m, d, ctx.M_precond, ctx.qLD_precond[:, m.qLD_block_total :], ctx.qLDiagInv_precond)
-  if m.qLD_has_simple:
+
+  if m.opt.cone == types.ConeType.ELLIPTIC:
+    # Block-limit the JTCJ launch
+    is_sparse_compact = False
+    jtcj_second_dim = m.dof_tri_row.size
+    if wp.get_device().is_cuda:
+      sm_count = wp.get_device().sm_count
+      dim_block = ceil((sm_count * 6 * 256) / jtcj_second_dim)
+    else:
+      dim_block = d.naconmax
+    nblocks_perblock = int((d.naconmax + dim_block - 1) / dim_block)
+
     wp.launch(
-      smooth._factor_simple,
-      dim=(d.nworld, m.qLD_simple_dofs.size),
-      inputs=[m.M_rownnz, m.M_rowadr, ctx.M_precond, m.qLD_simple_dofs],
-      outputs=[ctx.qLDiagInv_precond],
-    )
-
-
-def _apply_ic_preconditioner(m, d, ctx):
-  """Apply hybrid preconditioner: (M+JTDJ)^{-1} for articulated, block Jacobi for flex.
-
-  For articulated trees (dense or sparse blocks): factored (M+JTDJ) Cholesky/LDL solve.
-  For flex/simple DOFs: per-body block Jacobi (M+JTDJ)^{-1} captures off-diagonal coupling.
-  """
-  if ctx.M_precond.shape[1] == 0:
-    # No articulated trees: pure block Jacobi for all
-    wp.launch(
-      _apply_block_preconditioner,
-      dim=(d.nworld, ctx.nblocks),
+      _add_JTCJ_to_precond_dense,
+      dim=(dim_block, jtcj_second_dim),
       inputs=[
+        m.opt.impratio_invsqrt,
         m.dof_treeid,
+        m.tree_dofadr,
         m.tree_dofnum,
-        0,
-        ctx.nblocks,
-        ctx.block_dof_adr,
-        ctx.block_dof_num,
-        ctx.inv_H_blocks,
-        ctx.grad,
+        ctx.precond_block_adr,
+        d.contact.dist,
+        d.contact.includemargin,
+        d.contact.friction,
+        d.contact.dim,
+        d.contact.efc_address,
+        d.contact.worldid,
+        d.efc.J_rownnz,
+        d.efc.J_rowadr,
+        d.efc.J_colind,
+        d.efc.J,
+        d.efc.D,
+        d.efc.state,
+        d.naconmax,
+        d.nacon,
+        ctx.Jaref,
         ctx.done,
+        nblocks_perblock,
+        dim_block,
       ],
-      outputs=[ctx.Mgrad],
+      outputs=[ctx.preconditioner],
     )
-    return
-  # Apply factored (M+JTDJ)^{-1} for ALL DOFs (dense/sparse/simple dispatch)
-  smooth.solve_LD(m, d, ctx.qLD_precond, ctx.qLDiagInv_precond, ctx.Mgrad, ctx.grad)
-  # Overwrite flex DOFs with better block Jacobi (captures off-diagonal JTDJ)
-  wp.launch(
-    _apply_block_preconditioner,
-    dim=(d.nworld, ctx.nblocks),
-    inputs=[
-      m.dof_treeid,
-      m.tree_dofnum,
-      1,
-      ctx.nblocks,
-      ctx.block_dof_adr,
-      ctx.block_dof_num,
-      ctx.inv_H_blocks,
-      ctx.grad,
-      ctx.done,
-    ],
-    outputs=[ctx.Mgrad],
-  )
+
+  for tile in ctx.precond_tiles:
+    wp.launch_tiled(
+      _tile_cholesky_factorize_precond_inplace(tile),
+      dim=(d.nworld, tile.adr.size),
+      inputs=[ctx.precond_block_adr, tile.adr],
+      outputs=[ctx.preconditioner],
+      block_dim=32 if tile.size <= 16 else m.block_dim.cholesky_factorize,
+    )
 
 
-def _build_block_jacobi_preconditioner(m: types.Model, d: types.Data, ctx: SolverContext):
-  """Build and invert block-diagonal preconditioner using block mapping."""
-  ctx.inv_H_blocks.zero_()
-
-  # Accumulate block-diagonal of J^T D J
-  wp.launch(
-    _block_jacobi_JTDJ,
-    dim=(d.nworld, d.njmax),
-    inputs=[
-      d.nefc,
-      d.efc.J_rownnz,
-      d.efc.J_rowadr,
-      d.efc.J_colind,
-      d.efc.J,
-      d.efc.D,
-      d.efc.state,
-      ctx.dof_to_block,
-      ctx.block_dof_adr,
-      ctx.done,
-    ],
-    outputs=[ctx.inv_H_blocks],
-  )
-
-  # Add mass matrix entries within each block
-  wp.launch(
-    _block_jacobi_add_M,
-    dim=(d.nworld, m.nv),
-    inputs=[
-      m.nv,
-      m.M_mulm_rowadr,
-      m.M_mulm_col,
-      m.M_mulm_madr,
-      d.M,
-      ctx.dof_to_block,
-      ctx.block_dof_adr,
-      ctx.done,
-    ],
-    outputs=[ctx.inv_H_blocks],
-  )
-
-  # Invert blocks in-place
-  wp.launch(
-    _block_jacobi_invert,
-    dim=(d.nworld, ctx.nblocks),
-    inputs=[ctx.nblocks, ctx.block_dof_num, ctx.done],
-    outputs=[ctx.inv_H_blocks],
-  )
+def _apply_preconditioner(m: types.Model, d: types.Data, ctx: SolverContext):
+  """Apply hybrid dense tree-level preconditioner."""
+  for tile in ctx.precond_tiles:
+    block_dim = m.block_dim.cholesky_solve if tile.size <= 40 else 32
+    wp.launch_tiled(
+      smooth._tile_cholesky_solve_block(tile),
+      dim=(d.nworld, tile.adr.size),
+      inputs=[ctx.precond_block_adr, tile.adr, ctx.preconditioner, ctx.grad],
+      outputs=[ctx.Mgrad],
+      block_dim=block_dim,
+    )
 
 
 @wp.kernel
@@ -3403,9 +3266,9 @@ def _update_gradient(m: types.Model, d: types.Data, ctx: SolverContext, compact:
       outputs=[ctx.grad, ctx.grad_dot],
     )
   if m.opt.solver == types.SolverType.CG:
-    if m.is_sparse and m.opt.jac_preconditioner:
-      _build_ic_preconditioner(m, d, ctx)
-      _apply_ic_preconditioner(m, d, ctx)
+    if m.is_sparse and m.opt.cg_preconditioner == types.CGPreconditioner.CONSTRAINT:
+      _build_preconditioner(m, d, ctx)
+      _apply_preconditioner(m, d, ctx)
     else:
       smooth.solve_m(m, d, ctx.Mgrad, ctx.grad)
   elif m.opt.solver == types.SolverType.NEWTON:

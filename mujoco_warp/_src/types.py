@@ -459,6 +459,18 @@ class SolverType(enum.IntEnum):
   # unsupported: PGS
 
 
+class CGPreconditioner(enum.IntEnum):
+  """Preconditioner algorithm for CG solver.
+
+  Attributes:
+    INERTIA: use inertia-based preconditioner (solve_m)
+    CONSTRAINT: use tree-level constraint preconditioner (M + J^T D J)^-1
+  """
+
+  INERTIA = 0
+  CONSTRAINT = 1
+
+
 class ConstraintState(enum.IntEnum):
   """State of constraint.
 
@@ -815,7 +827,7 @@ class Option:
       zeros out the contacts at each step)
     contact_sensor_maxmatch: max number of contacts considered by contact sensor matching criteria
                              contacts matched after this value is exceded will be ignored
-    jac_preconditioner: enable block Jacobi + IC(0) preconditioner for sparse CG solver
+    cg_preconditioner: preconditioner for CG solver (CGPreconditioner)
   """
 
   timestep: array("*", float)
@@ -845,7 +857,7 @@ class Option:
   graph_conditional: bool
   run_collision_detection: bool
   contact_sensor_maxmatch: int
-  jac_preconditioner: bool
+  cg_preconditioner: CGPreconditioner
 
   # TODO(team): remove in future version
   @property
@@ -1403,6 +1415,7 @@ class Model:
   noct: int
   njnt: int
   ntree: int
+  tree_total_nnz_int: int
   nM: int
   nC: int
   nD: int
@@ -1823,6 +1836,8 @@ class Model:
   taxel_vertadr: array("nsensortaxel", int)
   taxel_sensorid: wp.array[int]
   M_tiles: tuple[TileSet, ...]
+  precond_block_adr: array("nv", int)  # custom non-overlapping tree block offsets
+  precond_tiles: tuple[TileSet, ...]  # custom TileSet grouping all trees by size
   qLD_updates: tuple[wp.array[wp.vec3i], ...]
   qLD_all_updates: wp.array[wp.vec3i]
   qLD_level_offsets: wp.array[int]
@@ -2339,17 +2354,10 @@ class SolverContext:
   beta_den: wp.array[float]
   h: wp.array3d[float]
   hfactor: wp.array3d[float]
-  # Block Jacobi preconditioner (CG only): pre-inverted block Hessian
-  inv_H_blocks: wp.array3d[float]
-  # Block mapping: split bodies with >3 DOFs into ≤3-DOF blocks
-  block_dof_adr: wp.array[int]
-  block_dof_num: wp.array[int]
-  dof_to_block: wp.array[int]
-  nblocks: int
   # Tree-level IC preconditioner (CG sparse only)
-  M_precond: wp.array2d[float]  # (nworld, nC) M + JTDJ in CSR format (unfactored)
-  qLD_precond: wp.array2d[float]  # (nworld, qld_total) factored preconditioner
-  qLDiagInv_precond: wp.array2d[float]  # (nworld, nv) IC(0) diagonal inverse
+  preconditioner: wp.array2d[float]  # (nworld, tree_total_nnz_int) factored preconditioner
+  precond_block_adr: wp.array[int]  # (nv,) custom non-overlapping tree block offsets
+  precond_tiles: tuple[TileSet, ...]  # custom TileSet grouping all trees by size
   # Incremental Hessian update (Newton only)
   changed_efc_ids: wp.array2d[int]
   changed_efc_count: wp.array[int]

@@ -22,6 +22,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 
 import mujoco_warp as mjw
+from mujoco_warp import CGPreconditioner
 from mujoco_warp import ConeType
 from mujoco_warp import SolverType
 from mujoco_warp import test_data
@@ -185,14 +186,22 @@ class SolverTest(parameterized.TestCase):
       _assert_eq(ctx_jv[:nefc], target_jv[:nefc], "jv")
 
   @parameterized.product(
-    cone=(ConeType.PYRAMIDAL, ConeType.ELLIPTIC), jacobian=(mujoco.mjtJacobian.mjJAC_SPARSE, mujoco.mjtJacobian.mjJAC_DENSE)
+    cone=(ConeType.PYRAMIDAL, ConeType.ELLIPTIC),
+    jacobian=(mujoco.mjtJacobian.mjJAC_SPARSE, mujoco.mjtJacobian.mjJAC_DENSE),
+    cg_preconditioner=(CGPreconditioner.INERTIA, CGPreconditioner.CONSTRAINT),
   )
-  def test_update_gradient_CG(self, cone, jacobian):
+  def test_update_gradient_CG(self, cone, jacobian, cg_preconditioner):
     """Test _update_gradient function is correct for the CG solver."""
     mjm, mjd, m, d = test_data.fixture(
       "humanoid/humanoid.xml",
       keyframe=0,
-      overrides={"opt.cone": cone, "opt.solver": SolverType.CG, "opt.jacobian": jacobian, "opt.iterations": 0},
+      overrides={
+        "opt.cone": cone,
+        "opt.solver": SolverType.CG,
+        "opt.jacobian": jacobian,
+        "opt.cg_preconditioner": cg_preconditioner,
+        "opt.iterations": 0,
+      },
     )
 
     # Create SolverContext and initialize

@@ -398,7 +398,7 @@ def put_model(mjm: mujoco.MjModel, batch_sizes: dict[str, int] | None = None) ->
     opt.contact_sensor_maxmatch = mjm.numeric_data[mjm.numeric_adr[contact_sensor_maxmatch_id]]
   else:
     opt.contact_sensor_maxmatch = 64
-  opt.jac_preconditioner = False
+  opt.cg_preconditioner = types.CGPreconditioner.INERTIA
 
   # place opt on device
   for f in dataclasses.fields(types.Option):
@@ -459,6 +459,11 @@ def put_model(mjm: mujoco.MjModel, batch_sizes: dict[str, int] | None = None) ->
     )
   m.tree_total_nnz_int = int(sum(int(n) ** 2 for n in mjm.tree_dofnum))
   m.has_articulated_trees = bool(any(int(n) > 6 for n in mjm.tree_dofnum))
+  if opt.solver == types.SolverType.CG and opt.cg_preconditioner == types.CGPreconditioner.CONSTRAINT:
+    if np.any(mjm.tree_dofnum > 64):
+      raise NotImplementedError(
+        "Tree sizes larger than 64 are not supported for CG sparse solver with CONSTRAINT preconditioner."
+      )
   m.has_fluid = mjm.opt.wind.any() or mjm.opt.density > 0 or mjm.opt.viscosity > 0
 
   m.max_ten_J_rownnz = int(mjm.ten_J_rownnz.max()) if mjm.ntendon else 0
@@ -920,6 +925,31 @@ def put_model(mjm: mujoco.MjModel, batch_sizes: dict[str, int] | None = None) ->
     elemid = M_elemid[np.maximum(gi, gj), np.minimum(gi, gj)]  # (nblock, sz, sz), -1 if absent
     elemid = np.where(elemid >= 0, elemid, mjm.nC)
     tile.elemid = wp.array(elemid.reshape(-1).astype(np.int32), dtype=int)
+
+  # Precompute custom precond tiles/offsets for all tree blocks (both simple and coupled)
+  precond_block_adr = np.zeros(mjm.nv, dtype=np.int32)
+  precond_off = 0
+  precond_tiles_dict = {}
+  for start, size in _lay["blocks"]:
+    precond_block_adr[start : start + size] = precond_off
+    precond_off += size * size
+    precond_tiles_dict.setdefault(size, []).append(start)
+
+  m.precond_block_adr = precond_block_adr
+
+  precond_tiles = []
+  for sz in sorted(precond_tiles_dict.keys()):
+    starts = np.array(precond_tiles_dict[sz], dtype=np.int32)
+    dofs = starts[:, None] + np.arange(sz)[None, :]
+    gi = dofs[:, :, None]
+    gj = dofs[:, None, :]
+    elemid = M_elemid[np.maximum(gi, gj), np.minimum(gi, gj)]
+    elemid = np.where(elemid >= 0, elemid, mjm.nC)
+    tile_elemid = wp.array(elemid.reshape(-1).astype(np.int32), dtype=int)
+
+    tile = types.TileSet(adr=wp.array(precond_tiles_dict[sz], dtype=int), size=sz, elemid=tile_elemid)
+    precond_tiles.append(tile)
+  m.precond_tiles = tuple(precond_tiles)
 
   upper_j, upper_i = np.triu_indices(mjm.nv)
   upper_elemid = M_elemid[upper_i, upper_j]
@@ -3324,6 +3354,7 @@ def override_model(model: types.Model | mujoco.MjModel, overrides: dict[str, Any
     "opt.enableflags": types.EnableBit,
     "opt.integrator": types.IntegratorType,
     "opt.solver": types.SolverType,
+    "opt.cg_preconditioner": types.CGPreconditioner,
   }
   # MuJoCo pybind11 enums don't support iteration, so we provide explicit mappings
   mj_enum_fields = {
@@ -3338,7 +3369,7 @@ def override_model(model: types.Model | mujoco.MjModel, overrides: dict[str, Any
     "opt.broadphase_filter",
     "opt.graph_conditional",
     "opt.contact_sensor_maxmatch",
-    "opt.jac_preconditioner",
+    "opt.cg_preconditioner",
   }
   mj_only_fields = {"opt.jacobian", "vis.quality.offsamples"}
 
