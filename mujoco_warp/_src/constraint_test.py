@@ -433,7 +433,7 @@ class ConstraintTest(parameterized.TestCase):
                     dim="3" cellcount="2 1 2" radius=".001"
                     mass="5" dof="trilinear">
             <elasticity young="1e4" poisson="0.3" damping="1e-3"/>
-            <contact condim="3" selfcollide="none" internal="false"/>
+            <contact condim="3" selfcollide="none"/>
           </flexcomp>
         </worldbody>
       </mujoco>

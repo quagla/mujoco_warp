@@ -1027,7 +1027,7 @@ class FlexPassiveForcesTest(parameterized.TestCase):
                   mass="5" name="softbody" dof="{dof}">
           <elasticity young="1e4" poisson="0.3" damping="1e-3"
                       elastic2d="{elastic2d}" thickness="0.03"/>
-          <contact selfcollide="none" internal="false"/>
+          <contact selfcollide="none"/>
         </flexcomp>
       </worldbody>
     </mujoco>
@@ -1853,11 +1853,11 @@ class FlexCollisionTest(parameterized.TestCase):
         <!-- Two distinct grid flex comps to test multi-flex models -->
         <flexcomp name="cloth1" type="grid" count="3 3 1" spacing=".2 .2 .1" pos="0 0 0"
                   radius=".02" dim="2" mass=".5">
-          <contact selfcollide="none" internal="false"/>
+          <contact selfcollide="none"/>
         </flexcomp>
         <flexcomp name="cloth2" type="grid" count="4 4 1" spacing=".2 .2 .1" pos="1 1 0"
                   radius=".02" dim="2" mass=".5">
-          <contact selfcollide="none" internal="false"/>
+          <contact selfcollide="none"/>
         </flexcomp>
       </worldbody>
     </mujoco>
@@ -2247,12 +2247,12 @@ class FlexCollisionTest(parameterized.TestCase):
         <!-- 2D Cloth -->
         <flexcomp name="cloth" type="grid" count="3 3 1" spacing=".2 .2 .1" pos="0 0 0"
                   radius=".02" dim="2" mass=".5">
-          <contact selfcollide="none" internal="false"/>
+          <contact selfcollide="none"/>
         </flexcomp>
         <!-- 3D Softbody -->
         <flexcomp name="softbody" type="grid" count="3 3 3" spacing=".2 .2 .2" pos="1 1 0"
                   radius=".02" dim="3" mass="1.0">
-          <contact selfcollide="none" internal="false"/>
+          <contact selfcollide="none"/>
         </flexcomp>
         <!-- A sphere positioned near the cloth to generate contact -->
         <body pos="0 0 0.05">
@@ -2964,14 +2964,14 @@ class FlexContactParityTest(parameterized.TestCase):
           <!-- Cube 1: Resting on the plane -->
           <flexcomp name="cube1" type="grid" count="8 8 8" spacing="0.07 0.07 0.07" pos="-0.2 0 0.27"
                     radius="0.001" dim="3" mass="5.0" dof="trilinear">
-            <contact selfcollide="none" internal="false"/>
+            <contact selfcollide="none"/>
             <elasticity young="1e4" damping="0.01" poisson="0.1"/>
           </flexcomp>
 
           <!-- Cube 2: Falling from above onto the corner of Cube 1 -->
           <flexcomp name="cube2" type="grid" count="8 8 8" spacing="0.07 0.07 0.07" pos="0.0 0 1.0"
                     radius="0.001" dim="3" mass="5.0" dof="trilinear">
-            <contact selfcollide="none" internal="false"/>
+            <contact selfcollide="none"/>
             <elasticity young="1e4" damping="0.01" poisson="0.1"/>
           </flexcomp>
         </worldbody>
@@ -3422,7 +3422,7 @@ class FlexContactConstraintTest(parameterized.TestCase):
                     dim="3" cellcount="2 1 2" radius=".001"
                     mass="5" dof="trilinear">
             <elasticity young="1e4" poisson="0.3" damping="1e-3"/>
-            <contact condim="3" selfcollide="none" internal="false"/>
+            <contact condim="3" selfcollide="none"/>
           </flexcomp>
         </worldbody>
       </mujoco>

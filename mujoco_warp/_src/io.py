@@ -404,7 +404,7 @@ def put_model(mjm: mujoco.MjModel, batch_sizes: dict[str, int] | None = None) ->
       raise NotImplementedError("Flex-SDF collision is not implemented.")
     if (mjm.geom_type == mujoco.mjtGeom.mjGEOM_HFIELD).any():
       raise NotImplementedError("Flex-HField collision is not implemented.")
-    if (mjm.flex_internal != 0).any():
+    if hasattr(mjm, "flex_internal") and (mjm.flex_internal != 0).any():
       raise NotImplementedError("Flex internal collisions are not implemented.")
     if (mjm.flex_rigid != 0).any():
       raise NotImplementedError("Rigid flexes are not implemented.")

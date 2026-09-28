@@ -2836,21 +2836,6 @@ class IOTest(parameterized.TestCase):
       warnings.simplefilter("error")
       mjwarp.put_model(mjm)
 
-  def test_flex_internal_collision(self):
-    """Test that flex internal collision raises NotImplementedError."""
-    xml = """
-      <mujoco>
-        <worldbody>
-          <flexcomp name="cloth" type="grid" count="3 3 1" spacing=".2 .2 .1" pos="0 0 0"
-                    radius=".02" dim="2" mass=".5">
-            <contact selfcollide="none" internal="true" margin="0.05"/>
-          </flexcomp>
-        </worldbody>
-      </mujoco>
-      """
-    with self.assertRaises(NotImplementedError):
-      test_data.fixture(xml=xml)
-
 
 if __name__ == "__main__":
   wp.init()
